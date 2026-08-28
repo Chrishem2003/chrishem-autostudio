@@ -219,12 +219,12 @@ function StudioPage() {
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[17rem_1fr_20rem]">
-        <aside className="hidden min-h-0 border-r border-border bg-surface lg:block">
+      <div className="grid min-h-0 min-w-0 flex-1 overflow-hidden grid-cols-1 lg:grid-cols-[17rem_minmax(0,1fr)_20rem]">
+        <aside className="hidden min-h-0 min-w-0 border-r border-border bg-surface lg:block">
           {active ? <Palette vertical={active.vertical} onAdd={(id) => addNode(id)} /> : null}
         </aside>
 
-        <main className="relative min-h-0">
+        <main className="relative min-h-0 min-w-0 overflow-hidden">
           {active ? (
             <>
               <div className="pointer-events-none absolute left-4 top-4 z-10 max-w-sm rounded-lg border border-border bg-card/85 px-3 py-2 backdrop-blur">
@@ -266,7 +266,7 @@ function StudioPage() {
           )}
         </main>
 
-        <aside className="flex min-h-0 flex-col border-l border-border bg-surface">
+        <aside className="flex min-h-0 min-w-0 flex-col border-l border-border bg-surface">
           <div className="flex border-b border-border">
             {(["run", "templates"] as PanelTab[]).map((t) => (
               <button
