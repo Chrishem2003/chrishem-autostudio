@@ -159,5 +159,53 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
   }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+}
+
+@utility studio-grid {
+  background-color: var(--surface);
+  background-image:
+    linear-gradient(to right, color-mix(in oklch, var(--grid) 60%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklch, var(--grid) 60%, transparent) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+@utility panel {
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+@utility glow-primary {
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary) 45%, transparent),
+    0 12px 40px -16px color-mix(in oklch, var(--primary) 60%, transparent);
+}
+
+@utility mono-label {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+@keyframes dash-flow {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+@utility edge-live {
+  stroke-dasharray: 6 6;
+  animation: dash-flow 0.9s linear infinite;
 }
