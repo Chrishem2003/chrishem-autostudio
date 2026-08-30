@@ -623,78 +623,52 @@ const CORE = [
 ];
 
 
+
+const V = (
+  id: string,
+  name: string,
+  tagline: string,
+  glyph: string,
+  categories: string[],
+  extra: string[] = [],
+): Vertical => ({
+  id,
+  name,
+  tagline,
+  glyph,
+  categories,
+  nodes: [...CORE, ...extra, ...categories.flatMap((c) => NODES_BY_CATEGORY[c] ?? [])].filter(
+    (v, i, a) => a.indexOf(v) === i,
+  ),
+});
+
 export const VERTICALS: Vertical[] = [
-  {
-    id: "sales",
-    name: "Sales & Growth",
-    tagline: "Capture, score and route every lead the moment it lands.",
-    glyph: "◈",
-    nodes: [...CORE, "trigger.form", "action.crm", "action.slack", "action.email", "action.sheets", "action.calendar"],
-  },
-  {
-    id: "marketing",
-    name: "Marketing",
-    tagline: "Content pipelines, campaign reporting, always-on nurture.",
-    glyph: "◇",
-    nodes: [...CORE, "trigger.form", "action.notion", "action.email", "action.slack", "action.storage"],
-  },
-  {
-    id: "finance",
-    name: "Finance & Ops",
-    tagline: "Invoices, reconciliations and approvals without spreadsheets.",
-    glyph: "▣",
-    nodes: [...CORE, "trigger.email", "action.invoice", "action.sheets", "action.email", "action.storage"],
-  },
-  {
-    id: "support",
-    name: "Customer Support",
-    tagline: "Triage, answer and escalate across every inbox.",
-    glyph: "◉",
-    nodes: [...CORE, "trigger.email", "action.slack", "action.email", "action.whatsapp", "action.crm"],
-  },
-  {
-    id: "people",
-    name: "People & HR",
-    tagline: "Onboarding, reviews and reminders that never slip.",
-    glyph: "◎",
-    nodes: [...CORE, "trigger.form", "action.calendar", "action.email", "action.notion", "action.sheets"],
-  },
-  {
-    id: "health",
-    name: "Health & Clinics",
-    tagline: "Appointments, reminders and follow-up care journeys.",
-    glyph: "✚",
-    nodes: [...CORE, "trigger.form", "action.calendar", "action.whatsapp", "action.sms", "action.notion"],
-  },
-  {
-    id: "logistics",
-    name: "Logistics & Field",
-    tagline: "Dispatch, tracking and exception handling in real time.",
-    glyph: "▲",
-    nodes: [...CORE, "action.sms", "action.slack", "action.sheets", "action.storage", "action.http"],
-  },
-  {
-    id: "education",
-    name: "Education",
-    tagline: "Enrolment, cohorts, grading and parent comms.",
-    glyph: "❖",
-    nodes: [...CORE, "trigger.form", "action.email", "action.sheets", "action.calendar", "action.whatsapp"],
-  },
-  {
-    id: "realestate",
-    name: "Real Estate",
-    tagline: "Listings, viewings and buyer follow-through.",
-    glyph: "⬢",
-    nodes: [...CORE, "trigger.form", "action.crm", "action.calendar", "action.whatsapp", "action.notion"],
-  },
-  {
-    id: "research",
-    name: "Research & Data",
-    tagline: "Collect, enrich and analyse continuously.",
-    glyph: "◐",
-    nodes: [...CORE, "trigger.notion", "action.notion", "action.sheets", "action.storage", "action.http"],
-  },
+  V("sales", "Sales & Growth", "Capture, score and route every lead the moment it lands.", "\u25C8", ["CRM & Sales", "Communication", "Forms & Surveys", "Calendar & Scheduling"], ["trigger.form"]),
+  V("marketing", "Marketing", "Content pipelines, campaign reporting, always-on nurture.", "\u25C7", ["Marketing", "Social Media", "Analytics", "Productivity"], ["trigger.rss"]),
+  V("finance", "Finance & Ops", "Invoices, reconciliation and approvals without spreadsheets.", "\u25A3", ["Finance & Payments", "Productivity", "Storage & Files", "Communication"], ["trigger.email.inbound", "ai.ocr"]),
+  V("support", "Customer Support", "Triage, answer and escalate across every inbox.", "\u25C9", ["Support", "Communication", "AI & ML", "CRM & Sales"], ["ai.sentiment"]),
+  V("people", "People & HR", "Onboarding, reviews and reminders that never slip.", "\u25CE", ["HR & Recruiting", "Calendar & Scheduling", "Communication", "Storage & Files"], ["trigger.form"]),
+  V("health", "Health & Clinics", "Appointments, reminders and follow-up care journeys.", "\u271A", ["Health", "Calendar & Scheduling", "Communication", "Forms & Surveys"]),
+  V("logistics", "Logistics & Field", "Dispatch, tracking and exception handling in real time.", "\u25B2", ["Logistics & Maps", "Communication", "Databases", "E-commerce"]),
+  V("education", "Education", "Enrolment, cohorts, grading and parent comms.", "\u2756", ["Education", "Forms & Surveys", "Communication", "Calendar & Scheduling"]),
+  V("realestate", "Real Estate", "Listings, viewings and buyer follow-through.", "\u2B22", ["Real Estate", "CRM & Sales", "Calendar & Scheduling", "Communication"]),
+  V("research", "Research & Data", "Collect, enrich and analyse continuously.", "\u25D0", ["Databases", "Analytics", "AI & ML", "Productivity"], ["trigger.file"]),
+  V("ecommerce", "E-commerce & Retail", "Orders, fulfilment, refunds and win-back journeys.", "\u25EC", ["E-commerce", "Finance & Payments", "Logistics & Maps", "Marketing"]),
+  V("engineering", "Engineering & DevOps", "Ship, monitor and page the right human automatically.", "\u2318", ["Developer", "Communication", "Analytics", "Security & Identity"], ["trigger.error"]),
+  V("product", "Product & Design", "Feedback loops, release notes and roadmap hygiene.", "\u25D1", ["Project Management", "Developer", "Productivity", "Analytics"]),
+  V("legal", "Legal & Compliance", "Contracts, signatures and audit-ready trails.", "\u2696", ["Legal", "Storage & Files", "Communication", "Security & Identity"], ["output.audit"]),
+  V("agency", "Agencies & Freelance", "Client intake, delivery and invoicing on autopilot.", "\u2726", ["Project Management", "Finance & Payments", "Communication", "Productivity"], ["trigger.form"]),
+  V("nonprofit", "Nonprofit & NGO", "Donors, grants, volunteers and impact reporting.", "\u2764", ["Finance & Payments", "Marketing", "Forms & Surveys", "Communication"]),
+  V("hospitality", "Hospitality & Travel", "Bookings, guest messaging and review recovery.", "\u2617", ["Calendar & Scheduling", "Communication", "E-commerce", "Social Media"]),
+  V("manufacturing", "Manufacturing & IoT", "Sensors, maintenance windows and shop-floor alerts.", "\u2699", ["IoT & Devices", "Databases", "Communication", "Analytics"]),
+  V("security", "Security & IT", "Access reviews, incident response and offboarding.", "\u26E8", ["Security & Identity", "Developer", "Communication", "HR & Recruiting"]),
+  V("media", "Media & Creators", "Publish everywhere, repurpose everything.", "\u25B6", ["Social Media", "AI & ML", "Storage & Files", "Marketing"]),
+  V("recruiting", "Recruiting", "Sourcing, screening and scheduling at speed.", "\u25D3", ["HR & Recruiting", "Calendar & Scheduling", "Communication", "AI & ML"]),
+  V("finserv", "Banking & Fintech", "KYC, reconciliation and fraud watch-lists.", "\u25A4", ["Finance & Payments", "Security & Identity", "Databases", "Analytics"]),
+  V("government", "Public Sector", "Citizen requests, permits and transparent records.", "\u2691", ["Forms & Surveys", "Storage & Files", "Communication", "Legal"], ["output.audit"]),
+  V("personal", "Personal Productivity", "Your own life, quietly automated.", "\u263C", ["Productivity", "Calendar & Scheduling", "Communication", "Health"]),
 ];
+
 
 export interface TemplateDef {
   id: string;
