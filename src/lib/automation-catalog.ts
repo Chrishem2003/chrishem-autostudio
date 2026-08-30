@@ -22,8 +22,11 @@ export interface Vertical {
   name: string;
   tagline: string;
   glyph: string;
+  /** Integration categories whose steps show up first for this vertical. */
+  categories: string[];
   nodes: string[];
 }
+
 
 const BASE_NODES: Record<string, NodeDef> = {
   "trigger.schedule": {
