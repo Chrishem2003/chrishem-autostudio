@@ -3,7 +3,10 @@
  * definitions and starter templates for the Automation Studio.
  */
 
+import { ACTION_VERBS, APPS, appActionId, appTriggerId, type AppDef, type Category } from "./integrations";
+
 export type NodeKind = "trigger" | "action" | "logic" | "ai" | "output";
+
 
 export interface NodeDef {
   id: string;
