@@ -25,7 +25,7 @@ export interface Vertical {
   nodes: string[];
 }
 
-export const NODES: Record<string, NodeDef> = {
+const BASE_NODES: Record<string, NodeDef> = {
   "trigger.schedule": {
     id: "trigger.schedule",
     label: "Schedule",
