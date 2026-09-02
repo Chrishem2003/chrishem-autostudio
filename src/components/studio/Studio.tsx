@@ -39,8 +39,8 @@ const TAB_LABEL: Record<PanelTab, string> = {
 
 interface Props {
   embedded?: boolean;
-  initialVertical?: string;
-  initialTemplate?: string;
+  initialVertical?: string | undefined;
+  initialTemplate?: string | undefined;
 }
 
 export function Studio({ embedded = false, initialVertical, initialTemplate }: Props) {
