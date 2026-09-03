@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { Canvas } from "@/components/studio/Canvas";
@@ -57,6 +57,8 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
   const [hydrated, setHydrated] = useState(false);
   const [past, setPast] = useState<Workflow[][]>([]);
   const [future, setFuture] = useState<Workflow[][]>([]);
+  const undoRef = useRef<() => void>(() => {});
+  const redoRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     let loaded: Workflow[] = [];
@@ -92,6 +94,19 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
   const issues = useMemo(() => (active ? validate(active) : []), [active]);
   const impact = useMemo(() => impactOf(workflows), [workflows]);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z") return;
+      const target = e.target as HTMLElement | null;
+      if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+      e.preventDefault();
+      if (e.shiftKey) redoRef.current();
+      else undoRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   const commit = (next: Workflow[]) => {
     setPast((p) => [...p.slice(-40), workflows]);
     setFuture([]);
@@ -124,6 +139,9 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
       return f.slice(1);
     });
   };
+
+  undoRef.current = undo;
+  redoRef.current = redo;
 
   const setConfig = (id: string, key: string, value: string) =>
     update((w) => ({
@@ -365,7 +383,7 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
           {active ? (
             <>
               <div className="border-b border-border bg-surface/60 p-3">
-                <CopilotBar vertical={active.vertical} onApply={applyPlan} />
+                <CopilotBar vertical={active.vertical} flowName={active.name} onApply={applyPlan} />
               </div>
               <div className="relative min-h-0 flex-1 overflow-hidden">
                 <div className="pointer-events-none absolute left-4 top-4 z-10 max-w-sm rounded-lg border border-border bg-card/85 px-3 py-2 backdrop-blur">
