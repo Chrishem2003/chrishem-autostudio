@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { Canvas } from "@/components/studio/Canvas";
@@ -10,14 +10,17 @@ import { CopilotBar } from "@/components/studio/CopilotBar";
 import { TimeTravelPanel } from "@/components/studio/TimeTravelPanel";
 import { HealingPanel } from "@/components/studio/HealingPanel";
 import { MappingPanel } from "@/components/studio/MappingPanel";
-import { TEMPLATES, VERTICALS } from "@/lib/automation-catalog";
+import { NODES, TEMPLATES, VERTICALS } from "@/lib/automation-catalog";
 import { impactOf } from "@/lib/impact";
 import type { Plan } from "@/lib/intent";
 import {
   STORAGE_KEY,
+  autoChain,
+  autoLayout,
   blankWorkflow,
   exportForN8n,
   makeNode,
+  orderedNodes,
   simulateRun,
   uid,
   validate,
@@ -52,6 +55,10 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
   const [runningId, setRunningId] = useState<string | null>(null);
   const [tab, setTab] = useState<PanelTab>("run");
   const [hydrated, setHydrated] = useState(false);
+  const [past, setPast] = useState<Workflow[][]>([]);
+  const [future, setFuture] = useState<Workflow[][]>([]);
+  const undoRef = useRef<() => void>(() => {});
+  const redoRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     let loaded: Workflow[] = [];
@@ -87,8 +94,54 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
   const issues = useMemo(() => (active ? validate(active) : []), [active]);
   const impact = useMemo(() => impactOf(workflows), [workflows]);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z") return;
+      const target = e.target as HTMLElement | null;
+      if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+      e.preventDefault();
+      if (e.shiftKey) redoRef.current();
+      else undoRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const commit = (next: Workflow[]) => {
+    setPast((p) => [...p.slice(-40), workflows]);
+    setFuture([]);
+    setWorkflows(next);
+  };
+
   const update = (fn: (wf: Workflow) => Workflow) =>
-    setWorkflows((prev) => prev.map((w) => (w.id === activeId ? { ...fn(w), updatedAt: Date.now() } : w)));
+    setWorkflows((prev) => {
+      setPast((p) => [...p.slice(-40), prev]);
+      setFuture([]);
+      return prev.map((w) => (w.id === activeId ? { ...fn(w), updatedAt: Date.now() } : w));
+    });
+
+  const undo = () => {
+    setPast((p) => {
+      if (p.length === 0) return p;
+      const prevState = p[p.length - 1]!;
+      setFuture((f) => [workflows, ...f].slice(0, 40));
+      setWorkflows(prevState);
+      return p.slice(0, -1);
+    });
+  };
+
+  const redo = () => {
+    setFuture((f) => {
+      if (f.length === 0) return f;
+      const nextState = f[0]!;
+      setPast((p) => [...p, workflows]);
+      setWorkflows(nextState);
+      return f.slice(1);
+    });
+  };
+
+  undoRef.current = undo;
+  redoRef.current = redo;
 
   const setConfig = (id: string, key: string, value: string) =>
     update((w) => ({
@@ -99,18 +152,31 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
   const addNode = (defId: string, x?: number, y?: number) => {
     if (!active) return;
     const node = makeNode(defId, x ?? 120 + active.nodes.length * 40, y ?? 120 + (active.nodes.length % 4) * 150);
-    update((w) => ({ ...w, nodes: [...w.nodes, node] }));
+    const tail = orderedNodes(active).at(-1);
+    update((w) => ({
+      ...w,
+      nodes: [...w.nodes, node],
+      edges: tail && NODES[defId]?.kind !== "trigger" ? [...w.edges, { id: uid("e"), from: tail.id, to: node.id }] : w.edges,
+    }));
     setSelectedId(node.id);
   };
 
-  const applyPlan = (plan: Plan) => {
+  const duplicateNode = (id: string) => {
+    if (!active) return;
+    const src = active.nodes.find((n) => n.id === id);
+    if (!src) return;
+    const copy = { ...src, id: uid("n"), x: src.x + 32, y: src.y + 44, name: `${src.name} copy` };
+    update((w) => ({ ...w, nodes: [...w.nodes, copy] }));
+    setSelectedId(copy.id);
+  };
+
+  const buildPlanWorkflow = (plan: Plan): Workflow => {
     const nodes = plan.steps.map((s, i) => {
-      const node = makeNode(s.defId, 90 + (i % 3) * 300, 110 + Math.floor(i / 3) * 190);
+      const node = makeNode(s.defId, 60 + i * 300, 110);
       return { ...node, name: s.name, config: { ...s.config } };
     });
-    if (nodes.length === 0) return;
     const edges = nodes.slice(1).map((n, i) => ({ id: uid("e"), from: nodes[i]!.id, to: n.id }));
-    const wf: Workflow = {
+    return {
       id: uid("wf"),
       name: plan.intent.length > 46 ? `${plan.intent.slice(0, 46)}…` : plan.intent,
       vertical: active?.vertical ?? VERTICALS[0]!.id,
@@ -119,11 +185,29 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
       live: false,
       updatedAt: Date.now(),
     };
-    setWorkflows((prev) => [...prev, wf]);
+  };
+
+  const applyPlan = (plan: Plan, mode: "new" | "append" = "new") => {
+    if (plan.steps.length === 0) return;
+    if (mode === "append" && active) {
+      const startIndex = active.nodes.length;
+      const nodes = plan.steps.map((s, i) => {
+        const node = makeNode(s.defId, 60 + (startIndex + i) * 300, 110 + (startIndex % 2) * 200);
+        return { ...node, name: s.name, config: { ...s.config } };
+      });
+      const edges = nodes.slice(1).map((n, i) => ({ id: uid("e"), from: nodes[i]!.id, to: n.id }));
+      update((w) => autoLayout(autoChain({ ...w, nodes: [...w.nodes, ...nodes], edges: [...w.edges, ...edges] })));
+      setSelectedId(nodes[0]!.id);
+      setTab("map");
+      toast.success(`Added ${nodes.length} steps to ${active.name}.`);
+      return;
+    }
+    const wf = autoLayout(buildPlanWorkflow(plan));
+    commit([...workflows, wf]);
     setActiveId(wf.id);
-    setSelectedId(nodes[0]!.id);
+    setSelectedId(wf.nodes[0]?.id ?? null);
     setTab("map");
-    toast.success(`Provisioned ${nodes.length} steps on a new canvas.`);
+    toast.success(`Provisioned ${wf.nodes.length} connected steps.`);
   };
 
   const runFlow = () => {
@@ -208,6 +292,27 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
           + New flow
         </button>
 
+        <div className="flex items-center gap-1">
+          <button
+            onClick={undo}
+            disabled={past.length === 0}
+            title="Undo (⌘Z)"
+            className="rounded-lg border border-border px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground disabled:opacity-40"
+          >
+            ↶
+          </button>
+          <button
+            onClick={redo}
+            disabled={future.length === 0}
+            title="Redo (⇧⌘Z)"
+            className="rounded-lg border border-border px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground disabled:opacity-40"
+          >
+            ↷
+          </button>
+        </div>
+
+
+
         <select
           value={active?.vertical ?? ""}
           onChange={(e) => update((w) => ({ ...w, vertical: e.target.value }))}
@@ -278,7 +383,7 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
           {active ? (
             <>
               <div className="border-b border-border bg-surface/60 p-3">
-                <CopilotBar vertical={active.vertical} onApply={applyPlan} />
+                <CopilotBar vertical={active.vertical} flowName={active.name} onApply={applyPlan} />
               </div>
               <div className="relative min-h-0 flex-1 overflow-hidden">
                 <div className="pointer-events-none absolute left-4 top-4 z-10 max-w-sm rounded-lg border border-border bg-card/85 px-3 py-2 backdrop-blur">
@@ -310,7 +415,18 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
                     }));
                     setSelectedId((cur) => (cur === id ? null : cur));
                   }}
-                  onDropNode={(defId, x, y) => addNode(defId, x, y)}
+                  onDeleteEdge={(edgeId) => update((w) => ({ ...w, edges: w.edges.filter((e) => e.id !== edgeId) }))}
+                  onDuplicate={duplicateNode}
+                  onTidy={() => {
+                    update((w) => autoLayout(autoChain(w)));
+                    toast.success("Canvas tidied and every step connected.");
+                  }}
+                  onDropNode={(defId, x, y) => {
+                    if (!active) return;
+                    const node = makeNode(defId, x, y);
+                    update((w) => ({ ...w, nodes: [...w.nodes, node] }));
+                    setSelectedId(node.id);
+                  }}
                 />
               </div>
             </>

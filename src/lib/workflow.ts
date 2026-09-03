@@ -194,3 +194,41 @@ export function exportForN8n(wf: Workflow) {
     meta: { vertical: wf.vertical, generatedBy: "Automation Studio" },
   };
 }
+
+/**
+ * Left-to-right layered auto-layout ("Tidy up"). Depth is the longest incoming
+ * path, so every step sits to the right of everything that feeds it.
+ */
+export function autoLayout(wf: Workflow): Workflow {
+  const COL = 300;
+  const ROW = 176;
+  const depth = new Map<string, number>();
+  const order = orderedNodes(wf);
+  for (const n of order) {
+    const incoming = wf.edges.filter((e) => e.to === n.id);
+    const d = incoming.length ? Math.max(...incoming.map((e) => (depth.get(e.from) ?? 0) + 1)) : 0;
+    depth.set(n.id, d);
+  }
+  const perCol = new Map<number, number>();
+  const nodes = order.map((n) => {
+    const d = depth.get(n.id) ?? 0;
+    const row = perCol.get(d) ?? 0;
+    perCol.set(d, row + 1);
+    return { ...n, x: 60 + d * COL, y: 70 + row * ROW };
+  });
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  return { ...wf, nodes: wf.nodes.map((n) => byId.get(n.id) ?? n), updatedAt: Date.now() };
+}
+
+/** Connects every unlinked step into one clean chain, in topological order. */
+export function autoChain(wf: Workflow): Workflow {
+  const order = orderedNodes(wf);
+  const edges = [...wf.edges];
+  for (let i = 0; i < order.length - 1; i += 1) {
+    const from = order[i]!;
+    const to = order[i + 1]!;
+    const linked = edges.some((e) => e.to === to.id);
+    if (!linked) edges.push({ id: uid("e"), from: from.id, to: to.id });
+  }
+  return { ...wf, edges, updatedAt: Date.now() };
+}
