@@ -10,14 +10,17 @@ import { CopilotBar } from "@/components/studio/CopilotBar";
 import { TimeTravelPanel } from "@/components/studio/TimeTravelPanel";
 import { HealingPanel } from "@/components/studio/HealingPanel";
 import { MappingPanel } from "@/components/studio/MappingPanel";
-import { TEMPLATES, VERTICALS } from "@/lib/automation-catalog";
+import { NODES, TEMPLATES, VERTICALS } from "@/lib/automation-catalog";
 import { impactOf } from "@/lib/impact";
 import type { Plan } from "@/lib/intent";
 import {
   STORAGE_KEY,
+  autoChain,
+  autoLayout,
   blankWorkflow,
   exportForN8n,
   makeNode,
+  orderedNodes,
   simulateRun,
   uid,
   validate,
@@ -52,6 +55,8 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
   const [runningId, setRunningId] = useState<string | null>(null);
   const [tab, setTab] = useState<PanelTab>("run");
   const [hydrated, setHydrated] = useState(false);
+  const [past, setPast] = useState<Workflow[][]>([]);
+  const [future, setFuture] = useState<Workflow[][]>([]);
 
   useEffect(() => {
     let loaded: Workflow[] = [];
