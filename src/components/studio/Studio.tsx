@@ -274,6 +274,27 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
           + New flow
         </button>
 
+        <div className="flex items-center gap-1">
+          <button
+            onClick={undo}
+            disabled={past.length === 0}
+            title="Undo (⌘Z)"
+            className="rounded-lg border border-border px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground disabled:opacity-40"
+          >
+            ↶
+          </button>
+          <button
+            onClick={redo}
+            disabled={future.length === 0}
+            title="Redo (⇧⌘Z)"
+            className="rounded-lg border border-border px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground disabled:opacity-40"
+          >
+            ↷
+          </button>
+        </div>
+
+
+
         <select
           value={active?.vertical ?? ""}
           onChange={(e) => update((w) => ({ ...w, vertical: e.target.value }))}
