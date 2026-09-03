@@ -376,7 +376,18 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
                     }));
                     setSelectedId((cur) => (cur === id ? null : cur));
                   }}
-                  onDropNode={(defId, x, y) => addNode(defId, x, y)}
+                  onDeleteEdge={(edgeId) => update((w) => ({ ...w, edges: w.edges.filter((e) => e.id !== edgeId) }))}
+                  onDuplicate={duplicateNode}
+                  onTidy={() => {
+                    update((w) => autoLayout(autoChain(w)));
+                    toast.success("Canvas tidied and every step connected.");
+                  }}
+                  onDropNode={(defId, x, y) => {
+                    if (!active) return;
+                    const node = makeNode(defId, x, y);
+                    update((w) => ({ ...w, nodes: [...w.nodes, node] }));
+                    setSelectedId(node.id);
+                  }}
                 />
               </div>
             </>
