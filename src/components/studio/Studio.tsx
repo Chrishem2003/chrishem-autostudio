@@ -87,8 +87,38 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
   const issues = useMemo(() => (active ? validate(active) : []), [active]);
   const impact = useMemo(() => impactOf(workflows), [workflows]);
 
+  const commit = (next: Workflow[]) => {
+    setPast((p) => [...p.slice(-40), workflows]);
+    setFuture([]);
+    setWorkflows(next);
+  };
+
   const update = (fn: (wf: Workflow) => Workflow) =>
-    setWorkflows((prev) => prev.map((w) => (w.id === activeId ? { ...fn(w), updatedAt: Date.now() } : w)));
+    setWorkflows((prev) => {
+      setPast((p) => [...p.slice(-40), prev]);
+      setFuture([]);
+      return prev.map((w) => (w.id === activeId ? { ...fn(w), updatedAt: Date.now() } : w));
+    });
+
+  const undo = () => {
+    setPast((p) => {
+      if (p.length === 0) return p;
+      const prevState = p[p.length - 1]!;
+      setFuture((f) => [workflows, ...f].slice(0, 40));
+      setWorkflows(prevState);
+      return p.slice(0, -1);
+    });
+  };
+
+  const redo = () => {
+    setFuture((f) => {
+      if (f.length === 0) return f;
+      const nextState = f[0]!;
+      setPast((p) => [...p, workflows]);
+      setWorkflows(nextState);
+      return f.slice(1);
+    });
+  };
 
   const setConfig = (id: string, key: string, value: string) =>
     update((w) => ({
@@ -99,18 +129,31 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
   const addNode = (defId: string, x?: number, y?: number) => {
     if (!active) return;
     const node = makeNode(defId, x ?? 120 + active.nodes.length * 40, y ?? 120 + (active.nodes.length % 4) * 150);
-    update((w) => ({ ...w, nodes: [...w.nodes, node] }));
+    const tail = orderedNodes(active).at(-1);
+    update((w) => ({
+      ...w,
+      nodes: [...w.nodes, node],
+      edges: tail && NODES[defId]?.kind !== "trigger" ? [...w.edges, { id: uid("e"), from: tail.id, to: node.id }] : w.edges,
+    }));
     setSelectedId(node.id);
   };
 
-  const applyPlan = (plan: Plan) => {
+  const duplicateNode = (id: string) => {
+    if (!active) return;
+    const src = active.nodes.find((n) => n.id === id);
+    if (!src) return;
+    const copy = { ...src, id: uid("n"), x: src.x + 32, y: src.y + 44, name: `${src.name} copy` };
+    update((w) => ({ ...w, nodes: [...w.nodes, copy] }));
+    setSelectedId(copy.id);
+  };
+
+  const buildPlanWorkflow = (plan: Plan): Workflow => {
     const nodes = plan.steps.map((s, i) => {
-      const node = makeNode(s.defId, 90 + (i % 3) * 300, 110 + Math.floor(i / 3) * 190);
+      const node = makeNode(s.defId, 60 + i * 300, 110);
       return { ...node, name: s.name, config: { ...s.config } };
     });
-    if (nodes.length === 0) return;
     const edges = nodes.slice(1).map((n, i) => ({ id: uid("e"), from: nodes[i]!.id, to: n.id }));
-    const wf: Workflow = {
+    return {
       id: uid("wf"),
       name: plan.intent.length > 46 ? `${plan.intent.slice(0, 46)}…` : plan.intent,
       vertical: active?.vertical ?? VERTICALS[0]!.id,
@@ -119,11 +162,29 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
       live: false,
       updatedAt: Date.now(),
     };
-    setWorkflows((prev) => [...prev, wf]);
+  };
+
+  const applyPlan = (plan: Plan, mode: "new" | "append" = "new") => {
+    if (plan.steps.length === 0) return;
+    if (mode === "append" && active) {
+      const startIndex = active.nodes.length;
+      const nodes = plan.steps.map((s, i) => {
+        const node = makeNode(s.defId, 60 + (startIndex + i) * 300, 110 + (startIndex % 2) * 200);
+        return { ...node, name: s.name, config: { ...s.config } };
+      });
+      const edges = nodes.slice(1).map((n, i) => ({ id: uid("e"), from: nodes[i]!.id, to: n.id }));
+      update((w) => autoLayout(autoChain({ ...w, nodes: [...w.nodes, ...nodes], edges: [...w.edges, ...edges] })));
+      setSelectedId(nodes[0]!.id);
+      setTab("map");
+      toast.success(`Added ${nodes.length} steps to ${active.name}.`);
+      return;
+    }
+    const wf = autoLayout(buildPlanWorkflow(plan));
+    commit([...workflows, wf]);
     setActiveId(wf.id);
-    setSelectedId(nodes[0]!.id);
+    setSelectedId(wf.nodes[0]?.id ?? null);
     setTab("map");
-    toast.success(`Provisioned ${nodes.length} steps on a new canvas.`);
+    toast.success(`Provisioned ${wf.nodes.length} connected steps.`);
   };
 
   const runFlow = () => {
