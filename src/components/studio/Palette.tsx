@@ -41,9 +41,12 @@ export function Palette({ vertical, onAdd }: Props) {
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search Slack, invoice, AI…"
+          placeholder="Search every app — Slack, Stripe, invoice, AI…"
           className="mt-2 w-full rounded-lg border border-input bg-surface-raised px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus:border-primary"
         />
+        <p className="mt-1.5 text-[10px] text-muted-foreground">
+          {q ? `${total} step${total === 1 ? "" : "s"} across all apps` : `${total} steps in ${v.name}`}
+        </p>
       </div>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3">
         {grouped.map((g) => (
