@@ -8,7 +8,8 @@ import { cn } from "@/lib/utils";
 
 interface Props {
   vertical: string;
-  onApply: (plan: Plan) => void;
+  flowName?: string;
+  onApply: (plan: Plan, mode?: "new" | "append") => void;
 }
 
 const EXAMPLES = [
