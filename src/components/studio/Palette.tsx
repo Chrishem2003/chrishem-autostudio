@@ -12,19 +12,27 @@ export function Palette({ vertical, onAdd }: Props) {
   const [query, setQuery] = useState("");
   const v = VERTICALS.find((x) => x.id === vertical) ?? VERTICALS[0]!;
 
+  const q = query.trim().toLowerCase();
+
   const grouped = useMemo(() => {
-    const defs = v.nodes
-      .map((id) => NODES[id])
-      .filter((d): d is NonNullable<typeof d> => Boolean(d))
-      .filter((d) =>
-        query
-          ? `${d.label} ${d.tool} ${d.summary}`.toLowerCase().includes(query.toLowerCase())
-          : true,
-      );
+    // No query: show this section's curated steps. With a query: search every
+    // step across all 180+ apps so nothing is hidden behind the section picker.
+    const defs = q
+      ? Object.values(NODES)
+          .filter((d) => `${d.label} ${d.tool} ${d.summary}`.toLowerCase().includes(q))
+          .sort((a, b) => {
+            const av = v.nodes.includes(a.id) ? 0 : 1;
+            const bv = v.nodes.includes(b.id) ? 0 : 1;
+            return av - bv || a.label.localeCompare(b.label);
+          })
+          .slice(0, 300)
+      : v.nodes.map((id) => NODES[id]).filter((d): d is NonNullable<typeof d> => Boolean(d));
     return KIND_ORDER.map((kind) => ({ kind, items: defs.filter((d) => d.kind === kind) })).filter(
       (g) => g.items.length > 0,
     );
-  }, [v, query]);
+  }, [v, q]);
+
+  const total = grouped.reduce((n, g) => n + g.items.length, 0);
 
   return (
     <div className="flex h-full flex-col">
