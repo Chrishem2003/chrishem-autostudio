@@ -386,6 +386,17 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
                 <CopilotBar vertical={active.vertical} flowName={active.name} onApply={applyPlan} />
               </div>
               <div className="relative min-h-0 flex-1 overflow-hidden">
+                {active.nodes.length === 0 ? (
+                  <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center px-6 text-center">
+                    <div className="max-w-md">
+                      <p className="font-display text-lg font-semibold">Start by describing the outcome</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Type what should happen in the Copilot box above — “when a lead comes in, qualify it and post to
+                        #sales” — and we wire the whole pipeline. Or drag a step from the library.
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
                 <div className="pointer-events-none absolute left-4 top-4 z-10 max-w-sm rounded-lg border border-border bg-card/85 px-3 py-2 backdrop-blur">
                   <p className="text-sm font-semibold">{active.name}</p>
                   <p className="text-xs text-muted-foreground">

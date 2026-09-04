@@ -12,19 +12,27 @@ export function Palette({ vertical, onAdd }: Props) {
   const [query, setQuery] = useState("");
   const v = VERTICALS.find((x) => x.id === vertical) ?? VERTICALS[0]!;
 
+  const q = query.trim().toLowerCase();
+
   const grouped = useMemo(() => {
-    const defs = v.nodes
-      .map((id) => NODES[id])
-      .filter((d): d is NonNullable<typeof d> => Boolean(d))
-      .filter((d) =>
-        query
-          ? `${d.label} ${d.tool} ${d.summary}`.toLowerCase().includes(query.toLowerCase())
-          : true,
-      );
+    // No query: show this section's curated steps. With a query: search every
+    // step across all 180+ apps so nothing is hidden behind the section picker.
+    const defs = q
+      ? Object.values(NODES)
+          .filter((d) => `${d.label} ${d.tool} ${d.summary}`.toLowerCase().includes(q))
+          .sort((a, b) => {
+            const av = v.nodes.includes(a.id) ? 0 : 1;
+            const bv = v.nodes.includes(b.id) ? 0 : 1;
+            return av - bv || a.label.localeCompare(b.label);
+          })
+          .slice(0, 300)
+      : v.nodes.map((id) => NODES[id]).filter((d): d is NonNullable<typeof d> => Boolean(d));
     return KIND_ORDER.map((kind) => ({ kind, items: defs.filter((d) => d.kind === kind) })).filter(
       (g) => g.items.length > 0,
     );
-  }, [v, query]);
+  }, [v, q]);
+
+  const total = grouped.reduce((n, g) => n + g.items.length, 0);
 
   return (
     <div className="flex h-full flex-col">
@@ -33,9 +41,12 @@ export function Palette({ vertical, onAdd }: Props) {
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search Slack, invoice, AI…"
+          placeholder="Search every app — Slack, Stripe, invoice, AI…"
           className="mt-2 w-full rounded-lg border border-input bg-surface-raised px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus:border-primary"
         />
+        <p className="mt-1.5 text-[10px] text-muted-foreground">
+          {q ? `${total} step${total === 1 ? "" : "s"} across all apps` : `${total} steps in ${v.name}`}
+        </p>
       </div>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3">
         {grouped.map((g) => (

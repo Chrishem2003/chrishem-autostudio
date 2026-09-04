@@ -8,7 +8,8 @@ import { cn } from "@/lib/utils";
 
 interface Props {
   vertical: string;
-  onApply: (plan: Plan) => void;
+  flowName?: string;
+  onApply: (plan: Plan, mode?: "new" | "append") => void;
 }
 
 const EXAMPLES = [
@@ -17,7 +18,7 @@ const EXAMPLES = [
   "When an invoice is 7 days overdue, email the client and log it",
 ];
 
-export function CopilotBar({ vertical, onApply }: Props) {
+export function CopilotBar({ vertical, flowName, onApply }: Props) {
   const [intent, setIntent] = useState("");
   const [busy, setBusy] = useState(false);
   const [plan, setPlan] = useState<Plan | null>(null);
@@ -95,15 +96,26 @@ export function CopilotBar({ vertical, onApply }: Props) {
             <span className="mono-label">
               {plan.source === "ai" ? "AI-composed pipeline" : "Composed offline"} · {plan.steps.length} steps
             </span>
-            <button
-              onClick={() => {
-                onApply(plan);
-                setPlan(null);
-              }}
-              className="ml-auto rounded-md border border-primary/60 px-2 py-1 text-[11px] font-semibold text-primary"
-            >
-              Provision on canvas
-            </button>
+            <div className="ml-auto flex items-center gap-1.5">
+              <button
+                onClick={() => {
+                  onApply(plan, "append");
+                  setPlan(null);
+                }}
+                className="rounded-md border border-border px-2 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
+              >
+                Add to {flowName ? (flowName.length > 18 ? `${flowName.slice(0, 18)}…` : flowName) : "this flow"}
+              </button>
+              <button
+                onClick={() => {
+                  onApply(plan, "new");
+                  setPlan(null);
+                }}
+                className="rounded-md border border-primary/60 bg-primary/10 px-2 py-1 text-[11px] font-semibold text-primary"
+              >
+                Provision on new canvas
+              </button>
+            </div>
           </div>
           <ol className="mt-2 space-y-1">
             {plan.steps.map((s, i) => {
