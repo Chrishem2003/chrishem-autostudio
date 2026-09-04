@@ -18,7 +18,7 @@ const EXAMPLES = [
   "When an invoice is 7 days overdue, email the client and log it",
 ];
 
-export function CopilotBar({ vertical, onApply }: Props) {
+export function CopilotBar({ vertical, flowName, onApply }: Props) {
   const [intent, setIntent] = useState("");
   const [busy, setBusy] = useState(false);
   const [plan, setPlan] = useState<Plan | null>(null);
