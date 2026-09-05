@@ -347,6 +347,14 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
           + New flow
         </button>
 
+        <button
+          onClick={() => setCmdOpen(true)}
+          className="rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
+        >
+          Search everything <span className="ml-1 opacity-70">⌘K</span>
+        </button>
+
+
         <div className="flex items-center gap-1">
           <button
             onClick={undo}
