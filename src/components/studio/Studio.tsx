@@ -10,6 +10,9 @@ import { CopilotBar } from "@/components/studio/CopilotBar";
 import { TimeTravelPanel } from "@/components/studio/TimeTravelPanel";
 import { HealingPanel } from "@/components/studio/HealingPanel";
 import { MappingPanel } from "@/components/studio/MappingPanel";
+import { ConnectionsPanel } from "@/components/studio/ConnectionsPanel";
+import { DoctorPanel } from "@/components/studio/DoctorPanel";
+import { CommandPalette, type CommandAction } from "@/components/studio/CommandPalette";
 import { NODES, TEMPLATES, VERTICALS } from "@/lib/automation-catalog";
 import { impactOf } from "@/lib/impact";
 import type { Plan } from "@/lib/intent";
@@ -30,15 +33,18 @@ import {
 } from "@/lib/workflow";
 import { cn } from "@/lib/utils";
 
-type PanelTab = "run" | "time" | "heal" | "map" | "templates";
+type PanelTab = "run" | "doctor" | "accounts" | "time" | "heal" | "map" | "templates";
 
 const TAB_LABEL: Record<PanelTab, string> = {
   run: "Run",
+  doctor: "Doctor",
+  accounts: "Accounts",
   time: "Time-travel",
   heal: "Healing",
   map: "Mapping",
   templates: "Templates",
 };
+
 
 interface Props {
   embedded?: boolean;
