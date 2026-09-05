@@ -529,12 +529,21 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
                 onExport={exportFlow}
                 onSelectNode={setSelectedId}
               />
+            ) : tab === "doctor" ? (
+              <div className="h-full overflow-y-auto">
+                <DoctorPanel workflow={active} onUpdate={update} />
+              </div>
+            ) : tab === "accounts" ? (
+              <div className="h-full overflow-y-auto">
+                <ConnectionsPanel workflow={active} />
+              </div>
             ) : tab === "time" && active ? (
               <TimeTravelPanel workflow={active} onSelectNode={setSelectedId} />
             ) : tab === "heal" && active ? (
               <HealingPanel workflow={active} onHeal={setConfig} onSelectNode={setSelectedId} />
             ) : tab === "map" && active ? (
               <MappingPanel workflow={active} node={selected} onApply={setConfig} />
+
             ) : (
               <div className="h-full space-y-2 overflow-y-auto p-3">
                 <p className="mono-label">Start from a proven flow · {TEMPLATES.length} ready</p>
