@@ -65,6 +65,8 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
   const [future, setFuture] = useState<Workflow[][]>([]);
   const undoRef = useRef<() => void>(() => {});
   const redoRef = useRef<() => void>(() => {});
+  const [cmdOpen, setCmdOpen] = useState(false);
+
 
   useEffect(() => {
     let loaded: Workflow[] = [];
