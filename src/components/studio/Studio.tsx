@@ -10,6 +10,9 @@ import { CopilotBar } from "@/components/studio/CopilotBar";
 import { TimeTravelPanel } from "@/components/studio/TimeTravelPanel";
 import { HealingPanel } from "@/components/studio/HealingPanel";
 import { MappingPanel } from "@/components/studio/MappingPanel";
+import { ConnectionsPanel } from "@/components/studio/ConnectionsPanel";
+import { DoctorPanel } from "@/components/studio/DoctorPanel";
+import { CommandPalette, type CommandAction } from "@/components/studio/CommandPalette";
 import { NODES, TEMPLATES, VERTICALS } from "@/lib/automation-catalog";
 import { impactOf } from "@/lib/impact";
 import type { Plan } from "@/lib/intent";
@@ -30,15 +33,18 @@ import {
 } from "@/lib/workflow";
 import { cn } from "@/lib/utils";
 
-type PanelTab = "run" | "time" | "heal" | "map" | "templates";
+type PanelTab = "run" | "doctor" | "accounts" | "time" | "heal" | "map" | "templates";
 
 const TAB_LABEL: Record<PanelTab, string> = {
   run: "Run",
+  doctor: "Doctor",
+  accounts: "Accounts",
   time: "Time-travel",
   heal: "Healing",
   map: "Mapping",
   templates: "Templates",
 };
+
 
 interface Props {
   embedded?: boolean;
@@ -59,6 +65,8 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
   const [future, setFuture] = useState<Workflow[][]>([]);
   const undoRef = useRef<() => void>(() => {});
   const redoRef = useRef<() => void>(() => {});
+  const [cmdOpen, setCmdOpen] = useState(false);
+
 
   useEffect(() => {
     let loaded: Workflow[] = [];
@@ -96,7 +104,14 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z") return;
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const key = e.key.toLowerCase();
+      if (key === "k") {
+        e.preventDefault();
+        setCmdOpen((o) => !o);
+        return;
+      }
+      if (key !== "z") return;
       const target = e.target as HTMLElement | null;
       if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
       e.preventDefault();
@@ -106,6 +121,7 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
 
   const commit = (next: Workflow[]) => {
     setPast((p) => [...p.slice(-40), workflows]);
@@ -247,9 +263,48 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
     }
   };
 
+  const useTemplate = (templateId: string) => {
+    const tpl = TEMPLATES.find((t) => t.id === templateId);
+    if (!tpl) return;
+    const wf = workflowFromTemplate(templateId);
+    commit([...workflows, wf]);
+    setActiveId(wf.id);
+    setSelectedId(null);
+    setSteps([]);
+    setTab("run");
+    toast.success(`${tpl.name} added to your flows.`);
+  };
+
+  const commands: CommandAction[] = [
+    { id: "run", label: "Run this flow", hint: "simulate", run: runFlow },
+    { id: "tidy", label: "Tidy up and connect everything", hint: "auto-layout", run: () => update((w) => autoLayout(autoChain(w))) },
+    { id: "doctor", label: "Open the flow doctor", hint: "fix issues", run: () => setTab("doctor") },
+    { id: "accounts", label: "Review the accounts this flow needs", hint: "connections", run: () => setTab("accounts") },
+    { id: "time", label: "Open time-travel debugging", hint: "inspect a run", run: () => setTab("time") },
+    { id: "export", label: "Copy n8n workflow JSON", hint: "export", run: () => void exportFlow() },
+    { id: "new", label: "Start a new flow", hint: "blank canvas", run: () => {
+      const wf = blankWorkflow(active?.vertical);
+      commit([...workflows, wf]);
+      setActiveId(wf.id);
+      setSelectedId(null);
+      setSteps([]);
+    } },
+    { id: "undo", label: "Undo the last change", hint: "⌘Z", run: undo },
+    { id: "redo", label: "Redo", hint: "⇧⌘Z", run: redo },
+  ];
+
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
       <Toaster />
+      <CommandPalette
+        open={cmdOpen}
+        onClose={() => setCmdOpen(false)}
+        actions={commands}
+        onAddStep={(defId) => addNode(defId)}
+        onUseTemplate={useTemplate}
+        onSetVertical={(v) => update((w) => ({ ...w, vertical: v }))}
+      />
+
       <header className="flex flex-wrap items-center gap-3 border-b border-border bg-surface px-4 py-2.5">
         <div className="flex items-center gap-2">
           <span className="grid size-7 place-items-center rounded-md bg-primary font-display text-sm font-bold text-primary-foreground">
@@ -291,6 +346,14 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
         >
           + New flow
         </button>
+
+        <button
+          onClick={() => setCmdOpen(true)}
+          className="rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
+        >
+          Search everything <span className="ml-1 opacity-70">⌘K</span>
+        </button>
+
 
         <div className="flex items-center gap-1">
           <button
@@ -474,12 +537,21 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
                 onExport={exportFlow}
                 onSelectNode={setSelectedId}
               />
+            ) : tab === "doctor" ? (
+              <div className="h-full overflow-y-auto">
+                <DoctorPanel workflow={active} onUpdate={update} />
+              </div>
+            ) : tab === "accounts" ? (
+              <div className="h-full overflow-y-auto">
+                <ConnectionsPanel workflow={active} />
+              </div>
             ) : tab === "time" && active ? (
               <TimeTravelPanel workflow={active} onSelectNode={setSelectedId} />
             ) : tab === "heal" && active ? (
               <HealingPanel workflow={active} onHeal={setConfig} onSelectNode={setSelectedId} />
             ) : tab === "map" && active ? (
               <MappingPanel workflow={active} node={selected} onApply={setConfig} />
+
             ) : (
               <div className="h-full space-y-2 overflow-y-auto p-3">
                 <p className="mono-label">Start from a proven flow · {TEMPLATES.length} ready</p>
