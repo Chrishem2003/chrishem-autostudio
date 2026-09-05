@@ -263,9 +263,48 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
     }
   };
 
+  const useTemplate = (templateId: string) => {
+    const tpl = TEMPLATES.find((t) => t.id === templateId);
+    if (!tpl) return;
+    const wf = workflowFromTemplate(templateId);
+    commit([...workflows, wf]);
+    setActiveId(wf.id);
+    setSelectedId(null);
+    setSteps([]);
+    setTab("run");
+    toast.success(`${tpl.name} added to your flows.`);
+  };
+
+  const commands: CommandAction[] = [
+    { id: "run", label: "Run this flow", hint: "simulate", run: runFlow },
+    { id: "tidy", label: "Tidy up and connect everything", hint: "auto-layout", run: () => update((w) => autoLayout(autoChain(w))) },
+    { id: "doctor", label: "Open the flow doctor", hint: "fix issues", run: () => setTab("doctor") },
+    { id: "accounts", label: "Review the accounts this flow needs", hint: "connections", run: () => setTab("accounts") },
+    { id: "time", label: "Open time-travel debugging", hint: "inspect a run", run: () => setTab("time") },
+    { id: "export", label: "Copy n8n workflow JSON", hint: "export", run: () => void exportFlow() },
+    { id: "new", label: "Start a new flow", hint: "blank canvas", run: () => {
+      const wf = blankWorkflow(active?.vertical);
+      commit([...workflows, wf]);
+      setActiveId(wf.id);
+      setSelectedId(null);
+      setSteps([]);
+    } },
+    { id: "undo", label: "Undo the last change", hint: "⌘Z", run: undo },
+    { id: "redo", label: "Redo", hint: "⇧⌘Z", run: redo },
+  ];
+
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
       <Toaster />
+      <CommandPalette
+        open={cmdOpen}
+        onClose={() => setCmdOpen(false)}
+        actions={commands}
+        onAddStep={(defId) => addNode(defId)}
+        onUseTemplate={useTemplate}
+        onSetVertical={(v) => update((w) => ({ ...w, vertical: v }))}
+      />
+
       <header className="flex flex-wrap items-center gap-3 border-b border-border bg-surface px-4 py-2.5">
         <div className="flex items-center gap-2">
           <span className="grid size-7 place-items-center rounded-md bg-primary font-display text-sm font-bold text-primary-foreground">
