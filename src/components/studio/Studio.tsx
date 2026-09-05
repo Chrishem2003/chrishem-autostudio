@@ -104,7 +104,14 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z") return;
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const key = e.key.toLowerCase();
+      if (key === "k") {
+        e.preventDefault();
+        setCmdOpen((o) => !o);
+        return;
+      }
+      if (key !== "z") return;
       const target = e.target as HTMLElement | null;
       if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
       e.preventDefault();
@@ -114,6 +121,7 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
 
   const commit = (next: Workflow[]) => {
     setPast((p) => [...p.slice(-40), workflows]);
