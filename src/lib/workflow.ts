@@ -23,6 +23,8 @@ export interface Workflow {
   edges: WorkflowEdge[];
   live: boolean;
   updatedAt: number;
+  /** Cloud automation id once saved to the backend. */
+  cloudId?: string | undefined;
 }
 
 export interface RunStep {
