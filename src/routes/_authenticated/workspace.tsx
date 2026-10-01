@@ -1,0 +1,232 @@
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { STORAGE_KEY, type Workflow } from "@/lib/workflow";
+import {
+  deleteAutomation,
+  disconnectIntegration,
+  listAutomations,
+  listIntegrations,
+  listRuns,
+  listVersions,
+  restoreVersion,
+  setAutomationStatus,
+  verifyIntegration,
+} from "@/lib/cloud.functions";
+import { cn } from "@/lib/utils";
+
+export const Route = createFileRoute("/_authenticated/workspace")({
+  head: () => ({
+    meta: [
+      { title: "My Workspace — Chrishem AutoStudio" },
+      { name: "description", content: "Your saved automations, versions, run history and connected apps." },
+      { property: "og:title", content: "My Workspace — Chrishem AutoStudio" },
+      { property: "og:description", content: "Your saved automations, versions, run history and connected apps." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
+  component: Workspace,
+});
+
+type Section = "automations" | "runs" | "integrations";
+
+function healthTone(h: number) {
+  return h >= 80 ? "text-primary" : h >= 50 ? "text-foreground" : "text-destructive";
+}
+
+function Workspace() {
+  const [section, setSection] = useState<Section>("automations");
+  const { user } = Route.useRouteContext();
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+
+  const signOut = async () => {
+    await qc.cancelQueries();
+    qc.clear();
+    await supabase.auth.signOut();
+    navigate({ to: "/auth", replace: true });
+  };
+
+  return (
+    <div className="flex min-h-screen bg-background text-foreground">
+      <aside className="w-56 shrink-0 border-r border-border bg-surface p-4">
+        <Link to="/" className="font-display text-sm font-semibold">Chrishem AutoStudio</Link>
+        <nav className="mt-6 space-y-1 text-sm">
+          {(
+            [
+              ["automations", "My Automations"],
+              ["runs", "Run History"],
+              ["integrations", "Integrations"],
+            ] as const
+          ).map(([id, label]) => (
+            <button key={id} onClick={() => setSection(id)}
+              className={cn("block w-full rounded-lg px-3 py-2 text-left", section === id ? "bg-surface-raised text-foreground" : "text-muted-foreground hover:text-foreground")}>
+              {label}
+            </button>
+          ))}
+          <Link to="/marketplace" className="block rounded-lg px-3 py-2 text-muted-foreground hover:text-foreground">Templates</Link>
+        </nav>
+        <div className="mt-10 text-xs text-muted-foreground">
+          <p className="truncate">{user.email}</p>
+          <button onClick={signOut} className="mt-2 text-primary">Sign out</button>
+        </div>
+      </aside>
+      <main className="flex-1 p-6">
+        <div className="mb-6 flex items-center justify-between">
+          <h1 className="font-display text-xl font-semibold">
+            {section === "automations" ? "My Automations" : section === "runs" ? "Run History" : "Integrations"}
+          </h1>
+          <Link to="/" className="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground">+ New Automation</Link>
+        </div>
+        {section === "automations" && <Automations />}
+        {section === "runs" && <Runs />}
+        {section === "integrations" && <Integrations />}
+      </main>
+    </div>
+  );
+}
+
+function Automations() {
+  const list = useServerFn(listAutomations);
+  const del = useServerFn(deleteAutomation);
+  const status = useServerFn(setAutomationStatus);
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const [openId, setOpenId] = useState<string | null>(null);
+  const q = useQuery({ queryKey: ["automations"], queryFn: () => list() });
+  const refresh = () => qc.invalidateQueries({ queryKey: ["automations"] });
+
+  const openInStudio = (flow: Workflow, cloudId: string) => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      const local = raw ? (JSON.parse(raw) as Workflow[]) : [];
+      const next = [{ ...flow, cloudId }, ...local.filter((w) => w.id !== flow.id)];
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    } catch { /* ignore */ }
+    navigate({ to: "/" });
+  };
+
+  if (q.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (q.error) return <p className="text-sm text-destructive">Couldn't load your automations. <button onClick={() => q.refetch()} className="underline">Try again</button></p>;
+  const rows = q.data ?? [];
+  if (!rows.length)
+    return (
+      <div className="rounded-2xl border border-dashed border-border p-10 text-center">
+        <p className="font-display text-lg">No saved automations yet</p>
+        <p className="mt-1 text-sm text-muted-foreground">Describe what you want in the studio, then press “Save to cloud”.</p>
+        <Link to="/" className="mt-4 inline-block rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground">Open the studio</Link>
+      </div>
+    );
+
+  return (
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      {rows.map((a) => (
+        <div key={a.id} className="rounded-xl border border-border bg-surface p-4">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="font-medium">{a.name}</p>
+              <p className="mono-label">v{a.version} · {a.status} · {a.flow?.nodes.length ?? 0} steps</p>
+            </div>
+            <span className={cn("rounded-md border border-border px-2 py-0.5 text-xs font-semibold", healthTone(a.healthScore))}>{a.healthScore}</span>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Updated {new Date(a.updatedAt).toLocaleString()}{a.lastRunAt ? ` · last run ${new Date(a.lastRunAt).toLocaleString()}` : ""}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs">
+            {a.flow && <button onClick={() => openInStudio(a.flow!, a.id)} className="rounded-md bg-primary px-2 py-1 text-primary-foreground">Open</button>}
+            <button onClick={async () => { await status({ data: { automationId: a.id, status: a.status === "live" ? "paused" : "live" } }); refresh(); }}
+              className="rounded-md border border-border px-2 py-1">{a.status === "live" ? "Pause" : "Go live"}</button>
+            <button onClick={() => setOpenId(openId === a.id ? null : a.id)} className="rounded-md border border-border px-2 py-1">History</button>
+            <button onClick={async () => { if (confirm(`Delete “${a.name}”?`)) { await del({ data: { automationId: a.id } }); refresh(); } }}
+              className="rounded-md border border-border px-2 py-1 text-destructive">Delete</button>
+          </div>
+          {openId === a.id && <Versions automationId={a.id} onRestored={refresh} />}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Versions({ automationId, onRestored }: { automationId: string; onRestored: () => void }) {
+  const list = useServerFn(listVersions);
+  const restore = useServerFn(restoreVersion);
+  const q = useQuery({ queryKey: ["versions", automationId], queryFn: () => list({ data: { automationId } }) });
+  const m = useMutation({
+    mutationFn: (versionNumber: number) => restore({ data: { automationId, versionNumber } }),
+    onSuccess: () => { q.refetch(); onRestored(); },
+  });
+  return (
+    <ul className="mt-3 max-h-48 space-y-1 overflow-auto border-t border-border pt-2 text-xs">
+      {(q.data ?? []).map((v, i) => (
+        <li key={v.id} className="flex items-center justify-between gap-2">
+          <span>v{v.versionNumber} · {v.changeSummary ?? "Saved"} · {new Date(v.createdAt).toLocaleDateString()}</span>
+          {i > 0 && <button disabled={m.isPending} onClick={() => m.mutate(v.versionNumber)} className="text-primary">Roll back</button>}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function Runs() {
+  const list = useServerFn(listRuns);
+  const q = useQuery({ queryKey: ["runs"], queryFn: () => list() });
+  const [open, setOpen] = useState<string | null>(null);
+  if (q.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  const rows = q.data ?? [];
+  if (!rows.length) return <p className="text-sm text-muted-foreground">No runs yet. Save a flow, then press Run in the studio — each run is recorded here with every step.</p>;
+  return (
+    <div className="space-y-2">
+      {rows.map((r) => (
+        <div key={r.id} className="rounded-xl border border-border bg-surface p-3">
+          <button onClick={() => setOpen(open === r.id ? null : r.id)} className="flex w-full items-center justify-between text-left text-sm">
+            <span>
+              <span className={cn("mr-2 font-semibold", r.status === "failed" ? "text-destructive" : "text-primary")}>{r.status}</span>
+              {r.triggerType} {r.isDryRun && "· dry run"}
+            </span>
+            <span className="mono-label">{new Date(r.startedAt).toLocaleString()} · {r.durationMs ?? 0}ms</span>
+          </button>
+          {r.errorSummary && <p className="mt-1 text-xs text-destructive">{r.errorSummary}</p>}
+          {open === r.id && (
+            <ol className="mt-2 space-y-1 border-t border-border pt-2 text-xs">
+              {r.steps.map((s) => (
+                <li key={s.id}>
+                  <span className="font-medium">{s.label}</span> — {s.status} ({s.durationMs ?? 0}ms){s.errorDetail ? ` · ${s.errorDetail}` : ""}
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Integrations() {
+  const list = useServerFn(listIntegrations);
+  const verify = useServerFn(verifyIntegration);
+  const disc = useServerFn(disconnectIntegration);
+  const q = useQuery({ queryKey: ["integrations"], queryFn: () => list() });
+  if (q.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  const rows = q.data ?? [];
+  if (!rows.length) return <p className="text-sm text-muted-foreground">No apps connected yet. Open a flow's Accounts tab in the studio to connect the apps it needs.</p>;
+  return (
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      {rows.map((i) => (
+        <div key={i.id} className="rounded-xl border border-border bg-surface p-4">
+          <p className="font-medium">{i.provider}</p>
+          <p className="mono-label">
+            {i.status === "connected" ? "Connected" : i.status} · verified {i.lastVerifiedAt ? new Date(i.lastVerifiedAt).toLocaleString() : "never"}
+          </p>
+          {i.scopes.length > 0 && <p className="mt-1 text-xs text-muted-foreground">Permissions: {i.scopes.join(", ")}</p>}
+          <div className="mt-3 flex gap-2 text-xs">
+            <button onClick={async () => { await verify({ data: { integrationId: i.id } }); q.refetch(); }} className="rounded-md border border-border px-2 py-1">Test connection</button>
+            <button onClick={async () => { await disc({ data: { integrationId: i.id } }); q.refetch(); }} className="rounded-md border border-border px-2 py-1 text-destructive">Disconnect</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
