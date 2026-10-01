@@ -1,4 +1,7 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { useAuth } from "@/hooks/use-auth";
+import { recordRun, saveAutomation } from "@/lib/cloud.functions";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
@@ -66,6 +69,12 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
   const undoRef = useRef<() => void>(() => {});
   const redoRef = useRef<() => void>(() => {});
   const [cmdOpen, setCmdOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const { user } = useAuth();
+  const signedIn = !!user;
+  const navigate = useNavigate();
+  const saveFn = useServerFn(saveAutomation);
+  const recordRunFn = useServerFn(recordRun);
 
 
   useEffect(() => {
@@ -122,6 +131,32 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+
+  const saveToCloud = async () => {
+    if (!active) return;
+    if (!signedIn) {
+      toast("Sign in to save your flows to the cloud.");
+      navigate({ to: "/auth" });
+      return;
+    }
+    setSaving(true);
+    try {
+      const { cloudId, ...flow } = active;
+      const res = await saveFn({
+        data: {
+          ...(cloudId ? { automationId: cloudId } : {}),
+          flow,
+          changeSummary: cloudId ? "Saved from studio" : "First save",
+        },
+      });
+      setWorkflows((prev) => prev.map((w) => (w.id === active.id ? { ...w, cloudId: res.automationId } : w)));
+      toast.success(`Saved as version ${res.version}.`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't save — try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const commit = (next: Workflow[]) => {
     setPast((p) => [...p.slice(-40), workflows]);
@@ -246,6 +281,21 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
           const failed = result.filter((r) => r.status === "failed").length;
           if (failed) toast.error(`Run finished with ${failed} failed step${failed > 1 ? "s" : ""}.`);
           else toast.success("Run completed successfully.");
+          if (signedIn && active.cloudId) {
+            recordRunFn({
+              data: {
+                automationId: active.cloudId,
+                triggerType: "manual",
+                isDryRun: true,
+                steps: result.map((r) => ({
+                  label: r.label.slice(0, 160),
+                  status: r.status === "failed" ? "failed" : "dry_run",
+                  durationMs: Math.max(0, Math.round(r.ms)),
+                  detail: r.detail.slice(0, 500),
+                })),
+              },
+            }).catch(() => {});
+          }
         }
       }, 320 * (i + 1));
     });
@@ -353,6 +403,24 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
         >
           Search everything <span className="ml-1 opacity-70">⌘K</span>
         </button>
+
+        {!embedded && (
+          <>
+            <button
+              onClick={saveToCloud}
+              disabled={saving}
+              className="rounded-lg border border-primary/60 px-2.5 py-1.5 text-xs text-primary transition-colors hover:bg-primary/10 disabled:opacity-50"
+            >
+              {saving ? "Saving…" : active?.cloudId ? "Save new version" : "Save to cloud"}
+            </button>
+            <Link
+              to={signedIn ? "/workspace" : "/auth"}
+              className="rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+            >
+              {signedIn ? "My workspace" : "Sign in"}
+            </Link>
+          </>
+        )}
 
 
         <div className="flex items-center gap-1">
