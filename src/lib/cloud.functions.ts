@@ -95,7 +95,7 @@ export const saveAutomation = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ context, data }): Promise<{ automationId: string; version: number }> => {
-    const flow = data.flow as unknown as Record<string, unknown>;
+    const flow = data.flow as unknown as import("@/integrations/supabase/types").Json;
     let automationId = data.automationId;
     let version = 1;
 
@@ -263,7 +263,7 @@ export interface CloudRun {
     status: string;
     durationMs: number | null;
     errorDetail: string | null;
-    output: unknown;
+    output: import("@/integrations/supabase/types").Json | null;
   }>;
 }
 
