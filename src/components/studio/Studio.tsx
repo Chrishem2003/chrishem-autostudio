@@ -10,6 +10,7 @@ import { Palette } from "@/components/studio/Palette";
 import { Inspector } from "@/components/studio/Inspector";
 import { RunPanel } from "@/components/studio/RunPanel";
 import { CopilotBar } from "@/components/studio/CopilotBar";
+import { ThemeToggle } from "@/components/studio/ThemeToggle";
 import { TimeTravelPanel } from "@/components/studio/TimeTravelPanel";
 import { HealingPanel } from "@/components/studio/HealingPanel";
 import { MappingPanel } from "@/components/studio/MappingPanel";
@@ -403,6 +404,7 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
         >
           Search everything <span className="ml-1 opacity-70">⌘K</span>
         </button>
+        <ThemeToggle />
 
         {!embedded && (
           <>
@@ -514,7 +516,7 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
           {active ? (
             <>
               <div className="border-b border-border bg-surface/60 p-3">
-                <CopilotBar vertical={active.vertical} flowName={active.name} onApply={applyPlan} />
+                <CopilotBar vertical={active.vertical} flowName={active.name} currentDefIds={active.nodes.map((n) => n.defId)} onApply={applyPlan} />
               </div>
               <div className="relative min-h-0 flex-1 overflow-hidden">
                 {active.nodes.length === 0 ? (

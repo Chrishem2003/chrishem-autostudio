@@ -9,6 +9,8 @@ import { cn } from "@/lib/utils";
 interface Props {
   vertical: string;
   flowName?: string;
+  /** Step ids already on the canvas — used for the before/after diff. */
+  currentDefIds?: string[];
   onApply: (plan: Plan, mode?: "new" | "append") => void;
 }
 
@@ -18,7 +20,7 @@ const EXAMPLES = [
   "When an invoice is 7 days overdue, email the client and log it",
 ];
 
-export function CopilotBar({ vertical, flowName, onApply }: Props) {
+export function CopilotBar({ vertical, flowName, currentDefIds = [], onApply }: Props) {
   const [intent, setIntent] = useState("");
   const [busy, setBusy] = useState(false);
   const [plan, setPlan] = useState<Plan | null>(null);
@@ -117,13 +119,26 @@ export function CopilotBar({ vertical, flowName, onApply }: Props) {
               </button>
             </div>
           </div>
+          {currentDefIds.length > 0 ? (
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              If added to this flow: <span className="text-action">
+                +{plan.steps.filter((s) => !currentDefIds.includes(s.defId)).length} new
+              </span>{" "}· {plan.steps.filter((s) => currentDefIds.includes(s.defId)).length} already there · {currentDefIds.length} existing steps untouched
+            </p>
+          ) : null}
           <ol className="mt-2 space-y-1">
             {plan.steps.map((s, i) => {
               const kind = NODES[s.defId]?.kind ?? "action";
+              const isNew = !currentDefIds.includes(s.defId);
               return (
                 <li key={`${s.defId}-${i}`} className="flex items-start gap-2 text-xs">
                   <span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", KIND_STYLE[kind].dot)} />
                   <span className="font-medium">{s.name}</span>
+                  {currentDefIds.length > 0 ? (
+                    <span className={cn("rounded px-1 text-[9px] font-semibold uppercase", isNew ? "bg-action/15 text-action" : "bg-muted text-muted-foreground")}>
+                      {isNew ? "new" : "exists"}
+                    </span>
+                  ) : null}
                   <span className="truncate text-muted-foreground">— {s.reason}</span>
                 </li>
               );
