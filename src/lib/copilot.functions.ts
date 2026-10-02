@@ -56,7 +56,7 @@ export const composeFlow = createServerFn({ method: "POST" })
         method: "POST",
         headers: { "Content-Type": "application/json", "Lovable-API-Key": key },
         body: JSON.stringify({
-          model: "openai/gpt-5.6-sol",
+          model: "openai/gpt-6-astra",
           input: [
             {
               role: "system",
