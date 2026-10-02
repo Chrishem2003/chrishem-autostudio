@@ -116,6 +116,32 @@
   --sidebar-ring: oklch(0.704 0.04 256.788);
 }
 
+html.light {
+  --background: oklch(0.975 0.006 85);
+  --foreground: oklch(0.22 0.025 254);
+  --surface: oklch(0.955 0.008 85);
+  --surface-raised: oklch(0.93 0.01 85);
+  --grid: oklch(0.88 0.01 85);
+  --card: oklch(0.99 0.004 85);
+  --card-foreground: oklch(0.22 0.025 254);
+  --popover: oklch(0.99 0.004 85);
+  --popover-foreground: oklch(0.22 0.025 254);
+  --primary: oklch(0.62 0.16 70);
+  --primary-foreground: oklch(0.99 0.01 85);
+  --secondary: oklch(0.92 0.01 85);
+  --secondary-foreground: oklch(0.25 0.025 254);
+  --muted: oklch(0.93 0.008 85);
+  --muted-foreground: oklch(0.48 0.02 254);
+  --border: oklch(0.86 0.012 85);
+  --input: oklch(0.86 0.012 85);
+  --ring: oklch(0.62 0.16 70);
+  --trigger: oklch(0.62 0.16 70);
+  --logic: oklch(0.55 0.12 195);
+  --ai: oklch(0.55 0.17 305);
+  --action: oklch(0.55 0.14 150);
+  --output: oklch(0.55 0.12 250);
+}
+
 .dark {
   --background: oklch(0.129 0.042 264.695);
   --foreground: oklch(0.984 0.003 247.858);
