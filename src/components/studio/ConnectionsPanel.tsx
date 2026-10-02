@@ -11,6 +11,9 @@ import {
 } from "@/lib/connections";
 import type { Workflow } from "@/lib/workflow";
 import { cn } from "@/lib/utils";
+import { useServerFn } from "@tanstack/react-start";
+import { useAuth } from "@/hooks/use-auth";
+import { connectIntegration } from "@/lib/cloud.functions";
 
 interface Props {
   workflow: Workflow | null;
@@ -19,6 +22,14 @@ interface Props {
 export function ConnectionsPanel({ workflow }: Props) {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [pending, setPending] = useState<string | null>(null);
+  const { user } = useAuth();
+  const cloudConnect = useServerFn(connectIntegration);
+  const sync = (tool: string, auth: Connection["auth"]) => {
+    if (!user) return;
+    cloudConnect({ data: { provider: tool, accountLabel: suggestAccount(tool), authKind: auth, scopes: [] } }).catch(() =>
+      toast.error(`Couldn't save the ${tool} connection to your workspace.`),
+    );
+  };
 
   useEffect(() => {
     setConnections(loadConnections());
@@ -48,6 +59,7 @@ export function ConnectionsPanel({ workflow }: Props) {
         },
       ]);
       setPending(null);
+      sync(tool, appForTool(tool)?.auth ?? "none");
       toast.success(`${tool} connected.`);
     }, 650);
   };
@@ -62,6 +74,7 @@ export function ConnectionsPanel({ workflow }: Props) {
         connectedAt: Date.now(),
       })),
     ]);
+    missing.forEach((m) => sync(m.tool, m.auth));
     toast.success(`Connected ${missing.length} account${missing.length === 1 ? "" : "s"} for this flow.`);
   };
 

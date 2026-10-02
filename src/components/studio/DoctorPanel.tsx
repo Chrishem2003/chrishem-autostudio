@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { diagnose, explainFlow, scoreFlow } from "@/lib/doctor";
 import type { Workflow } from "@/lib/workflow";
 import { cn } from "@/lib/utils";
+import { simulateImpact } from "@/lib/conflicts";
 
 interface Props {
   workflow: Workflow | null;
@@ -16,6 +17,7 @@ export function DoctorPanel({ workflow, onUpdate }: Props) {
 
   if (!workflow || !score) return <p className="p-3 text-sm text-muted-foreground">Open a flow to run the doctor.</p>;
 
+  const impact = simulateImpact(workflow, score.runsPerDay);
   const repairable = fixes.filter((f) => f.id !== "review");
 
   return (
@@ -94,6 +96,19 @@ export function DoctorPanel({ workflow, onUpdate }: Props) {
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="rounded-lg border border-border bg-card/60 p-2.5">
+        <p className="mono-label">Before you go live — last 30 days</p>
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          At this rate it would have run about <span className="text-foreground">{impact.runs}</span> times
+          {impact.effects.length ? " and:" : " with no outside effects."}
+        </p>
+        <ul className="mt-1 space-y-0.5 text-[11px]">
+          {impact.effects.map((e) => (
+            <li key={e.label}>· {e.label} <span className="text-muted-foreground">×{e.count}</span></li>
+          ))}
+        </ul>
       </div>
 
       <div className="rounded-lg border border-border bg-surface-raised p-2.5">

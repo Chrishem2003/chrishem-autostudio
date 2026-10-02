@@ -15,6 +15,8 @@ import {
   setAutomationStatus,
   verifyIntegration,
 } from "@/lib/cloud.functions";
+import { explainFailure } from "@/lib/assist.functions";
+import { detectConflicts } from "@/lib/conflicts";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/workspace")({
@@ -121,7 +123,17 @@ function Automations() {
       </div>
     );
 
+  const conflicts = detectConflicts(rows.map((a) => ({ name: a.name, flow: a.flow, status: a.status })));
   return (
+    <>
+    {conflicts.length > 0 && (
+      <div className="mb-4 space-y-1 rounded-xl border border-destructive/40 bg-destructive/5 p-3 text-sm">
+        <p className="font-medium">Possible conflicts between your flows</p>
+        {conflicts.map((c) => (
+          <p key={c.tool} className="text-xs text-muted-foreground"><span className="text-foreground">{c.flows.join(" + ")}</span> — {c.detail}</p>
+        ))}
+      </div>
+    )}
     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
       {rows.map((a) => (
         <div key={a.id} className="rounded-xl border border-border bg-surface p-4">
@@ -147,6 +159,7 @@ function Automations() {
         </div>
       ))}
     </div>
+    </>
   );
 }
 
@@ -189,6 +202,7 @@ function Runs() {
             <span className="mono-label">{new Date(r.startedAt).toLocaleString()} · {r.durationMs ?? 0}ms</span>
           </button>
           {r.errorSummary && <p className="mt-1 text-xs text-destructive">{r.errorSummary}</p>}
+          {(r.status === "failed" || r.status === "halted") && <ExplainFailure runId={r.id} />}
           {open === r.id && (
             <ol className="mt-2 space-y-1 border-t border-border pt-2 text-xs">
               {r.steps.map((s) => (
@@ -200,6 +214,23 @@ function Runs() {
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+function ExplainFailure({ runId }: { runId: string }) {
+  const explain = useServerFn(explainFailure);
+  const m = useMutation({ mutationFn: () => explain({ data: { runId } }) });
+  return (
+    <div className="mt-2 text-xs">
+      {m.data ? (
+        <p className="rounded-lg border border-border bg-surface-raised p-2">{m.data.explanation}</p>
+      ) : (
+        <button disabled={m.isPending} onClick={() => m.mutate()} className="rounded-md border border-primary/60 px-2 py-1 text-primary">
+          {m.isPending ? "Looking into it…" : "Explain this failure"}
+        </button>
+      )}
+      {m.error && <p className="mt-1 text-destructive">Couldn't explain this run. Try again.</p>}
     </div>
   );
 }
@@ -223,7 +254,7 @@ function Integrations() {
           {i.scopes.length > 0 && <p className="mt-1 text-xs text-muted-foreground">Permissions: {i.scopes.join(", ")}</p>}
           <div className="mt-3 flex gap-2 text-xs">
             <button onClick={async () => { await verify({ data: { integrationId: i.id } }); q.refetch(); }} className="rounded-md border border-border px-2 py-1">Test connection</button>
-            <button onClick={async () => { await disc({ data: { integrationId: i.id } }); q.refetch(); }} className="rounded-md border border-border px-2 py-1 text-destructive">Disconnect</button>
+            <button onClick={async () => { const r = await disc({ data: { integrationId: i.id } }); if (r.paused.length) alert(`Paused because they use ${i.provider}: ${r.paused.join(", ")}. Reconnect ${i.provider} and press "Go live" to resume.`); q.refetch(); }} className="rounded-md border border-border px-2 py-1 text-destructive">Disconnect</button>
           </div>
         </div>
       ))}
