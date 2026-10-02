@@ -460,7 +460,25 @@ export const disconnectIntegration = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ integrationId: z.string().uuid() }).parse(input))
   .handler(async ({ context, data }) => {
+    const { data: integ } = await context.supabase
+      .from("integrations").select("provider").eq("id", data.integrationId).maybeSingle();
     const { error } = await context.supabase.from("integrations").delete().eq("id", data.integrationId);
     if (error) throw new Error(error.message);
-    return { ok: true };
+    // Scoped revocation: pause only the live flows that use this app.
+    let paused: string[] = [];
+    if (integ?.provider) {
+      const { NODES } = await import("./automation-catalog");
+      const provider = integ.provider.toLowerCase();
+      const { data: autos } = await context.supabase
+        .from("automations").select("id, name, flow_json").eq("status", "live");
+      const hit = (autos ?? []).filter((a) => {
+        const nodes = ((a.flow_json as { nodes?: Array<{ defId: string }> } | null)?.nodes ?? []);
+        return nodes.some((n) => NODES[n.defId]?.tool.toLowerCase() === provider);
+      });
+      if (hit.length) {
+        await context.supabase.from("automations").update({ status: "paused" }).in("id", hit.map((a) => a.id));
+        paused = hit.map((a) => a.name);
+      }
+    }
+    return { ok: true, paused };
   });

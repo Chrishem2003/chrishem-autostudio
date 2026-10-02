@@ -15,7 +15,7 @@ function profile(wf: Workflow) {
     const def = NODES[n.defId];
     if (!def) continue;
     if (def.kind === "trigger") trigger ||= def.tool ?? def.label;
-    if ((def.kind === "action" || def.kind === "output") && def.tool) writes.add(def.tool);
+    if ((def.kind === "action" || def.kind === "output") && def.tool && def.tool !== "Core") writes.add(def.tool);
   }
   return { writes, trigger };
 }
