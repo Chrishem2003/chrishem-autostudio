@@ -12,7 +12,7 @@ async function ask(prompt: string): Promise<string | null> {
       method: "POST",
       headers: { "Content-Type": "application/json", "Lovable-API-Key": key },
       body: JSON.stringify({
-        model: "openai/gpt-5.6-sol",
+        model: "openai/gpt-6-astra",
         input: [
           { role: "system", content: "You are a senior automation support engineer. Be specific, short, practical." },
           { role: "user", content: prompt },
