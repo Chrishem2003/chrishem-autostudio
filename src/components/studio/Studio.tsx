@@ -516,7 +516,7 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
           {active ? (
             <>
               <div className="border-b border-border bg-surface/60 p-3">
-                <CopilotBar vertical={active.vertical} flowName={active.name} onApply={applyPlan} />
+                <CopilotBar vertical={active.vertical} flowName={active.name} currentDefIds={active.nodes.map((n) => n.defId)} onApply={applyPlan} />
               </div>
               <div className="relative min-h-0 flex-1 overflow-hidden">
                 {active.nodes.length === 0 ? (
