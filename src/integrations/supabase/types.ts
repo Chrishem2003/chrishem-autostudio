@@ -62,8 +62,11 @@ export type Database = {
           flow_json: Json
           health_score: number
           id: string
+          is_published: boolean
           last_run_at: string | null
           name: string
+          published_at: string | null
+          remix_count: number
           status: Database["public"]["Enums"]["automation_status"]
           updated_at: string
           user_id: string
@@ -77,8 +80,11 @@ export type Database = {
           flow_json?: Json
           health_score?: number
           id?: string
+          is_published?: boolean
           last_run_at?: string | null
           name?: string
+          published_at?: string | null
+          remix_count?: number
           status?: Database["public"]["Enums"]["automation_status"]
           updated_at?: string
           user_id?: string
@@ -92,8 +98,11 @@ export type Database = {
           flow_json?: Json
           health_score?: number
           id?: string
+          is_published?: boolean
           last_run_at?: string | null
           name?: string
+          published_at?: string | null
+          remix_count?: number
           status?: Database["public"]["Enums"]["automation_status"]
           updated_at?: string
           user_id?: string

@@ -177,6 +177,7 @@ export function SiteNav({ current }: { current: string }) {
   const links = [
     { to: "/" as const, label: "Studio" },
     { to: "/marketplace" as const, label: "Marketplace" },
+    { to: "/gallery" as const, label: "Gallery" },
     { to: "/impact" as const, label: "Impact" },
     { to: "/sdk" as const, label: "Embed SDK" },
   ];

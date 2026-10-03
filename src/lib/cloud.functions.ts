@@ -76,6 +76,7 @@ export const listAutomations = createServerFn({ method: "GET" })
       .select(
         "id, name, description, vertical, status, version, health_score, last_run_at, updated_at, flow_json",
       )
+      .eq("user_id", context.userId)
       .order("updated_at", { ascending: false });
     if (error) throw new Error(error.message);
     return (data ?? []).map(toAutomation);
@@ -470,7 +471,7 @@ export const disconnectIntegration = createServerFn({ method: "POST" })
       const { NODES } = await import("./automation-catalog");
       const provider = integ.provider.toLowerCase();
       const { data: autos } = await context.supabase
-        .from("automations").select("id, name, flow_json").eq("status", "live");
+        .from("automations").select("id, name, flow_json").eq("status", "live").eq("user_id", context.userId);
       const hit = (autos ?? []).filter((a) => {
         const nodes = ((a.flow_json as { nodes?: Array<{ defId: string }> } | null)?.nodes ?? []);
         return nodes.some((n) => NODES[n.defId]?.tool.toLowerCase() === provider);

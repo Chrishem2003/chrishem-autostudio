@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as EmbedRouteImport } from './routes/embed'
+import { Route as GalleryRouteImport } from './routes/gallery'
 import { Route as ImpactRouteImport } from './routes/impact'
 import { Route as MarketplaceRouteImport } from './routes/marketplace'
 import { Route as SdkRouteImport } from './routes/sdk'
@@ -35,6 +36,11 @@ const AuthRoute = AuthRouteImport.update({
 const EmbedRoute = EmbedRouteImport.update({
   id: '/embed',
   path: '/embed',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GalleryRoute = GalleryRouteImport.update({
+  id: '/gallery',
+  path: '/gallery',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ImpactRoute = ImpactRouteImport.update({
@@ -62,6 +68,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/embed': typeof EmbedRoute
+  '/gallery': typeof GalleryRoute
   '/impact': typeof ImpactRoute
   '/marketplace': typeof MarketplaceRoute
   '/sdk': typeof SdkRoute
@@ -71,6 +78,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/embed': typeof EmbedRoute
+  '/gallery': typeof GalleryRoute
   '/impact': typeof ImpactRoute
   '/marketplace': typeof MarketplaceRoute
   '/sdk': typeof SdkRoute
@@ -82,6 +90,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/embed': typeof EmbedRoute
+  '/gallery': typeof GalleryRoute
   '/impact': typeof ImpactRoute
   '/marketplace': typeof MarketplaceRoute
   '/sdk': typeof SdkRoute
@@ -93,6 +102,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/embed'
+    | '/gallery'
     | '/impact'
     | '/marketplace'
     | '/sdk'
@@ -102,6 +112,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/embed'
+    | '/gallery'
     | '/impact'
     | '/marketplace'
     | '/sdk'
@@ -112,6 +123,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/embed'
+    | '/gallery'
     | '/impact'
     | '/marketplace'
     | '/sdk'
@@ -123,6 +135,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   EmbedRoute: typeof EmbedRoute
+  GalleryRoute: typeof GalleryRoute
   ImpactRoute: typeof ImpactRoute
   MarketplaceRoute: typeof MarketplaceRoute
   SdkRoute: typeof SdkRoute
@@ -156,6 +169,13 @@ declare module '@tanstack/react-router' {
       path: '/embed'
       fullPath: '/embed'
       preLoaderRoute: typeof EmbedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/gallery': {
+      id: '/gallery'
+      path: '/gallery'
+      fullPath: '/gallery'
+      preLoaderRoute: typeof GalleryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/impact': {
@@ -205,6 +225,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   EmbedRoute: EmbedRoute,
+  GalleryRoute: GalleryRoute,
   ImpactRoute: ImpactRoute,
   MarketplaceRoute: MarketplaceRoute,
   SdkRoute: SdkRoute,
