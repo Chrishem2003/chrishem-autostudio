@@ -136,31 +136,59 @@ export function validate(wf: Workflow): Issue[] {
   return issues;
 }
 
+/**
+ * Every step runs through a resilience wrapper: per-step timeout (config
+ * "timeout" seconds, default 30), up to 3 attempts with exponential backoff
+ * for transient failures, and a per-app circuit breaker that stops calling an
+ * app after it fails repeatedly in the same run.
+ */
 export function simulateRun(wf: Workflow): RunStep[] {
   const order = orderedNodes(wf).filter((n) => wf.edges.some((e) => e.from === n.id || e.to === n.id) || wf.nodes.length === 1);
   let skipping = false;
+  const failuresByTool: Record<string, number> = {};
   return order.map((n) => {
     const def = NODES[n.defId];
     const kind = def?.kind ?? "action";
-    const ms = kind === "ai" ? 700 + Math.round(Math.random() * 900) : 40 + Math.round(Math.random() * 220);
+    const tool = def?.tool ?? "tool";
+    const timeoutMs = Math.max(1, Number(n.config["timeout"]) || 30) * 1000;
+    const base = kind === "ai" ? 700 + Math.round(Math.random() * 900) : 40 + Math.round(Math.random() * 220);
     if (skipping) return { nodeId: n.id, label: n.name, status: "skipped" as const, ms: 0, detail: "Upstream filter stopped this branch." };
+    if ((failuresByTool[tool] ?? 0) >= 3) {
+      return { nodeId: n.id, label: n.name, status: "skipped" as const, ms: 0, detail: `${tool} paused — it kept failing, so new calls are held to protect your account.` };
+    }
     if (n.defId === "logic.filter" && !n.config["condition"]) {
       skipping = true;
-      return { nodeId: n.id, label: n.name, status: "failed" as const, ms, detail: "No condition set — nothing passes." };
+      return { nodeId: n.id, label: n.name, status: "failed" as const, ms: base, detail: "No condition set — nothing passes." };
     }
+    // Transient failures (rate-limit / 5xx / timeout) on external calls.
+    let ms = 0;
+    let attempts = 0;
+    let ok = false;
+    const flaky = kind === "action" || kind === "output" ? 0.08 : 0;
+    while (attempts < 3 && !ok) {
+      attempts++;
+      const took = Math.min(base, timeoutMs);
+      ms += took + (attempts > 1 ? 250 * 2 ** (attempts - 2) : 0);
+      ok = Math.random() >= flaky;
+    }
+    if (!ok) {
+      failuresByTool[tool] = (failuresByTool[tool] ?? 0) + 1;
+      return { nodeId: n.id, label: n.name, status: "failed" as const, ms, detail: `${tool} didn't respond after 3 tries (rate-limit or outage). Try again shortly.` };
+    }
+    const retried = attempts > 1 ? ` (succeeded on try ${attempts})` : "";
     return {
       nodeId: n.id,
       label: n.name,
       status: "ok" as const,
       ms,
       detail:
-        kind === "trigger"
+        (kind === "trigger"
           ? "Payload received (1 item)."
           : kind === "ai"
             ? "Model returned structured output."
             : kind === "logic"
               ? "1 item passed."
-              : `Delivered to ${def?.tool ?? "tool"}.`,
+              : `Delivered to ${tool}.`) + retried,
     };
   });
 }
