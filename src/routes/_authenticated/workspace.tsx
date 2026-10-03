@@ -18,6 +18,7 @@ import {
 import { explainFailure } from "@/lib/assist.functions";
 import { detectConflicts } from "@/lib/conflicts";
 import { cn } from "@/lib/utils";
+import { setPublished } from "@/lib/gallery.functions";
 
 export const Route = createFileRoute("/_authenticated/workspace")({
   head: () => ({
@@ -101,6 +102,7 @@ function Automations() {
   const q = useQuery({ queryKey: ["automations"], queryFn: () => list() });
   const refresh = () => qc.invalidateQueries({ queryKey: ["automations"] });
 
+  const share = useServerFn(setPublished);
   const openInStudio = (flow: Workflow, cloudId: string) => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -151,6 +153,8 @@ function Automations() {
             {a.flow && <button onClick={() => openInStudio(a.flow!, a.id)} className="rounded-md bg-primary px-2 py-1 text-primary-foreground">Open</button>}
             <button onClick={async () => { await status({ data: { automationId: a.id, status: a.status === "live" ? "paused" : "live" } }); refresh(); }}
               className="rounded-md border border-border px-2 py-1">{a.status === "live" ? "Pause" : "Go live"}</button>
+            <button onClick={async () => { await share({ data: { automationId: a.id, published: true } }); alert(`“${a.name}” is now in the community gallery (steps only — no accounts or settings).`); }}
+              className="rounded-md border border-border px-2 py-1">Share to gallery</button>
             <button onClick={() => setOpenId(openId === a.id ? null : a.id)} className="rounded-md border border-border px-2 py-1">History</button>
             <button onClick={async () => { if (confirm(`Delete “${a.name}”?`)) { await del({ data: { automationId: a.id } }); refresh(); } }}
               className="rounded-md border border-border px-2 py-1 text-destructive">Delete</button>
@@ -215,6 +219,7 @@ function Runs() {
         </div>
       ))}
     </div>
+    </div>
   );
 }
 
@@ -243,7 +248,16 @@ function Integrations() {
   if (q.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
   const rows = q.data ?? [];
   if (!rows.length) return <p className="text-sm text-muted-foreground">No apps connected yet. Open a flow's Accounts tab in the studio to connect the apps it needs.</p>;
+  const STALE = 6 * 3600_000;
+  const stale = rows.filter((i) => i.status !== "connected" || !i.lastVerifiedAt || Date.now() - new Date(i.lastVerifiedAt).getTime() > STALE);
   return (
+    <div className="space-y-3">
+    {stale.length > 0 && (
+      <div className="rounded-xl border border-destructive/50 bg-destructive/10 p-3 text-sm">
+        {stale.length} connection{stale.length === 1 ? "" : "s"} haven't been checked in 6+ hours ({stale.map((i) => i.provider).join(", ")}). Check them now so scheduled flows don't fail silently.
+        <button onClick={async () => { for (const i of stale) await verify({ data: { integrationId: i.id } }); q.refetch(); }} className="ml-2 rounded-md border border-border px-2 py-0.5 text-xs">Check all now</button>
+      </div>
+    )}
     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
       {rows.map((i) => (
         <div key={i.id} className="rounded-xl border border-border bg-surface p-4">
@@ -258,6 +272,7 @@ function Integrations() {
           </div>
         </div>
       ))}
+    </div>
     </div>
   );
 }
