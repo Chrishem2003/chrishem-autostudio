@@ -37,7 +37,7 @@ export const runWebStep = createServerFn({ method: "POST" })
         const res = await fetch(url, {
           method: data.method,
           headers: hasBody ? { "content-type": "application/json", "user-agent": "Chrishem-AutoStudio/1.0" } : { "user-agent": "Chrishem-AutoStudio/1.0" },
-          body: hasBody ? data.body : undefined,
+          body: hasBody ? data.body! : null,
           redirect: "manual",
           signal: AbortSignal.timeout(data.timeoutSec * 1000),
         });

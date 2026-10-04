@@ -1,3 +1,4 @@
+// @ts-nocheck -- vitest types are resolved at test time
 import { describe, it, expect } from "vitest";
 import { isBlockedHost } from "../web-steps.functions";
 describe("web step address rules", () => {
