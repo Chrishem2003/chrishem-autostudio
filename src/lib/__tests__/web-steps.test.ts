@@ -1,6 +1,6 @@
 // @ts-nocheck -- vitest types are resolved at test time
 import { describe, it, expect } from "vitest";
-import { isBlockedHost } from "../web-steps.functions";
+import { isBlockedHost } from "../web-steps.server";
 describe("web step address rules", () => {
   it("blocks localhost", () => expect(isBlockedHost("localhost")).toBe(true));
   it("blocks private 10.x", () => expect(isBlockedHost("10.1.2.3")).toBe(true));
