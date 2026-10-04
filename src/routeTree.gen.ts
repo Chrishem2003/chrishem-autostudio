@@ -18,6 +18,7 @@ import { Route as ImpactRouteImport } from './routes/impact'
 import { Route as MarketplaceRouteImport } from './routes/marketplace'
 import { Route as SdkRouteImport } from './routes/sdk'
 import { Route as AuthenticatedWorkspaceRouteImport } from './routes/_authenticated/workspace'
+import { Route as ApiPublicCronRunScheduledRouteImport } from './routes/api/public/cron/run-scheduled'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -63,6 +64,12 @@ const AuthenticatedWorkspaceRoute = AuthenticatedWorkspaceRouteImport.update({
   path: '/workspace',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiPublicCronRunScheduledRoute =
+  ApiPublicCronRunScheduledRouteImport.update({
+    id: '/api/public/cron/run-scheduled',
+    path: '/api/public/cron/run-scheduled',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -73,6 +80,7 @@ export interface FileRoutesByFullPath {
   '/marketplace': typeof MarketplaceRoute
   '/sdk': typeof SdkRoute
   '/workspace': typeof AuthenticatedWorkspaceRoute
+  '/api/public/cron/run-scheduled': typeof ApiPublicCronRunScheduledRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -83,6 +91,7 @@ export interface FileRoutesByTo {
   '/marketplace': typeof MarketplaceRoute
   '/sdk': typeof SdkRoute
   '/workspace': typeof AuthenticatedWorkspaceRoute
+  '/api/public/cron/run-scheduled': typeof ApiPublicCronRunScheduledRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -95,6 +104,7 @@ export interface FileRoutesById {
   '/marketplace': typeof MarketplaceRoute
   '/sdk': typeof SdkRoute
   '/_authenticated/workspace': typeof AuthenticatedWorkspaceRoute
+  '/api/public/cron/run-scheduled': typeof ApiPublicCronRunScheduledRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -107,6 +117,7 @@ export interface FileRouteTypes {
     | '/marketplace'
     | '/sdk'
     | '/workspace'
+    | '/api/public/cron/run-scheduled'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -117,6 +128,7 @@ export interface FileRouteTypes {
     | '/marketplace'
     | '/sdk'
     | '/workspace'
+    | '/api/public/cron/run-scheduled'
   id:
     | '__root__'
     | '/'
@@ -128,6 +140,7 @@ export interface FileRouteTypes {
     | '/marketplace'
     | '/sdk'
     | '/_authenticated/workspace'
+    | '/api/public/cron/run-scheduled'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -139,6 +152,7 @@ export interface RootRouteChildren {
   ImpactRoute: typeof ImpactRoute
   MarketplaceRoute: typeof MarketplaceRoute
   SdkRoute: typeof SdkRoute
+  ApiPublicCronRunScheduledRoute: typeof ApiPublicCronRunScheduledRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -206,6 +220,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedWorkspaceRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/public/cron/run-scheduled': {
+      id: '/api/public/cron/run-scheduled'
+      path: '/api/public/cron/run-scheduled'
+      fullPath: '/api/public/cron/run-scheduled'
+      preLoaderRoute: typeof ApiPublicCronRunScheduledRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -229,6 +250,7 @@ const rootRouteChildren: RootRouteChildren = {
   ImpactRoute: ImpactRoute,
   MarketplaceRoute: MarketplaceRoute,
   SdkRoute: SdkRoute,
+  ApiPublicCronRunScheduledRoute: ApiPublicCronRunScheduledRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
