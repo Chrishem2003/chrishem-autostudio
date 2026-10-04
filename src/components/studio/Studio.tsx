@@ -2,6 +2,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
 import { recordRun, saveAutomation } from "@/lib/cloud.functions";
+import { runWebStep } from "@/lib/web-steps.functions";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
@@ -76,6 +77,7 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
   const navigate = useNavigate();
   const saveFn = useServerFn(saveAutomation);
   const recordRunFn = useServerFn(recordRun);
+  const webStepFn = useServerFn(runWebStep);
 
 
   useEffect(() => {
@@ -262,7 +264,7 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
     toast.success(`Provisioned ${wf.nodes.length} connected steps.`);
   };
 
-  const runFlow = () => {
+  const runFlow = async () => {
     if (!active) return;
     const result = simulateRun(active);
     if (result.length === 0) {
@@ -272,6 +274,30 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
     setSteps([]);
     setRunning(true);
     setTab("run");
+    let live = false;
+    if (signedIn) {
+      for (let i = 0; i < result.length; i++) {
+        const r = result[i]!;
+        const node = active.nodes.find((n) => n.id === r.nodeId);
+        if (!node || (node.defId !== "action.http" && node.defId !== "output.webhook") || r.status === "skipped") continue;
+        const url = node.config["url"]?.trim();
+        if (!url) continue;
+        live = true;
+        try {
+          const out = await webStepFn({
+            data: {
+              method: (node.defId === "output.webhook" ? "POST" : (node.config["method"] || "GET")) as "GET",
+              url,
+              body: node.config["body"] || (node.defId === "output.webhook" ? JSON.stringify({ flow: active.name, sentAt: new Date().toISOString() }) : undefined),
+              timeoutSec: Math.min(60, Math.max(1, Number(node.config["timeout"]) || 30)),
+            },
+          });
+          result[i] = { ...r, status: out.ok ? "ok" : "failed", ms: out.ms, detail: `Live: ${out.detail}` };
+        } catch {
+          result[i] = { ...r, status: "failed", detail: "Live: that address isn't valid — use a full https:// link." };
+        }
+      }
+    }
     result.forEach((s, i) => {
       window.setTimeout(() => {
         setRunningId(s.nodeId);
