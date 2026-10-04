@@ -313,10 +313,10 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
               data: {
                 automationId: active.cloudId,
                 triggerType: "manual",
-                isDryRun: true,
+                isDryRun: !live,
                 steps: result.map((r) => ({
                   label: r.label.slice(0, 160),
-                  status: r.status === "failed" ? "failed" : "dry_run",
+                  status: r.status === "failed" ? "failed" : r.detail.startsWith("Live:") ? "success" : "dry_run",
                   durationMs: Math.max(0, Math.round(r.ms)),
                   detail: r.detail.slice(0, 500),
                 })),
