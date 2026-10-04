@@ -8,3 +8,5 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+- Real outbound web calls go through `callWeb` in src/lib/web-steps.server.ts (private-address block, 3 retries) — one guarded path for both manual and scheduled runs.
+- Scheduled runs are executed by POST /api/public/cron/run-scheduled (cron-secret auth) using `isDue` in src/lib/schedule.ts — keeps schedule rules pure and testable.
