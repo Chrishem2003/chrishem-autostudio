@@ -91,6 +91,7 @@ const BASE_NODES: Record<string, NodeDef> = {
     tool: "Slack",
     summary: "Post to a channel or DM a teammate.",
     fields: [
+      { key: "webhook", label: "Slack webhook link (sends for real)", placeholder: "https://hooks.slack.com/services/…" },
       { key: "channel", label: "Channel", placeholder: "#ops" },
       { key: "message", label: "Message", type: "textarea", placeholder: "New lead: {{name}}" },
     ],
@@ -569,7 +570,13 @@ function buildGenerated(): Record<string, NodeDef> {
           kind: kindForApp(app),
           tool: app.name,
           summary: `${verb} a ${object} in ${app.name}.`,
-          fields: actionFields(verb, object),
+          fields:
+            verb === "Create" && object === "message" && ["Slack", "Discord", "Microsoft Teams", "Mattermost"].includes(app.name)
+              ? [
+                  { key: "webhook", label: `${app.name} webhook link (sends for real)`, placeholder: "https://…" },
+                  { key: "message", label: "Message", type: "textarea", placeholder: "New lead: {{name}}" },
+                ]
+              : actionFields(verb, object),
         };
       }
     }
