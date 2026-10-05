@@ -3,6 +3,8 @@ import { authenticateCronRequest } from "@/integrations/supabase/cron-auth";
 import { isDue } from "@/lib/schedule";
 import { callWeb } from "@/lib/web-steps.server";
 import { orderedNodes, type Workflow } from "@/lib/workflow";
+import { NODES } from "@/lib/automation-catalog";
+import { buildChatRequest, isChatMessageStep } from "@/lib/chat-steps";
 
 export const Route = createFileRoute("/api/public/cron/run-scheduled")({
   server: {
@@ -32,6 +34,19 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
           let halted = false;
           for (const n of orderedNodes(wf)) {
             if (halted) break;
+            const tool = NODES[n.defId]?.tool;
+            const chat = isChatMessageStep(n.defId, tool) ? buildChatRequest(tool!, n.config ?? {}, wf.name) : null;
+            if (chat && "error" in chat) {
+              steps.push({ nodeId: n.id, label: n.name, status: "failed", ms: 0, detail: chat.error });
+              halted = true;
+              continue;
+            }
+            if (chat) {
+              const r = await callWeb({ method: "POST", url: chat.url, body: chat.body, timeoutSec: 30 });
+              steps.push({ nodeId: n.id, label: n.name, status: r.ok ? "success" : "failed", ms: r.ms, detail: r.detail });
+              if (!r.ok) halted = true;
+              continue;
+            }
             const url = n.config?.["url"]?.trim();
             if ((n.defId === "action.http" || n.defId === "output.webhook") && url) {
               let r;

@@ -3,6 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
 import { recordRun, saveAutomation } from "@/lib/cloud.functions";
 import { runWebStep } from "@/lib/web-steps.functions";
+import { buildChatRequest, isChatMessageStep } from "@/lib/chat-steps";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
@@ -279,18 +280,31 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
       for (let i = 0; i < result.length; i++) {
         const r = result[i]!;
         const node = active.nodes.find((n) => n.id === r.nodeId);
-        if (!node || (node.defId !== "action.http" && node.defId !== "output.webhook") || r.status === "skipped") continue;
-        const url = node.config["url"]?.trim();
-        if (!url) continue;
+        if (!node || r.status === "skipped") continue;
+        const tool = NODES[node.defId]?.tool;
+        let req: { method: "GET" | "POST"; url: string; body?: string | undefined } | null = null;
+        if (isChatMessageStep(node.defId, tool)) {
+          const chat = buildChatRequest(tool!, node.config, active.name);
+          if (!chat) continue;
+          if ("error" in chat) {
+            live = true;
+            result[i] = { ...r, status: "failed", detail: `Live: ${chat.error}` };
+            continue;
+          }
+          req = { method: "POST", url: chat.url, body: chat.body };
+        } else if (node.defId === "action.http" || node.defId === "output.webhook") {
+          const url = node.config["url"]?.trim();
+          if (!url) continue;
+          req = {
+            method: (node.defId === "output.webhook" ? "POST" : (node.config["method"] || "GET")) as "GET",
+            url,
+            body: node.config["body"] || (node.defId === "output.webhook" ? JSON.stringify({ flow: active.name, sentAt: new Date().toISOString() }) : undefined),
+          };
+        } else continue;
         live = true;
         try {
           const out = await webStepFn({
-            data: {
-              method: (node.defId === "output.webhook" ? "POST" : (node.config["method"] || "GET")) as "GET",
-              url,
-              body: node.config["body"] || (node.defId === "output.webhook" ? JSON.stringify({ flow: active.name, sentAt: new Date().toISOString() }) : undefined),
-              timeoutSec: Math.min(60, Math.max(1, Number(node.config["timeout"]) || 30)),
-            },
+            data: { ...req, timeoutSec: Math.min(60, Math.max(1, Number(node.config["timeout"]) || 30)) },
           });
           result[i] = { ...r, status: out.ok ? "ok" : "failed", ms: out.ms, detail: `Live: ${out.detail}` };
         } catch {
