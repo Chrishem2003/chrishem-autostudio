@@ -31,7 +31,8 @@ function SdkPage() {
   const [template, setTemplate] = useState("");
   const [height, setHeight] = useState(820);
 
-  const base = typeof window !== "undefined" ? window.location.origin : "https://your-app.lovable.app";
+  // Embed snippets always point at the published app so copied code works anywhere.
+  const base = "https://chrishem-autostudio.lovable.app";
   const src = useMemo(() => {
     const q = new URLSearchParams();
     if (vertical) q.set("vertical", vertical);
