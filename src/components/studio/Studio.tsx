@@ -3,6 +3,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
 import { recordRun, saveAutomation } from "@/lib/cloud.functions";
 import { runWebStep } from "@/lib/web-steps.functions";
+import { sendGmailStep } from "@/lib/gmail.functions";
+import { isGmailSendStep } from "@/lib/gmail-steps";
 import { buildChatRequest, isChatMessageStep } from "@/lib/chat-steps";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -79,6 +81,7 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
   const saveFn = useServerFn(saveAutomation);
   const recordRunFn = useServerFn(recordRun);
   const webStepFn = useServerFn(runWebStep);
+  const gmailFn = useServerFn(sendGmailStep);
 
 
   useEffect(() => {
@@ -283,6 +286,17 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
         if (!node || r.status === "skipped") continue;
         const tool = NODES[node.defId]?.tool;
         let req: { method: "GET" | "POST"; url: string; body?: string | undefined } | null = null;
+        if (isGmailSendStep(node.defId)) {
+          if (!node.config["to"]?.trim()) continue;
+          live = true;
+          try {
+            const out = await gmailFn({ data: { config: node.config, flowName: active.name } });
+            result[i] = { ...r, status: out.ok ? "ok" : "failed", ms: out.ms ?? r.ms, detail: `Live: ${out.detail}` };
+          } catch {
+            result[i] = { ...r, status: "failed", detail: "Live: couldn't reach Gmail — try again shortly." };
+          }
+          continue;
+        }
         if (isChatMessageStep(node.defId, tool)) {
           const chat = buildChatRequest(tool!, node.config, active.name);
           if (!chat) continue;

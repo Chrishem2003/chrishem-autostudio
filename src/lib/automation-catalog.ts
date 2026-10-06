@@ -130,6 +130,18 @@ const BASE_NODES: Record<string, NodeDef> = {
       { key: "body", label: "Body", type: "textarea" },
     ],
   },
+  "action.gmail": {
+    id: "action.gmail",
+    label: "Send Gmail",
+    kind: "action",
+    tool: "Gmail",
+    summary: "Send a real email from your own connected Gmail.",
+    fields: [
+      { key: "to", label: "To", placeholder: "client@example.com" },
+      { key: "subject", label: "Subject", placeholder: "Your report is ready" },
+      { key: "body", label: "Message", type: "textarea" },
+    ],
+  },
   "action.crm": {
     id: "action.crm",
     label: "Upsert CRM record",
@@ -512,6 +524,12 @@ const BASE_NODES: Record<string, NodeDef> = {
 function actionFields(verb: string, object: string): NodeDef["fields"] {
   switch (verb) {
     case "Create":
+      if (object === "email")
+        return [
+          { key: "to", label: "To", placeholder: "client@example.com" },
+          { key: "subject", label: "Subject", placeholder: "Your report is ready" },
+          { key: "body", label: "Message", type: "textarea" },
+        ];
       return [
         { key: "fields", label: `${cap(object)} fields`, type: "textarea", placeholder: "name = {{name}}\nemail = {{email}}" },
         { key: "account", label: "Connected account", placeholder: "default" },

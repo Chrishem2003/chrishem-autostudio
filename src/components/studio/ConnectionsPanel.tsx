@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
 import { connectIntegration } from "@/lib/cloud.functions";
+import { GmailConnect } from "./GmailConnect";
 
 interface Props {
   workflow: Workflow | null;
@@ -80,6 +81,7 @@ export function ConnectionsPanel({ workflow }: Props) {
 
   return (
     <div className="space-y-3 p-3">
+      <GmailConnect />
       <div className="rounded-lg border border-border bg-card/60 p-2.5">
         <p className="mono-label">Accounts this flow needs</p>
         <p className="mt-1 text-xs text-muted-foreground">
