@@ -43,7 +43,10 @@ export function GmailConnect() {
 
   const connect = async () => {
     const popup = window.open("", "gmail-oauth", "width=600,height=720");
-    if (!popup) return toast.error("Your browser blocked the Google window. Allow pop-ups and try again.");
+    if (!popup) {
+      toast.error("Your browser blocked the Google window. Allow pop-ups and try again.");
+      return;
+    }
     setBusy(true);
     try {
       const { authorizationUrl } = await start();
