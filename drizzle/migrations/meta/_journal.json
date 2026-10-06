@@ -15,6 +15,13 @@
       "when": 1791008929780,
       "tag": "0001_owner_checks_explicit",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791278799247,
+      "tag": "0002_app_user_connections",
+      "breakpoints": true
     }
   ]
 }
