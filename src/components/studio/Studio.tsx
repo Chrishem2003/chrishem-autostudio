@@ -2,10 +2,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
 import { recordRun, saveAutomation } from "@/lib/cloud.functions";
-import { runWebStep } from "@/lib/web-steps.functions";
-import { sendGmailStep } from "@/lib/gmail.functions";
-import { isGmailSendStep } from "@/lib/gmail-steps";
-import { buildChatRequest, isChatMessageStep } from "@/lib/chat-steps";
+import { executeAutomationFlow } from "@/lib/execution.functions";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
@@ -80,8 +77,7 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
   const navigate = useNavigate();
   const saveFn = useServerFn(saveAutomation);
   const recordRunFn = useServerFn(recordRun);
-  const webStepFn = useServerFn(runWebStep);
-  const gmailFn = useServerFn(sendGmailStep);
+  const executeAutomationFlowFn = useServerFn(executeAutomationFlow);
 
 
   useEffect(() => {
@@ -270,6 +266,45 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
 
   const runFlow = async () => {
     if (!active) return;
+
+    // Live actions must be submitted as a saved, owner-scoped server execution.
+    // The browser never calls provider endpoints step-by-step.
+    if (active.live) {
+      if (!signedIn) {
+        toast.error("Sign in before queueing a live run.");
+        navigate({ to: "/auth" });
+        return;
+      }
+      if (!active.cloudId) {
+        toast.error("Save this flow to the cloud before queueing a live run.");
+        return;
+      }
+
+      setSteps([]);
+      setRunning(true);
+      setTab("run");
+      try {
+        const queued = await executeAutomationFlowFn({
+          data: {
+            automationId: active.cloudId,
+            mode: "live",
+            requestId: crypto.randomUUID(),
+          },
+        });
+        if ("queued" in queued && queued.queued) {
+          toast.success(`Live run queued (${queued.status}). Job ID: ${queued.jobId}`);
+        } else {
+          toast.message("Live run request returned without a queue receipt.");
+        }
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Live run could not be queued safely.");
+      } finally {
+        setRunning(false);
+      }
+      return;
+    }
+
+    // Test runs are previews only. They do not call provider APIs.
     const result = simulateRun(active);
     if (result.length === 0) {
       toast.error("Nothing to run yet — add and connect a couple of steps.");
@@ -278,81 +313,33 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
     setSteps([]);
     setRunning(true);
     setTab("run");
-    let live = false;
-    if (signedIn) {
-      for (let i = 0; i < result.length; i++) {
-        const r = result[i]!;
-        const node = active.nodes.find((n) => n.id === r.nodeId);
-        if (!node || r.status === "skipped") continue;
-        const tool = NODES[node.defId]?.tool;
-        let req: { method: "GET" | "POST"; url: string; body?: string | undefined } | null = null;
-        if (isGmailSendStep(node.defId)) {
-          if (!node.config["to"]?.trim()) continue;
-          live = true;
-          try {
-            const out = await gmailFn({ data: { config: node.config, flowName: active.name } });
-            result[i] = { ...r, status: out.ok ? "ok" : "failed", ms: out.ms ?? r.ms, detail: `Live: ${out.detail}` };
-          } catch {
-            result[i] = { ...r, status: "failed", detail: "Live: provider actions are temporarily disabled until durable queue execution is connected. No external action was taken." };
-          }
-          continue;
-        }
-        if (isChatMessageStep(node.defId, tool)) {
-          const chat = buildChatRequest(tool!, node.config, active.name);
-          if (!chat) continue;
-          if ("error" in chat) {
-            live = true;
-            result[i] = { ...r, status: "failed", detail: `Live: ${chat.error}` };
-            continue;
-          }
-          req = { method: "POST", url: chat.url, body: chat.body };
-        } else if (node.defId === "action.http" || node.defId === "output.webhook") {
-          const url = node.config["url"]?.trim();
-          if (!url) continue;
-          req = {
-            method: (node.defId === "output.webhook" ? "POST" : (node.config["method"] || "GET")) as "GET",
-            url,
-            body: node.config["body"] || (node.defId === "output.webhook" ? JSON.stringify({ flow: active.name, sentAt: new Date().toISOString() }) : undefined),
-          };
-        } else continue;
-        live = true;
-        try {
-          const out = await webStepFn({
-            data: { ...req, timeoutSec: Math.min(60, Math.max(1, Number(node.config["timeout"]) || 30)) },
-          });
-          result[i] = { ...r, status: out.ok ? "ok" : "failed", ms: out.ms, detail: `Live: ${out.detail}` };
-        } catch {
-          result[i] = { ...r, status: "failed", detail: "Live: provider actions are temporarily disabled until durable queue execution is connected. No external action was taken." };
-        }
-      }
-    }
-    result.forEach((s, i) => {
+    result.forEach((step, index) => {
       window.setTimeout(() => {
-        setRunningId(s.nodeId);
-        setSteps((prev) => [...prev, s]);
-        if (i === result.length - 1) {
+        setRunningId(step.nodeId);
+        setSteps((prev) => [...prev, step]);
+        if (index === result.length - 1) {
           setRunning(false);
           setRunningId(null);
-          const failed = result.filter((r) => r.status === "failed").length;
-          if (failed) toast.error(`Run finished with ${failed} failed step${failed > 1 ? "s" : ""}.`);
-          else toast.success("Run completed successfully.");
+          const failed = result.filter((item) => item.status === "failed").length;
+          if (failed) toast.error(`Test run finished with ${failed} failed step${failed > 1 ? "s" : ""}.`);
+          else toast.success("Test run completed. No external actions were taken.");
           if (signedIn && active.cloudId) {
             recordRunFn({
               data: {
                 automationId: active.cloudId,
                 triggerType: "manual",
-                isDryRun: !live,
-                steps: result.map((r) => ({
-                  label: r.label.slice(0, 160),
-                  status: r.status === "failed" ? "failed" : r.detail.startsWith("Live:") ? "success" : "dry_run",
-                  durationMs: Math.max(0, Math.round(r.ms)),
-                  detail: r.detail.slice(0, 500),
+                isDryRun: true,
+                steps: result.map((item) => ({
+                  label: item.label.slice(0, 160),
+                  status: item.status === "failed" ? "failed" : "dry_run",
+                  durationMs: Math.max(0, Math.round(item.ms)),
+                  detail: item.detail.slice(0, 500),
                 })),
               },
             }).catch(() => {});
           }
         }
-      }, 320 * (i + 1));
+      }, 320 * (index + 1));
     });
   };
 
