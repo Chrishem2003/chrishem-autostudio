@@ -67,6 +67,18 @@ describe("server-side execution guardrails", () => {
   });
 
 
+  it("returns only allowlisted scalar output fields for a successful HTTP response", async () => {
+    // HTTP is deployment-gated, so test the executor output contract at the shared runner boundary.
+    const { executeFlowSteps } = await import("../execute-flow-steps.server");
+    const result = await executeFlowSteps({
+      nodes: [node("trigger", "trigger.manual"), node("http", "action.http")],
+      flowName: "outputs", userId: "user_1", mode: "live", startedAtMs: Date.now(), maxRuntimeMs: 10000,
+      persistIntent: async (_node, i) => ({ id: String(i) }), persistOutcome: async () => true,
+      execute: async ({ node: current }) => ({ nodeId: current.id, label: current.name, status: "success", ms: 1, detail: "ok", ...(current.id === "http" ? { outputs: { httpStatus: 201 } } : {}) }),
+    });
+    expect(result.steps[1].outputs).toEqual({ httpStatus: 201 });
+  });
+
   it("fails closed on live HTTP until the deployment runtime is explicitly verified", async () => {
     const result = await executeStep({
       node: node("action.http", { url: "https://example.com", method: "GET" }),
