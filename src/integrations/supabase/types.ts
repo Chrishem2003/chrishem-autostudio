@@ -118,6 +118,8 @@ export type Database = {
           id: string
           is_published: boolean
           last_run_at: string | null
+          schedule_lock_token: string | null
+          schedule_lock_until: string | null
           name: string
           published_at: string | null
           remix_count: number
@@ -136,6 +138,8 @@ export type Database = {
           id?: string
           is_published?: boolean
           last_run_at?: string | null
+          schedule_lock_token?: string | null
+          schedule_lock_until?: string | null
           name?: string
           published_at?: string | null
           remix_count?: number
@@ -458,6 +462,8 @@ export type Database = {
       owns_automation: { Args: { _automation_id: string }; Returns: boolean }
       owns_run: { Args: { _run_id: string }; Returns: boolean }
       consume_ai_plan_quota: { Args: { _task: string }; Returns: string | null }
+      claim_scheduled_automation: { Args: { _automation_id: string; _lease_seconds?: number }; Returns: string | null }
+      release_scheduled_automation: { Args: { _automation_id: string; _lock_token: string; _last_run_at: string }; Returns: boolean }
     }
     Enums: {
       automation_status: "draft" | "live" | "paused"
