@@ -60,6 +60,37 @@ describe("processOneExecutionJob", () => {
     expect(calls.finished[0].status).toBe("queued");
   });
 
+  test("does not spin retries for permanent preflight/configuration failures", async () => {
+    const { deps, calls } = dependencies({
+      execute: async () => ({
+        status: "failed",
+        sideEffectCertainty: "not_attempted",
+        retryable: false,
+        error: "Gmail needs verification",
+      }),
+    });
+    const result = await processOneExecutionJob(deps);
+    expect(result.status).toBe("failed");
+    expect(calls.finished[0].status).toBe("failed");
+    expect(calls.finished[0].retryAt).toBeNull();
+  });
+
+  test("preserves scheduled retry time for transient lock contention", async () => {
+    const retryAt = new Date(Date.now() + 30_000).toISOString();
+    const { deps, calls } = dependencies({
+      execute: async () => ({
+        status: "failed",
+        sideEffectCertainty: "not_attempted",
+        retryable: true,
+        retryAt,
+        error: "Automation is busy",
+      }),
+    });
+    const result = await processOneExecutionJob(deps);
+    expect(result.status).toBe("queued");
+    expect(calls.finished[0].retryAt).toBe(retryAt);
+  });
+
   test("passes the stable idempotency key through the retry policy", async () => {
     const { deps, calls } = dependencies({
       execute: async () => ({
