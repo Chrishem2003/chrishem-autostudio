@@ -54,10 +54,10 @@ function Workspace() {
   };
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
-      <aside className="w-56 shrink-0 border-r border-border bg-surface p-4">
+    <div className="flex min-h-screen bg-background text-foreground max-md:flex-col">
+      <aside className="w-56 shrink-0 border-r border-border bg-surface p-4 max-md:w-full max-md:border-b max-md:border-r-0">
         <Link to="/" className="font-display text-sm font-semibold">Chrishem AutoStudio</Link>
-        <nav className="mt-6 space-y-1 text-sm">
+        <nav aria-label="Workspace navigation" className="mt-6 space-y-1 text-sm max-md:flex max-md:flex-wrap max-md:gap-1 max-md:space-y-0">
           {(
             [
               ["automations", "My Automations"],
@@ -66,19 +66,23 @@ function Workspace() {
             ] as const
           ).map(([id, label]) => (
             <button key={id} onClick={() => setSection(id)}
-              className={cn("block w-full rounded-lg px-3 py-2 text-left", section === id ? "bg-surface-raised text-foreground" : "text-muted-foreground hover:text-foreground")}>
+              aria-current={section === id ? "page" : undefined}
+              className={cn("rounded-lg px-3 py-2 text-left transition-colors", section === id ? "bg-primary/10 text-foreground ring-1 ring-primary/30" : "text-muted-foreground hover:bg-surface-raised hover:text-foreground")}>
               {label}
             </button>
           ))}
-          <Link to="/marketplace" className="block rounded-lg px-3 py-2 text-muted-foreground hover:text-foreground">Templates</Link>
+          <Link to="/marketplace" className="rounded-lg px-3 py-2 text-muted-foreground transition-colors hover:bg-surface-raised hover:text-foreground">Marketplace</Link>
+          <Link to="/gallery" className="rounded-lg px-3 py-2 text-muted-foreground transition-colors hover:bg-surface-raised hover:text-foreground">Community gallery</Link>
+          <Link to="/impact" className="rounded-lg px-3 py-2 text-muted-foreground transition-colors hover:bg-surface-raised hover:text-foreground">Impact & plans</Link>
+          <Link to="/sdk" className="rounded-lg px-3 py-2 text-muted-foreground transition-colors hover:bg-surface-raised hover:text-foreground">Embed SDK</Link>
         </nav>
-        <div className="mt-10 text-xs text-muted-foreground">
+        <div className="mt-10 border-t border-border pt-4 text-xs text-muted-foreground max-md:mt-4">
           <p className="truncate">{user.email}</p>
           <button onClick={signOut} className="mt-2 text-primary">Sign out</button>
         </div>
       </aside>
-      <main className="flex-1 p-6">
-        <div className="mb-6 flex items-center justify-between">
+      <main className="min-w-0 flex-1 p-6 max-sm:p-4">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <h1 className="font-display text-xl font-semibold">
             {section === "automations" ? "My Automations" : section === "runs" ? "Run History" : "Integrations"}
           </h1>
