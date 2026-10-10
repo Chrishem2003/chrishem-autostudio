@@ -1,6 +1,6 @@
 // @ts-nocheck -- Bun's test runner supplies test types at runtime
 import { describe, expect, it } from "bun:test";
-import { CONNECTOR_MANIFESTS, getConnectorActionForNode, getConnectorManifestForNode, validateConnectorActionConfig } from "../connector-manifests";
+import { CONNECTOR_MANIFESTS, getConnectorActionForNode, getConnectorCapabilityLabel, getConnectorManifestForNode, validateConnectorActionConfig } from "../connector-manifests";
 
 describe("connector manifests", () => {
   it("limits the registry to implemented execution paths", () => {
@@ -18,6 +18,14 @@ describe("connector manifests", () => {
   });
   it("does not invent a manifest for catalog-only nodes", () => {
     expect(getConnectorManifestForNode("app.hubspot.create.contact", "HubSpot")).toBeUndefined();
+  });
+
+  it("labels capability according to the reviewed runtime contract", () => {
+    expect(getConnectorCapabilityLabel("action.gmail", "Gmail")).toBe("User test required");
+    expect(getConnectorCapabilityLabel("app.slack.create.message", "Slack")).toBe("Runtime gated");
+    expect(getConnectorCapabilityLabel("action.http", "HTTP")).toBe("Runtime gated");
+    expect(getConnectorCapabilityLabel("app.hubspot.create.contact", "HubSpot")).toBe("Catalog only");
+    expect(getConnectorCapabilityLabel("trigger.schedule", "Core")).toBeNull();
   });
 
   it("defines unique, bounded action contracts with truthful outputs", () => {
