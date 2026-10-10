@@ -112,3 +112,18 @@ GitHub CI is evidence for code/build/unit-test and disposable PostgreSQL behavio
 2. Unresolved tokens fail preflight with a clear error and no provider call.
 3. Ordinary literal configurations and existing dry-run behavior remain unchanged.
 4. The master plan's data-mapping milestone is not complete until output values can be safely produced, mapped, validated, redacted and audited end-to-end.
+
+## Persisted workflow graph validation hardening — 2026-10-10
+
+**Implemented; exact-head CI verification pending.**
+
+- The live execution planner now rejects persisted node configuration objects containing non-string values before connector preflight or step execution. This prevents malformed JSON from reaching string-oriented provider adapters and causing an unhandled runtime exception.
+- The planner now rejects duplicate connection IDs as well as duplicate endpoint pairs, dangling endpoints, cycles, branching, multiple triggers and disconnected nodes.
+- Added regression tests for nested/non-string configuration values and duplicate connection IDs.
+- This does not implement branching or dynamic data mapping. The live execution contract remains a single connected, acyclic chain with one trigger.
+
+### Acceptance evidence required
+
+1. Typecheck, unit tests, production build and PostgreSQL queue smoke test pass on the exact head commit.
+2. Malformed persisted flows are rejected before any step intent or provider call.
+3. Valid linear flows retain their current ordering and behavior.
