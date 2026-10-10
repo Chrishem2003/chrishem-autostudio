@@ -54,6 +54,12 @@ describe("parseClaimedExecutionJob", () => {
     expect(() => parseClaimedExecutionJob(row)).toThrow("missing required fields");
   });
 
+  test("rejects a claim response that omits the persisted payload field", () => {
+    const row = validRow();
+    delete row.payload;
+    expect(() => parseClaimedExecutionJob(row)).toThrow("invalid payload");
+  });
+
   test("rejects invalid or oversized stored payloads", () => {
     const primitivePayload = validRow();
     primitivePayload.payload = ["not", "an", "object"];
