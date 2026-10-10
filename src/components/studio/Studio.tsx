@@ -153,8 +153,10 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
           changeSummary: cloudId ? "Saved from studio" : "First save",
         },
       });
-      setWorkflows((prev) => prev.map((w) => (w.id === active.id ? { ...w, cloudId: res.automationId } : w)));
-      toast.success(`Saved as version ${res.version}.`);
+      setWorkflows((prev) => prev.map((w) => (w.id === active.id ? { ...w, cloudId: res.automationId, live: false } : w)));
+      toast.success(active.live
+        ? `Saved as version ${res.version}. Live execution was paused; Preview again before re-enabling.`
+        : `Saved as version ${res.version}.`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't save — try again.");
     } finally {
@@ -551,7 +553,26 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
           {active ? (
             <>
               <button
-                onClick={() => update((w) => ({ ...w, live: !w.live }))}
+                onClick={async () => {
+                  if (!active) return;
+                  if (!signedIn) {
+                    toast.error("Sign in to manage live automations.");
+                    navigate({ to: "/auth" });
+                    return;
+                  }
+                  if (!active.cloudId) {
+                    toast.error("Save this flow to the cloud before enabling live execution.");
+                    return;
+                  }
+                  const nextStatus = active.live ? "paused" : "live";
+                  try {
+                    await setStatusFn({ data: { automationId: active.cloudId, status: nextStatus } });
+                    update((w) => ({ ...w, live: nextStatus === "live" }));
+                    toast.success(nextStatus === "live" ? "Live execution enabled." : "Automation paused.");
+                  } catch (error) {
+                    toast.error(error instanceof Error ? error.message : "Could not change the automation status.");
+                  }
+                }}
                 className={cn(
                   "flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
                   active.live
