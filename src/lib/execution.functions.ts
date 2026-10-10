@@ -176,50 +176,49 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
     for (let index = 0; index < connectedOrder.length; index++) {
       const node = connectedOrder[index]!;
       if (steps.some((step) => step.status === "failed")) break;
+
+      // Persist intent before a side effect. A stale running/uncertain row is a
+      // recovery signal if the process dies or completion persistence fails.
+      const { data: attempt, error: intentError } = await context.supabase
+        .from("run_step_logs")
+        .insert({
+          run_id: run.id,
+          workspace_id: row.workspace_id,
+          step_index: index,
+          node_id: node.id,
+          node_label: node.name.slice(0, 160),
+          status: "running",
+          outcome_state: "uncertain",
+          output_snapshot: { recoveryHint: "Execution intent recorded; final outcome not yet confirmed." },
+        })
+        .select("id")
+        .single();
+      if (intentError || !attempt) {
+        steps.push({ nodeId: node.id, label: node.name.slice(0, 160), status: "failed", ms: 0, detail: "Could not persist the step intent. No action was attempted; remaining steps were halted." });
+        break;
+      }
+
       let step;
       if (Date.now() - startedMs >= MAX_FLOW_RUNTIME_MS) {
-        step = {
-          nodeId: node.id,
-          label: node.name,
-          status: "failed" as const,
-          ms: 0,
-          detail: "The flow exceeded its four-minute execution budget. Remaining steps were halted.",
-        };
+        step = { nodeId: node.id, label: node.name, status: "failed" as const, ms: 0, detail: "The flow exceeded its four-minute execution budget. Remaining steps were halted." };
       } else {
         try {
           step = await executeStep({ node, flowName: flow.name, userId: context.userId, mode: data.mode });
         } catch (error) {
-          step = {
-            nodeId: node.id,
-            label: node.name,
-            status: "failed" as const,
-            ms: 0,
-            detail: "The step stopped unexpectedly. Its external outcome may be uncertain; verify the destination before retrying.",
-          };
+          step = { nodeId: node.id, label: node.name, status: "failed" as const, ms: 0, detail: "The step stopped unexpectedly. Its external outcome may be uncertain; verify the destination before retrying." };
         }
       }
       steps.push(step);
-      const { error: stepLogError } = await context.supabase.from("run_step_logs").insert({
-        run_id: run.id,
-        workspace_id: row.workspace_id,
-        step_index: index,
-        node_id: node.id,
-        node_label: step.label.slice(0, 160),
+      const outcomeState = classifyExecutionOutcome(step.status, step.detail);
+      const { error: stepLogError } = await context.supabase.from("run_step_logs").update({
         status: step.status,
-        outcome_state: classifyExecutionOutcome(step.status, step.detail),
+        outcome_state: outcomeState,
         duration_ms: Math.max(0, Math.round(step.ms)),
         error_detail: step.status === "failed" ? step.detail.slice(0, 500) : null,
-        output_snapshot: {
-          detail: step.detail.slice(0, 500),
-          outcomeState: classifyExecutionOutcome(step.status, step.detail),
-        },
-      });
+        output_snapshot: { detail: step.detail.slice(0, 500), outcomeState },
+      }).eq("id", attempt.id);
       if (stepLogError) {
-        steps[steps.length - 1] = {
-          ...step,
-          status: "failed",
-          detail: "The step result could not be safely recorded. Stop and verify external effects before retrying.",
-        };
+        steps[steps.length - 1] = { ...step, status: "failed", detail: "The step result could not be safely recorded. Stop and verify external effects before retrying." };
         break;
       }
     }
