@@ -59,6 +59,7 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
           // Keep lease cleanup around every post-claim operation, including unexpected
           // database/runtime exceptions and early continues.
           let leaseCursor = startedAt;
+          let activeRunId: string | null = null;
           try {
           // Persist the run before any external side effects. If audit persistence
           // is unavailable, fail closed and release the lease without executing.
@@ -85,6 +86,7 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
             continue;
           }
 
+          activeRunId = run.id;
           ran++;
           const steps: Array<{
             nodeId: string;
@@ -176,13 +178,62 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
             .eq("id", run.id);
 
           if (finishError) {
-            console.error("[AutoStudio scheduler] Could not persist run summary.", {
+            console.error("[AutoStudio scheduler] Could not persist run summary; attempting a failed-state fallback.", {
               automationId: row.id,
               runId: run.id,
               errorCode: finishError.code,
             });
+            const { error: fallbackError } = await supabaseAdmin
+              .from("run_logs")
+              .update({
+                status: "failed",
+                finished_at: finishedAt,
+                duration_ms: Date.now() - started,
+                error_summary: "The final run summary could not be safely persisted. Verify recorded step outcomes before retrying.",
+              })
+              .eq("id", run.id);
+            if (fallbackError) {
+              console.error("[AutoStudio scheduler] Failed-state fallback also failed.", {
+                automationId: row.id,
+                runId: run.id,
+                errorCode: fallbackError.code,
+              });
+            }
           }
+          activeRunId = null;
 
+          } catch (error) {
+            console.error("[AutoStudio scheduler] Unexpected run-level failure.", {
+              automationId: row.id,
+              errorName: error instanceof Error ? error.name : "UnknownError",
+            });
+            if (activeRunId) {
+              try {
+                const failedAt = new Date().toISOString();
+                const { error: auditError } = await supabaseAdmin
+                  .from("run_logs")
+                  .update({
+                    status: "failed",
+                    finished_at: failedAt,
+                    duration_ms: Date.now() - started,
+                    error_summary: "The scheduled run stopped unexpectedly. Verify external effects before retrying.",
+                  })
+                  .eq("id", activeRunId);
+                if (auditError) {
+                  console.error("[AutoStudio scheduler] Could not mark interrupted run failed.", {
+                    automationId: row.id,
+                    runId: activeRunId,
+                    errorCode: auditError.code,
+                  });
+                }
+              } catch {
+                console.error("[AutoStudio scheduler] Failed to record unexpected run failure.", {
+                  automationId: row.id,
+                  runId: activeRunId,
+                });
+              }
+            }
+            failed++;
           } finally {
             // Token-checked release cannot clear another worker's lease. Keep the
             // cadence cursor even when an unexpected exception interrupts this run.
