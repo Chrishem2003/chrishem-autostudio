@@ -20,7 +20,7 @@ export function preparePersistedExecutionPlan(value: unknown): PreparedExecution
   }
 
   const plan = planLinearExecution(parsed.data);
-  if (plan.error) return { success: false, error: plan.error };
+  if (plan.error !== null) return { success: false, error: plan.error };
 
   return { success: true, workflow: parsed.data, plan };
 }
