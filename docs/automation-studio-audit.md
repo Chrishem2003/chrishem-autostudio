@@ -58,3 +58,31 @@ This is a source-level baseline, not a local build or live production test. The 
 ## Merge gate
 
 Do not merge a phase solely because the code was generated. Require its stated acceptance tests, CI checks, migration review, and explicit evidence that every integration labeled Live has passed a real verification call. No live-flow execution should be enabled by an untested refactor.
+
+
+## Implementation progress on `audit/p0-hardening`
+
+This section records actual changes on the branch; it does not imply they are merged or deployed.
+
+### Implemented
+
+- Added `bun run typecheck` and `bun run test`; moved the four existing test files to Bun's built-in test runner so the committed `bun.lock` remains the source of dependency truth.
+- Added GitHub Actions CI for locked dependency installation, typechecking, unit tests, and production build. A completed run at commit `7e3162bef611fd606d77d1a3fb0090354e458efd` passed all four gates. Later commits must pass the workflow again before merge.
+- Added DNS resolution of all answers, rejection if any answer is private/special-use, IPv4-mapped IPv6 handling, hostname/IP classification, connection pinning, manual redirect handling, and bounded request/response sizes for outbound HTTP.
+- Added regression tests for private IPv4/IPv6, malformed IPv6-like host strings, public hostnames beginning with `fc` / `fd`, mixed public/private DNS answers, and validated-address pinning.
+- Protected AI planning with Supabase auth middleware, schema validation, timeout, and a database-enforced per-user quota.
+- Added shared server-side step execution for manual saved-flow runs and scheduled runs. Unsupported nodes fail closed instead of being marked as successful practice steps.
+- Saved-flow execution now requires ownership and persisted live status. The live toggle is cloud-backed; editing and saving an existing live flow pauses it until a fresh Preview is run.
+- Generic metadata-only connector calls no longer claim an app is connected. Gmail OAuth is saved only after a successful read-only profile check; direct Gmail and direct HTTP server functions are disabled so they cannot bypass saved-flow/live-status checks.
+- Added explicit owner filters to important automation reads/writes and redaction of credential-like fields/text in persisted run details.
+- Rewrote README with environment, CI, and scheduler operations guidance; removed the tracked `.env` from this branch and added a placeholder-only `.env.example`.
+
+### Still open before merge / deployment
+
+1. The newest commit must complete CI successfully; the earlier green run does not cover later changes.
+2. Runtime execution of the pinned HTTP transport must be verified on the actual deployment runtime. The repository's current build configuration defaults to a Cloudflare target, while the strongest DNS-pinning implementation uses Node's HTTP(S) request APIs. A successful bundle build alone does not prove those APIs work in the deployed runtime. Do not claim outbound HTTP is production-ready until a deployed smoke test passes or the deployment target/egress transport is reconciled.
+3. Add an atomic scheduler lease/job queue so concurrent cron calls cannot execute the same flow twice, then implement queue retries, dead-lettering, idempotency keys, and circuit state in P2.
+4. Finish the connector manifest registry and true `verify()` adapters. Gmail gets a real read-only profile check; generic app entries remain unverified, and the chat-webhook path still needs an explicit provider verification/test UX.
+5. Add a complete server-side `executeFlow` endpoint so manual, scheduled, and webhook runs share flow traversal, branch handling, run creation, event logs, and idempotency rather than sharing only the per-step executor.
+6. Reconcile the credential vault with the plan's future `credentials` table and key-version rotation; current storage intentionally matches the existing `app_user_connections` contract.
+7. Run a non-production Supabase migration rehearsal and end-to-end test with a dedicated Gmail account before any production migration or live schedule is enabled.
