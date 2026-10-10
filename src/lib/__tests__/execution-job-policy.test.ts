@@ -1,3 +1,4 @@
+// @ts-nocheck -- Bun's test runner supplies test types at runtime
 import { describe, expect, test } from "bun:test";
 import { decideExecutionRetry } from "../execution-job-policy";
 
