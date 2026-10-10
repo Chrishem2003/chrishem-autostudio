@@ -3,8 +3,7 @@ import { authenticateCronRequest } from "@/integrations/supabase/cron-auth";
 import { isDue } from "@/lib/schedule";
 import type { Workflow } from "@/lib/workflow";
 import { planLinearExecution } from "@/lib/execution-plan";
-import { classifyExecutionOutcome } from "@/lib/execution-outcome";
-import { executeStepSafely } from "@/lib/execute-step-safely.server";
+import { executeFlowSteps } from "@/lib/execute-flow-steps.server";
 
 const MAX_SCHEDULED_FLOW_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -137,92 +136,58 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
 
           activeRunId = run.id;
           ran++;
-          const steps: Array<{
-            nodeId: string;
-            label: string;
-            status: "success" | "failed" | "dry_run";
-            ms: number;
-            detail: string;
-          }> = [];
-
-          for (let index = 0; index < executionPlan.nodes.length; index++) {
-            const node = executionPlan.nodes[index]!;
-            if (steps.some((step) => step.status === "failed")) break;
-
-            // Durable intent precedes every side effect. If the worker crashes,
-            // the row remains running/uncertain and must be inspected, not replayed.
-            const { data: attempt, error: intentError } = await supabaseAdmin
-              .from("run_step_logs")
-              .insert({
-                run_id: run.id,
-                workspace_id: row.workspace_id,
-                step_index: index,
-                node_id: node.id,
-                node_label: node.name.slice(0, 160),
-                status: "running",
-                outcome_state: "uncertain",
-                output_snapshot: { recoveryHint: "Execution intent recorded; final outcome not yet confirmed." },
-              })
-              .select("id")
-              .single();
-            if (intentError || !attempt) {
-              console.error("[AutoStudio scheduler] Could not persist step intent; no action attempted.", {
-                automationId: row.id, runId: run.id, nodeId: node.id, errorCode: intentError?.code ?? "NO_ATTEMPT_RECORD",
-              });
-              steps.push({
-                nodeId: node.id, label: node.name.slice(0, 160), status: "failed", ms: 0,
-                detail: "Could not persist the step intent. No action was attempted; remaining steps were halted.",
-              });
-              break;
-            }
-
-            if (Date.now() - started >= MAX_SCHEDULED_FLOW_RUNTIME_MS) {
-              steps.push({
+          const execution = await executeFlowSteps({
+            nodes: executionPlan.nodes,
+            flowName: wf.name || row.name,
+            userId: row.user_id,
+            mode: "live",
+            startedAtMs: started,
+            maxRuntimeMs: MAX_SCHEDULED_FLOW_RUNTIME_MS,
+            persistIntent: async (node, index) => {
+              const { data: attempt, error: intentError } = await supabaseAdmin
+                .from("run_step_logs")
+                .insert({
+                  run_id: run.id,
+                  workspace_id: row.workspace_id,
+                  step_index: index,
+                  node_id: node.id,
+                  node_label: node.name.slice(0, 160),
+                  status: "running",
+                  outcome_state: "uncertain",
+                  output_snapshot: { recoveryHint: "Execution intent recorded; final outcome not yet confirmed." },
+                })
+                .select("id")
+                .single();
+              if (intentError || !attempt) return null;
+              return { id: attempt.id };
+            },
+            persistOutcome: async (intentId, step, outcomeState) => {
+              const { error: stepError } = await supabaseAdmin.from("run_step_logs").update({
+                status: step.status,
+                outcome_state: outcomeState,
+                duration_ms: Math.max(0, Math.round(step.ms)),
+                error_detail: step.status === "failed" ? step.detail.slice(0, 500) : null,
+                output_snapshot: { detail: step.detail.slice(0, 500), outcomeState },
+              }).eq("id", intentId);
+              return !stepError;
+            },
+            onUnexpectedError: (node, error) => {
+              console.error("[AutoStudio scheduler] Step failed unexpectedly.", {
+                automationId: row.id,
                 nodeId: node.id,
-                label: node.name.slice(0, 160),
-                status: "failed",
-                ms: 0,
-                detail: "Scheduled flow exceeded its four-minute execution budget. Remaining steps were halted.",
+                errorName: error instanceof Error ? error.name : "UnknownError",
               });
-            } else {
-              steps.push(await executeStepSafely({
-                node,
-                flowName: wf.name || row.name,
-                userId: row.user_id,
-                mode: "live",
-                onUnexpectedError: (error) => {
-                  console.error("[AutoStudio scheduler] Step failed unexpectedly.", {
-                    automationId: row.id,
-                    nodeId: node.id,
-                    errorName: error instanceof Error ? error.name : "UnknownError",
-                  });
-                },
-              }));
-            }
-
-            // Finalize the intent row rather than inserting a second record.
-            // If this write fails, the original uncertain row remains durable.
-            const step = steps[steps.length - 1]!;
-            const outcomeState = classifyExecutionOutcome(step.status, step.detail);
-            const { error: stepError } = await supabaseAdmin.from("run_step_logs").update({
-              status: step.status,
-              outcome_state: outcomeState,
-              duration_ms: Math.max(0, Math.round(step.ms)),
-              error_detail: step.status === "failed" ? step.detail.slice(0, 500) : null,
-              output_snapshot: { detail: step.detail.slice(0, 500), outcomeState },
-            }).eq("id", attempt.id);
-            if (stepError) {
-              console.error("[AutoStudio scheduler] Could not persist step outcome; stopping flow.", {
-                automationId: row.id, runId: run.id, nodeId: node.id, errorCode: stepError.code,
+            },
+            onPersistenceError: (stage, node) => {
+              console.error("[AutoStudio scheduler] Step audit persistence failed; halting flow.", {
+                automationId: row.id,
+                runId: run.id,
+                nodeId: node.id,
+                stage,
               });
-              steps[steps.length - 1] = {
-                ...step,
-                status: "failed",
-                detail: "The step outcome could not be safely recorded. Verify external effects before retrying.",
-              };
-              break;
-            }
-          }
+            },
+          });
+          const steps = execution.steps;
 
           const hasFailure = steps.some((step) => step.status === "failed");
           if (hasFailure) failed++;
