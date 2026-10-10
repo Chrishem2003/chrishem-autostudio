@@ -115,13 +115,16 @@ export async function executeStep(args: {
       },
     });
     if (await appUserReconnectRequired(response) || response.status === 401 || response.status === 403) {
+      await response.arrayBuffer().catch(() => undefined);
       const { markConnectionUnverified } = await import("@/lib/app-user-connections.server");
       await markConnectionUnverified(userId, GMAIL_CONNECTOR);
       return result("failed", "Gmail access needs renewing. Reconnect Gmail and verify it again.");
     }
     if (!response.ok) {
+      await response.arrayBuffer().catch(() => undefined);
       return result("failed", `Gmail refused the email (HTTP ${response.status}). Check the recipient and Gmail permissions.`);
     }
+    await response.arrayBuffer().catch(() => undefined);
     const { markConnectionVerified } = await import("@/lib/app-user-connections.server");
     await markConnectionVerified(userId, GMAIL_CONNECTOR);
     return result("success", "Email sent from your verified Gmail connection to the configured recipient(s).");
