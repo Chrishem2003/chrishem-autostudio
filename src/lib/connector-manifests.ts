@@ -90,7 +90,7 @@ export const CONNECTOR_MANIFESTS: readonly ConnectorManifest[] = [
       id: "chat.post_message",
       nodeIds: ["action.slack"],
       requiredConfig: ["webhook"],
-      optionalConfig: ["channel", "message"],
+      optionalConfig: ["channel", "message", "fields"],
       sideEffect: "external-message",
       idempotency: "not-guaranteed",
       timeoutSeconds: 30,
@@ -172,9 +172,26 @@ export function validateConnectorActionConfig(
       return key === "url" ? "Destination URL is required." : `Required connector setting "${key}" is missing.`;
     }
   }
+  const allowedKeys = new Set([...resolved.action.requiredConfig, ...resolved.action.optionalConfig]);
   for (const [key, value] of Object.entries(config)) {
+    if (!allowedKeys.has(key)) {
+      return `Connector setting "${key}" is not supported by this action.`;
+    }
     if (value !== undefined && typeof value !== "string") {
       return `Connector setting "${key}" must be text.`;
+    }
+  }
+
+  // Validate values that influence transport behavior before they reach the
+  // executor. Do not silently coerce malformed workflow settings.
+  if (resolved.action.id === "http.request") {
+    const method = config["method"]?.trim().toUpperCase();
+    if (method && !["GET", "POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+      return "HTTP method must be GET, POST, PUT, PATCH, or DELETE.";
+    }
+    const timeout = config["timeout"]?.trim();
+    if (timeout && (!/^\\d+(?:\\.\\d+)?$/.test(timeout) || Number(timeout) < 1 || Number(timeout) > 30)) {
+      return "HTTP timeout must be a number between 1 and 30 seconds.";
     }
   }
   return null;
