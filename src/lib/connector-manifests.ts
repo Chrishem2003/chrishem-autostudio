@@ -12,12 +12,35 @@ export type ConnectorVerification =
 
 export type ConnectorRuntime = "available-after-preflight" | "deployment-gated";
 
+export type ConnectorSideEffect = "external-message" | "arbitrary-http-request";
+export type ConnectorIdempotency = "provider-managed" | "not-guaranteed" | "safe-methods-only";
+
+export interface ConnectorActionContract {
+  /** Stable action identifier; not a marketing/catalog label. */
+  id: string;
+  /** Exact workflow definition IDs accepted by this action. */
+  nodeIds: readonly string[];
+  /** Required string config keys checked by the shared live preflight. */
+  requiredConfig: readonly string[];
+  /** Optional config keys understood by the executor. */
+  optionalConfig: readonly string[];
+  sideEffect: ConnectorSideEffect;
+  idempotency: ConnectorIdempotency;
+  /** Upper bound used by the executor/transport, in seconds. */
+  timeoutSeconds: number;
+  output: {
+    fields: readonly string[];
+    description: string;
+  };
+}
+
 export interface ConnectorManifest {
   id: string;
   name: string;
   category: "email" | "chat" | "http";
   authModel: "oauth" | "secret-webhook-url" | "user-configured-request";
   nodeIds: readonly string[];
+  actions: readonly ConnectorActionContract[];
   /** Dynamic generated app steps can be resolved by tool name and suffix. */
   generatedMessageToolNames?: readonly string[];
   verification: ConnectorVerification;
@@ -35,6 +58,16 @@ export const CONNECTOR_MANIFESTS: readonly ConnectorManifest[] = [
     category: "email",
     authModel: "oauth",
     nodeIds: ["action.gmail"],
+    actions: [{
+      id: "gmail.send_email",
+      nodeIds: ["action.gmail"],
+      requiredConfig: ["to", "subject", "body"],
+      optionalConfig: [],
+      sideEffect: "external-message",
+      idempotency: "provider-managed",
+      timeoutSeconds: 30,
+      output: { fields: ["providerMessageId"], description: "Provider acceptance result; does not guarantee recipient delivery." },
+    }],
     verification: "user-initiated-test-send",
     runtime: "available-after-preflight",
     requiredChecks: [
@@ -53,6 +86,16 @@ export const CONNECTOR_MANIFESTS: readonly ConnectorManifest[] = [
     category: "chat",
     authModel: "secret-webhook-url",
     nodeIds: ["action.slack"],
+    actions: [{
+      id: "chat.post_message",
+      nodeIds: ["action.slack"],
+      requiredConfig: ["webhook", "message"],
+      optionalConfig: ["channel"],
+      sideEffect: "external-message",
+      idempotency: "not-guaranteed",
+      timeoutSeconds: 30,
+      output: { fields: ["httpStatus"], description: "Webhook HTTP acceptance result; provider-side delivery may differ." },
+    }],
     generatedMessageToolNames: ["Slack", "Discord", "Microsoft Teams", "Mattermost"],
     verification: "configuration-preflight-only",
     runtime: "deployment-gated",
@@ -71,6 +114,16 @@ export const CONNECTOR_MANIFESTS: readonly ConnectorManifest[] = [
     category: "http",
     authModel: "user-configured-request",
     nodeIds: ["action.http", "output.webhook"],
+    actions: [{
+      id: "http.request",
+      nodeIds: ["action.http", "output.webhook"],
+      requiredConfig: ["url"],
+      optionalConfig: ["method", "body", "timeout"],
+      sideEffect: "arbitrary-http-request",
+      idempotency: "safe-methods-only",
+      timeoutSeconds: 30,
+      output: { fields: ["httpStatus", "responseExcerpt"], description: "Bounded response metadata; response bodies and credentials must be redacted before persistence." },
+    }],
     verification: "deployment-smoke-test-required",
     runtime: "deployment-gated",
     requiredChecks: [
@@ -87,6 +140,38 @@ export const CONNECTOR_MANIFESTS: readonly ConnectorManifest[] = [
 
 export function getConnectorManifest(id: string): ConnectorManifest | undefined {
   return CONNECTOR_MANIFESTS.find((manifest) => manifest.id === id);
+}
+
+export function getConnectorActionForNode(
+  defId: string,
+  tool?: string,
+): { manifest: ConnectorManifest; action: ConnectorActionContract } | undefined {
+  const manifest = getConnectorManifestForNode(defId, tool);
+  if (!manifest) return undefined;
+  const action = manifest.actions.find((candidate) => candidate.nodeIds.includes(defId));
+  return action ? { manifest, action } : undefined;
+}
+
+/** Fail closed if a step is not represented by an explicit reviewed action contract. */
+export function validateConnectorActionConfig(
+  defId: string,
+  config: Record<string, unknown>,
+  tool?: string,
+): string | null {
+  const resolved = getConnectorActionForNode(defId, tool);
+  if (!resolved) return "No reviewed connector action contract exists for this step.";
+  for (const key of resolved.action.requiredConfig) {
+    const value = config[key];
+    if (typeof value !== "string" || !value.trim()) {
+      return `Required connector setting "${key}" is missing.`;
+    }
+  }
+  for (const [key, value] of Object.entries(config)) {
+    if (value !== undefined && typeof value !== "string") {
+      return `Connector setting "${key}" must be text.`;
+    }
+  }
+  return null;
 }
 
 export function getConnectorManifestForNode(
