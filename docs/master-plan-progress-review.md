@@ -127,3 +127,22 @@ GitHub CI is evidence for code/build/unit-test and disposable PostgreSQL behavio
 1. Typecheck, unit tests, production build and PostgreSQL queue smoke test pass on the exact head commit.
 2. Malformed persisted flows are rejected before any step intent or provider call.
 3. Valid linear flows retain their current ordering and behavior.
+
+
+## Runtime data-mapping resolver foundation — 2026-10-10
+
+**Resolver and regression tests implemented on commit `51887f75fd221599688dfd529bcb49b2f624f3e3`; exact-head CI passed.** Both CI jobs completed successfully: typecheck, unit tests, production build, and PostgreSQL queue smoke test.
+
+- Added a pure resolver for explicit `{{steps.<node-id>.<field>}}` references.
+- It only accepts scalar string/number/boolean outputs, rejects missing fields and malformed tokens, and caps resolved values at 8,000 characters.
+- Added tests for multi-token interpolation, missing references, malformed syntax, nested payload rejection, false/zero values, and oversized output.
+- This is deliberately only the resolver foundation. It is **not wired into live execution yet**: upstream output contracts, allowlisted connector output capture, persistence/redaction, and pre-side-effect resolution integration remain required before live mapping can be enabled.
+- Keep existing unresolved-token rejection in place until the complete runtime path is integrated and verified end-to-end.
+
+### Next integration gate
+
+1. Define connector-specific allowlisted output fields (never persist arbitrary provider bodies or credentials).
+2. Extend step results and persistence to carry bounded, redacted structured outputs separately from human-readable status details.
+3. Resolve mappings using only successfully completed prior nodes, before the next step's intent/external action; fail closed on absent values.
+4. Add tests proving missing mappings stop before provider calls and sensitive values are not persisted in output snapshots.
+5. Keep branching, parallel execution, and automatic retry of uncertain external side effects out of scope until their semantics are explicitly modeled.
