@@ -135,7 +135,7 @@ export const composeFlow = createServerFn({ method: "POST" })
       if (tokens > 0) {
         try {
           const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-          await supabaseAdmin.from("ai_usage").update({ tokens }).eq("id", usageId);
+          await supabaseAdmin.from("ai_usage").update({ tokens }).eq("id", usageId).eq("user_id", context.userId);
         } catch {
           console.error("[AI planner] Token metering update failed.");
         }
