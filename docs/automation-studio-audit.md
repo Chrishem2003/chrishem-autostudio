@@ -224,3 +224,6 @@ Added a one-job worker orchestration boundary in `src/lib/execution-job-worker.t
 - If the executor heartbeats and the lease is rejected, the worker does not try to finalize with a stale token.
 
 This is orchestration logic only. It is not yet connected to a Supabase RPC adapter, a scheduler/worker deployment, or production execution routes. The executor must use the supplied stable idempotency key only with provider-specific guarantees that have been verified. A real worker runtime must heartbeat during long-running work and abort further work as soon as lease loss is detected.
+
+
+Worker orchestration CI note: the first typecheck exposed an `exactOptionalPropertyTypes` mismatch when passing an optional provider-idempotency flag. The worker now omits that field when it is undefined. Latest verified CI on commit `3d4a2718f679dc3c11d3019a250c279dba48ea9f` passed typecheck, unit tests (**82 passed, 0 failed**), and production build.
