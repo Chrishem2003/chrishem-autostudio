@@ -9,6 +9,7 @@ import { buildRunFinalization } from "@/lib/run-finalization";
 import { enqueueExecutionJob } from "@/lib/execution-job-queue.server";
 import { parsePersistedWorkflow } from "@/lib/persisted-workflow";
 import { isDurableQueueEnabled } from "@/lib/runtime-feature-gates";
+import { assertLiveExecutionQueueEnabled } from "@/lib/live-execution-policy";
 
 const MAX_FLOW_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -111,9 +112,7 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
 
     // Live execution must never fall back to inline provider calls while the
     // durable queue rollout is disabled. Preview remains synchronous.
-    if (data.mode === "live" && !isDurableQueueEnabled()) {
-      throw new Error("Live execution is temporarily unavailable while the durable queue is disabled. No external action was taken.");
-    }
+    assertLiveExecutionQueueEnabled(data.mode, isDurableQueueEnabled());
 
     // Queue only authenticated, owner-scoped live runs after all workflow and
     // provider preflight checks have passed. Preview remains synchronous.
