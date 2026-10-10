@@ -88,6 +88,14 @@ export const sendGmailTest = createServerFn({ method: "POST" })
     const connection = await getConnectionForUser(context.userId, CONNECTOR);
     if (!connection) return { ok: false as const, detail: "Connect Gmail first." };
 
+    const { data: quotaAllowed, error: quotaError } = await context.supabase.rpc("consume_gmail_test_quota", {});
+    if (quotaError) {
+      return { ok: false as const, detail: "Gmail test verification is temporarily unavailable. Try again later." };
+    }
+    if (!quotaAllowed) {
+      return { ok: false as const, detail: "Test-email limit reached: three Gmail verification emails per hour." };
+    }
+
     const raw = toRawEmail({
       to: [data.recipient],
       subject: "Chrishem AutoStudio — Gmail connection test",
