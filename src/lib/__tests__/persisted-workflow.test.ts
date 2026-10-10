@@ -66,4 +66,55 @@ describe("persisted workflow runtime validation", () => {
       edges: [{ id: "edge-1", from: "trigger", to: null }],
     }).success).toBe(false);
   });
+  it("rejects duplicate node IDs and invalid graph connections at the planner boundary", async () => {
+    const { planLinearExecution } = await import("../execution-plan");
+    const duplicateNodes = {
+      nodes: [
+        { ...valid.nodes[0], id: "trigger" },
+        { ...valid.nodes[1], id: "trigger" },
+      ],
+      edges: [],
+    };
+    const parsedDuplicate = parsePersistedWorkflow(duplicateNodes);
+    expect(parsedDuplicate.success).toBe(true);
+    if (parsedDuplicate.success) {
+      expect(planLinearExecution(parsedDuplicate.data).error).toMatch(/duplicate step ID/i);
+    }
+
+    const dangling = {
+      ...valid,
+      edges: [{ id: "edge-1", from: "trigger", to: "missing-node" }],
+    };
+    const parsedDangling = parsePersistedWorkflow(dangling);
+    expect(parsedDangling.success).toBe(true);
+    if (parsedDangling.success) {
+      expect(planLinearExecution(parsedDangling.data).error).toMatch(/invalid connection/i);
+    }
+  });
+
+  it("rejects overlong workflow, node, and edge identifiers before execution", () => {
+    expect(parsePersistedWorkflow({
+      ...valid,
+      name: "n".repeat(201),
+    }).success).toBe(false);
+    expect(parsePersistedWorkflow({
+      ...valid,
+      nodes: [{ ...valid.nodes[0], id: "i".repeat(121) }],
+      edges: [],
+    }).success).toBe(false);
+    expect(parsePersistedWorkflow({
+      ...valid,
+      edges: [{ id: "e".repeat(121), from: "trigger", to: "request" }],
+    }).success).toBe(false);
+  });
+
+  it("rejects too many edges before graph planning", () => {
+    expect(parsePersistedWorkflow({
+      ...valid,
+      edges: Array.from({ length: 501 }, (_, index) => ({
+        id: `edge-${index}`, from: "trigger", to: "request",
+      })),
+    }).success).toBe(false);
+  });
+
 });
