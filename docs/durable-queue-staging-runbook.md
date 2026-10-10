@@ -60,7 +60,8 @@ Before turning on the flag, ensure only a deliberately prepared staging test aut
 - [ ] Invoke the worker; verify job status transitions through `running` to its terminal state.
 - [ ] Verify the matching `run_logs` row and all `run_step_logs` records, including outcome certainty.
 - [ ] Verify the provider-side effect exactly once using the provider's own audit/history.
-- [ ] Replay the same request ID and confirm enqueue returns the existing job rather than creating a duplicate.
+- [ ] Replay the same request ID with the same logical payload and confirm enqueue returns the existing job rather than creating a duplicate.
+- [ ] Reuse that idempotency key with a changed trigger, payload, requester, or retry limit and confirm enqueue rejects the conflicting request instead of silently returning the old job.
 - [ ] Test a safe preflight rejection; it must not perform an external action.
 - [ ] Test a busy per-automation lease; the job must be deferred without executing steps.
 - [ ] Test scheduled enqueue in staging and confirm the scheduler only enqueues while the worker performs execution.
