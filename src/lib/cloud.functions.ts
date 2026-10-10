@@ -441,6 +441,7 @@ export const listIntegrations = createServerFn({ method: "GET" })
     const { data, error } = await context.supabase
       .from("integrations")
       .select("id, provider, account_label, auth_kind, status, scopes, last_verified_at")
+      .eq("user_id", context.userId)
       .order("provider");
     if (error) throw new Error(error.message);
     return (data ?? []).map((r) => ({
@@ -448,52 +449,52 @@ export const listIntegrations = createServerFn({ method: "GET" })
       provider: r.provider,
       accountLabel: r.account_label,
       authKind: r.auth_kind,
-      status: r.status,
+      // No generic connector manifest exists yet, so legacy metadata cannot be represented as verified.
+      status: r.status === "connected" ? "error" : r.status,
       scopes: r.scopes ?? [],
-      lastVerifiedAt: r.last_verified_at,
+      lastVerifiedAt: r.status === "connected" ? null : r.last_verified_at,
     }));
   });
 
+/**
+ * Generic metadata-only connection records are not proof of provider access.
+ * Until a reviewed manifest exists, fail closed rather than mark an app connected.
+ */
 export const connectIntegration = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
-    z
-      .object({
-        provider: z.string().min(1).max(80),
-        accountLabel: z.string().max(160).optional(),
-        authKind: z.enum(["oauth2", "apiKey", "basic", "none"]).default("oauth2"),
-        scopes: z.array(z.string().max(80)).max(30).default([]),
-      })
-      .parse(input),
+    z.object({
+      provider: z.string().min(1).max(80),
+      accountLabel: z.string().max(160).optional(),
+      authKind: z.enum(["oauth2", "apiKey", "basic", "none"]).default("oauth2"),
+      scopes: z.array(z.string().max(80)).max(30).default([]),
+    }).parse(input),
   )
-  .handler(async ({ context, data }) => {
-    const { error } = await context.supabase.from("integrations").upsert(
-      {
-        user_id: context.userId,
-        provider: data.provider,
-        display_name: data.provider,
-        account_label: data.accountLabel ?? null,
-        auth_kind: data.authKind,
-        status: "connected",
-        scopes: data.scopes,
-        last_verified_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id,provider" },
-    );
-    if (error) throw new Error(error.message);
-    return { ok: true };
-  });
+  .handler(async ({ data }) => ({
+    ok: false as const,
+    status: "error" as const,
+    provider: data.provider,
+    message: "This catalog entry has no reviewed connector manifest and successful provider verification yet. It remains Test only and was not marked connected.",
+  }));
 
 export const verifyIntegration = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ integrationId: z.string().uuid() }).parse(input))
   .handler(async ({ context, data }) => {
-    const { error } = await context.supabase
+    const { data: integration, error } = await context.supabase
       .from("integrations")
-      .update({ status: "connected", last_verified_at: new Date().toISOString() })
-      .eq("id", data.integrationId);
-    if (error) throw new Error(error.message);
-    return { ok: true, verifiedAt: new Date().toISOString() };
+      .select("provider")
+      .eq("id", data.integrationId)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (error) throw new Error("Could not load the integration.");
+    if (!integration) throw new Error("Integration not found.");
+    return {
+      ok: false as const,
+      status: "error" as const,
+      provider: integration.provider,
+      message: "No real verify() adapter is registered for this provider yet. The connection remains unverified.",
+    };
   });
 
 export const disconnectIntegration = createServerFn({ method: "POST" })
@@ -501,8 +502,8 @@ export const disconnectIntegration = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => z.object({ integrationId: z.string().uuid() }).parse(input))
   .handler(async ({ context, data }) => {
     const { data: integ } = await context.supabase
-      .from("integrations").select("provider").eq("id", data.integrationId).maybeSingle();
-    const { error } = await context.supabase.from("integrations").delete().eq("id", data.integrationId);
+      .from("integrations").select("provider").eq("id", data.integrationId).eq("user_id", context.userId).maybeSingle();
+    const { error } = await context.supabase.from("integrations").delete().eq("id", data.integrationId).eq("user_id", context.userId);
     if (error) throw new Error(error.message);
     // Scoped revocation: pause only the live flows that use this app.
     let paused: string[] = [];
