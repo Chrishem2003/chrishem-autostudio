@@ -216,6 +216,14 @@ async function requestOnce(url: URL, data: WebInput, target: PinnedAddress): Pro
   });
 }
 
+/** Response summaries intentionally exclude remote bodies from persisted run details. */
+export function summarizeWebResponse(status: number, hostname: string, retried = false): string {
+  if (status >= 200 && status < 300) {
+    return `${status} from ${hostname}${retried ? " (succeeded after retry)" : ""}.`;
+  }
+  return `${hostname} refused the request (${status}). Check the address and request settings.`;
+}
+
 export async function callWeb(data: WebInput): Promise<WebResult> {
   const started = Date.now();
   if (process.env["AUTOSTUDIO_OUTBOUND_TRANSPORT_READY"] !== "true") {
@@ -266,8 +274,8 @@ export async function callWeb(data: WebInput): Promise<WebResult> {
         const ms = Date.now() - started;
         const retried = attempts > 1 ? ` (succeeded on try ${attempts})` : "";
         return response.status >= 200 && response.status < 300
-          ? { ok: true, status: response.status, ms, attempts, detail: `${response.status} from ${url.hostname}${retried}. ${response.body ? `Reply: ${response.body}` : ""}`.trim() }
-          : { ok: false, status: response.status, ms, attempts, detail: `${url.hostname} refused the request (${response.status}). Check the address and body. ${response.body}`.trim() };
+          ? { ok: true, status: response.status, ms, attempts, detail: summarizeWebResponse(response.status, url.hostname, attempts > 1) }
+          : { ok: false, status: response.status, ms, attempts, detail: summarizeWebResponse(response.status, url.hostname) };
       }
     } catch (error) {
       last = error instanceof Error && error.name === "TimeoutError"
