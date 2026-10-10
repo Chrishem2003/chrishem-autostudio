@@ -15,9 +15,18 @@ export const startGmailConnect = createServerFn({ method: "POST" })
     if (!clientKey) throw new Error("Gmail isn't set up for this app yet.");
     const { authorizeAppUserOAuth } = await import("@/integrations/lovable/appUserConnector");
     const { getConnectionForUser } = await import("./app-user-connections.server");
-    const request = getRequest();
-    const url = new URL(request.url);
-    const returnUrl = new URL("/oauth/gmail/return", url.origin).toString();
+    const configuredBase = process.env["APP_BASE_URL"];
+    if (!configuredBase) throw new Error("APP_BASE_URL must be configured before Gmail OAuth can start.");
+    let appOrigin: URL;
+    try {
+      appOrigin = new URL(configuredBase);
+    } catch {
+      throw new Error("APP_BASE_URL must be a valid absolute URL.");
+    }
+    if (appOrigin.protocol !== "https:" && appOrigin.hostname !== "localhost") {
+      throw new Error("APP_BASE_URL must use HTTPS outside local development.");
+    }
+    const returnUrl = new URL("/oauth/gmail/return", appOrigin.origin).toString();
     const existing = await getConnectionForUser(context.userId, CONNECTOR);
     const { authorizationUrl } = await authorizeAppUserOAuth({
       gatewayBaseUrl: GATEWAY,
