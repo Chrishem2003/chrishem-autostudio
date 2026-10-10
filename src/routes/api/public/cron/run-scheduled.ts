@@ -78,20 +78,16 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
         let ran = 0;
         let failed = 0;
         for (const row of rows ?? []) {
-          const parsedWorkflow = parsePersistedWorkflow(row.flow_json);
-          if (!parsedWorkflow.success) {
-            console.warn("[AutoStudio scheduler] Skipping malformed saved workflow.", { automationId: row.id });
-            continue;
-          }
-          const wf = parsedWorkflow.data as unknown as Workflow;
-          const executionPlan = planLinearExecution(wf);
-          if (executionPlan.error) {
-            console.warn("[AutoStudio scheduler] Flow rejected by execution planner.", {
+          const prepared = preparePersistedExecutionPlan(row.flow_json);
+          if (!prepared.success) {
+            console.warn("[AutoStudio scheduler] Saved workflow failed execution preflight.", {
               automationId: row.id,
-              reason: executionPlan.error,
+              reason: prepared.error,
             });
             continue;
           }
+          const wf = prepared.workflow as unknown as Workflow;
+          const executionPlan = prepared.plan;
           const trigger = wf.nodes.find((node) => node.defId === "trigger.schedule");
           if (!trigger) continue;
           const cadence = trigger.config?.["cadence"] || "Hourly";
