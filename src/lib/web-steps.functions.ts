@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { callWeb } from "./web-steps.server";
+import { assertDirectProviderExecutionDisabled } from "@/lib/direct-execution-policy";
 
 const Input = z.object({
   method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]).default("POST"),
@@ -14,5 +15,6 @@ export const runWebStep = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => Input.parse(d))
   .handler(async ({ data }) => {
+    assertDirectProviderExecutionDisabled();
     return callWeb(data);
   });
