@@ -1,8 +1,8 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
-import { recordRun, saveAutomation, setAutomationStatus } from "@/lib/cloud.functions";
-import { executeAutomationStep } from "@/lib/execution.functions";
+import { saveAutomation, setAutomationStatus } from "@/lib/cloud.functions";
+import { executeAutomationFlow } from "@/lib/execution.functions";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
@@ -77,8 +77,7 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
   const signedIn = !!user;
   const navigate = useNavigate();
   const saveFn = useServerFn(saveAutomation);
-  const recordRunFn = useServerFn(recordRun);
-  const executeStepFn = useServerFn(executeAutomationStep);
+  const executeFlowFn = useServerFn(executeAutomationFlow);
   const setStatusFn = useServerFn(setAutomationStatus);
 
 
@@ -288,57 +287,32 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
       setRunning(false);
       return;
     }
+
     const isLiveRun = isCloudRun && active.live;
     let result: RunStep[] = [];
 
-    if (isCloudRun) {
-      for (const node of connectedOrder) {
-        try {
-          const executed = await executeStepFn({
-            data: {
-              automationId: active.cloudId!,
-              nodeId: node.id,
-              mode: isLiveRun ? "live" : "dry",
-            },
-          });
-          result.push({
-            nodeId: executed.nodeId,
-            label: executed.label,
-            status: executed.status === "success" ? "ok" : executed.status === "failed" ? "failed" : "skipped",
-            ms: executed.ms,
-            detail: isLiveRun ? executed.detail : `Preview only: ${executed.detail}`,
-          });
-          if (executed.status === "failed") {
-            for (const remaining of connectedOrder.slice(result.length)) {
-              result.push({
-                nodeId: remaining.id,
-                label: remaining.name,
-                status: "skipped",
-                ms: 0,
-                detail: "Skipped because an earlier step failed.",
-              });
-            }
-            break;
-          }
-        } catch (error) {
-          result.push({
-            nodeId: node.id,
-            label: node.name,
-            status: "failed",
-            ms: 0,
-            detail: error instanceof Error ? error.message.slice(0, 500) : "The step could not be executed.",
-          });
-          for (const remaining of connectedOrder.slice(result.length)) {
-            result.push({
-              nodeId: remaining.id,
-              label: remaining.name,
-              status: "skipped",
-              ms: 0,
-              detail: "Skipped because an earlier step failed.",
-            });
-          }
-          break;
-        }
+    if (isCloudRun && active.cloudId) {
+      try {
+        // One authenticated server request owns the whole run. The browser never
+        // sequences individual side-effecting steps or writes its own success logs.
+        const executed = await executeFlowFn({
+          data: {
+            automationId: active.cloudId,
+            mode: isLiveRun ? "live" : "dry",
+          },
+        });
+        result = executed.steps.map((step) => ({
+          nodeId: step.nodeId,
+          label: step.label,
+          status: step.status === "success" ? "ok" : step.status === "failed" ? "failed" : "skipped",
+          ms: step.ms,
+          detail: isLiveRun ? step.detail : `Preview only: ${step.detail}`,
+        }));
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "The flow could not be executed.");
+        setRunning(false);
+        setRunningId(null);
+        return;
       }
     } else {
       result = simulateRun(active).map((step) => ({
@@ -350,47 +324,13 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
       });
     }
 
-    result.forEach((step, index) => {
-      window.setTimeout(async () => {
-        setRunningId(step.nodeId);
-        setSteps((prev) => [...prev, step]);
-        if (index === result.length - 1) {
-          const failed = result.filter((item) => item.status === "failed").length;
-
-          if (isCloudRun && active.cloudId) {
-            try {
-              await recordRunFn({
-                data: {
-                  automationId: active.cloudId,
-                  triggerType: "manual",
-                  isDryRun: !isLiveRun,
-                  steps: result.map((item) => ({
-                    label: item.label.slice(0, 160),
-                    status: item.status === "failed"
-                      ? "failed"
-                      : item.status === "skipped"
-                        ? "halted"
-                        : isLiveRun
-                          ? "success"
-                          : "dry_run",
-                    durationMs: Math.max(0, Math.round(item.ms)),
-                    detail: item.detail.slice(0, 500),
-                  })),
-                },
-              });
-            } catch {
-              toast.error("The run finished, but its history could not be saved.");
-            }
-          }
-
-          setRunning(false);
-          setRunningId(null);
-          if (failed) toast.error(`Run finished with ${failed} failed step${failed > 1 ? "s" : ""}.`);
-          else if (isLiveRun) toast.success("Live execution completed.");
-          else toast.success("Preview completed — no external side effects were performed.");
-        }
-      }, 220 * (index + 1));
-    });
+    setSteps(result);
+    setRunning(false);
+    setRunningId(null);
+    const failed = result.filter((item) => item.status === "failed").length;
+    if (failed) toast.error(`Run finished with ${failed} failed step${failed > 1 ? "s" : ""}.`);
+    else if (isLiveRun) toast.success("Live execution completed and its run history was recorded by the server.");
+    else toast.success("Preview completed — no external side effects were performed.");
   };
 
   const exportFlow = async () => {
