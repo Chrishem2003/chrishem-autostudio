@@ -54,6 +54,18 @@ describe("server-side execution guardrails", () => {
   it("requires a destination URL for an HTTP action", () => {
     expect(liveCapabilityError(node("action.http"))).toMatch(/destination URL/i);
   });
+  it("fails closed on unresolved dynamic mapping tokens before external effects", () => {
+    expect(liveCapabilityError(node("action.gmail", {
+      to: "{{trigger.email}}",
+      subject: "Welcome {{trigger.name}}",
+      body: "Your order is {{trigger.order_id}}",
+    }))).toMatch(/dynamic data tokens are not resolved/i);
+    expect(liveCapabilityError(node("action.http", {
+      url: "https://example.com",
+      body: JSON.stringify({ customer: "{{previous.output}}" }),
+    }))).toMatch(/no external action will be taken/i);
+  });
+
 
   it("fails closed on live HTTP until the deployment runtime is explicitly verified", async () => {
     const result = await executeStep({
