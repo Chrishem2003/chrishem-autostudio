@@ -4,7 +4,7 @@ import { isDue } from "@/lib/schedule";
 import type { Workflow } from "@/lib/workflow";
 import { planLinearExecution } from "@/lib/execution-plan";
 import { classifyExecutionOutcome } from "@/lib/execution-outcome";
-import { executeStep } from "@/lib/execute-step.server";
+import { executeStepSafely } from "@/lib/execute-step-safely.server";
 
 const MAX_SCHEDULED_FLOW_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -185,27 +185,19 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
                 detail: "Scheduled flow exceeded its four-minute execution budget. Remaining steps were halted.",
               });
             } else {
-              try {
-                steps.push(await executeStep({
-                  node,
-                  flowName: wf.name || row.name,
-                  userId: row.user_id,
-                  mode: "live",
-                }));
-              } catch (error) {
-                console.error("[AutoStudio scheduler] Step failed.", {
-                  automationId: row.id,
-                  nodeId: node.id,
-                  errorName: error instanceof Error ? error.name : "UnknownError",
-                });
-                steps.push({
-                  nodeId: node.id,
-                  label: node.name.slice(0, 160),
-                  status: "failed",
-                  ms: 0,
-                  detail: "The step stopped unexpectedly. Its external outcome may be uncertain; verify the destination before retrying.",
-                });
-              }
+              steps.push(await executeStepSafely({
+                node,
+                flowName: wf.name || row.name,
+                userId: row.user_id,
+                mode: "live",
+                onUnexpectedError: (error) => {
+                  console.error("[AutoStudio scheduler] Step failed unexpectedly.", {
+                    automationId: row.id,
+                    nodeId: node.id,
+                    errorName: error instanceof Error ? error.name : "UnknownError",
+                  });
+                },
+              }));
             }
 
             // Finalize the intent row rather than inserting a second record.
