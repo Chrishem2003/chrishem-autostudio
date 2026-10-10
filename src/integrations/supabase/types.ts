@@ -417,6 +417,7 @@ export type Database = {
       run_step_logs: {
         Row: {
           created_at: string
+          outcome_state: string
           duration_ms: number | null
           error_detail: string | null
           id: string
@@ -431,6 +432,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          outcome_state?: string
           duration_ms?: number | null
           error_detail?: string | null
           id?: string
@@ -445,6 +447,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          outcome_state?: string
           duration_ms?: number | null
           error_detail?: string | null
           id?: string
