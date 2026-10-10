@@ -40,6 +40,7 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
               status: "failed" as const,
               sideEffectCertainty: "not_attempted" as const,
               error: "Automation no longer exists or is not live; no steps were executed.",
+              retryable: false,
             };
           }
 
@@ -54,6 +55,7 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
               status: "failed" as const,
               sideEffectCertainty: "not_attempted" as const,
               error: "Saved workflow is malformed; no steps were executed.",
+              retryable: false,
             };
           }
 
@@ -63,6 +65,7 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
               status: "failed" as const,
               sideEffectCertainty: "not_attempted" as const,
               error: "Saved workflow failed execution-plan validation; no steps were executed.",
+              retryable: false,
             };
           }
 
@@ -76,6 +79,7 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
                 status: "failed" as const,
                 sideEffectCertainty: "not_attempted" as const,
                 error: preflightError,
+                retryable: false,
               };
             }
           }
@@ -95,6 +99,7 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
               sideEffectCertainty: "not_attempted" as const,
               retryAt: new Date(Date.now() + 30_000).toISOString(),
               error: "Another run currently owns this automation; this queued job did not execute any steps.",
+              retryable: true,
             };
           }
 
