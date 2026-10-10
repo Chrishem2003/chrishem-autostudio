@@ -166,7 +166,7 @@ export function validateConnectorActionConfig(
   for (const key of resolved.action.requiredConfig) {
     const value = config[key];
     if (typeof value !== "string" || !value.trim()) {
-      return `Required connector setting "${key}" is missing.`;
+      return key === "url" ? "Destination URL is required." : `Required connector setting "${key}" is missing.`;
     }
   }
   for (const [key, value] of Object.entries(config)) {
