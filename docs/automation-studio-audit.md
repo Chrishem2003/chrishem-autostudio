@@ -67,7 +67,7 @@ This section records actual changes on the branch; it does not imply they are me
 ### Implemented
 
 - Added `bun run typecheck` and `bun run test`; moved the four existing test files to Bun's built-in test runner so the committed `bun.lock` remains the source of dependency truth.
-- Added GitHub Actions CI for locked dependency installation, typechecking, unit tests, and production build. A completed run at commit `7e3162bef611fd606d77d1a3fb0090354e458efd` passed all four gates. Later commits must pass the workflow again before merge.
+- Added GitHub Actions CI for locked dependency installation, typechecking, unit tests, and production build. A completed CI run at commit `73c530701a678a73f8e053c8598c51bccf7c56b2` passed locked dependency installation, typecheck, all 32 unit tests, and production build. The test suite now covers chat steps, Gmail rules, schedule rules, outbound-address safety, DNS pinning, and executor live-capability gates. Any subsequent code or configuration changes must pass CI again before merge.
 - Added DNS resolution of all answers, rejection if any answer is private/special-use, IPv4-mapped IPv6 handling, hostname/IP classification, connection pinning, manual redirect handling, and bounded request/response sizes for outbound HTTP.
 - Added regression tests for private IPv4/IPv6, malformed IPv6-like host strings, public hostnames beginning with `fc` / `fd`, mixed public/private DNS answers, and validated-address pinning.
 - Protected AI planning with Supabase auth middleware, schema validation, timeout, and a database-enforced per-user quota.
