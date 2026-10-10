@@ -159,11 +159,11 @@ function pinnedLookup(target: PinnedAddress): NonNullable<import("node:http").Re
   }) as NonNullable<import("node:http").RequestOptions["lookup"]>;
 }
 
-function requestOnce(url: URL, data: WebInput, target: PinnedAddress): Promise<{ status: number; body: string }> {
+async function requestOnce(url: URL, data: WebInput, target: PinnedAddress): Promise<{ status: number; body: string }> {
+  const requestFn = url.protocol === "https:"
+    ? (await import("node:https")).request
+    : (await import("node:http")).request;
   return new Promise((resolve, reject) => {
-    const requestFn = url.protocol === "https:"
-      ? (await import("node:https")).request
-      : (await import("node:http")).request;
     const body = data.method !== "GET" && data.method !== "DELETE" ? data.body : undefined;
     const headers: Record<string, string> = { "user-agent": "Chrishem-AutoStudio/1.0", accept: "application/json, text/plain, */*" };
     if (body !== undefined) {
