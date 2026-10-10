@@ -5,6 +5,7 @@ import { executeStep, type ExecutionMode } from "@/lib/execute-step.server";
 import { executeFlowSteps } from "@/lib/execute-flow-steps.server";
 import type { WorkflowNode } from "@/lib/workflow";
 import { planLinearExecution } from "@/lib/execution-plan";
+import { buildRunFinalization } from "@/lib/run-finalization";
 
 const MAX_FLOW_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -268,16 +269,16 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
       },
     });
     const steps = execution.steps;
-    const hasFailure = steps.some((step) => step.status === "failed");
-    const finalStatus = hasFailure ? "failed" : data.mode === "dry" ? "dry_run" : "success";
-    const finishedAt = new Date().toISOString();
+    const finalization = buildRunFinalization({ steps, mode: data.mode, startedAtMs: startedMs });
+    const finalStatus = finalization.status;
+    const finishedAt = finalization.finishedAt;
     const { error: finishError } = await context.supabase
       .from("run_logs")
       .update({
-        status: finalStatus,
-        finished_at: finishedAt,
-        duration_ms: Date.now() - startedMs,
-        error_summary: hasFailure ? steps.find((step) => step.status === "failed")!.detail.slice(0, 500) : null,
+        status: finalization.status,
+        finished_at: finalization.finishedAt,
+        duration_ms: finalization.durationMs,
+        error_summary: finalization.errorSummary,
       })
       .eq("id", run.id);
     if (finishError) {
