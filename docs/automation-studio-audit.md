@@ -263,6 +263,14 @@ The scheduler idempotency key is stable across a failed lease release until the 
 
 **Not yet complete:** manual live-run requests are not yet routed through the queue; the legacy direct scheduler path remains active unless the rollout flag is enabled; the new worker has only CI build/typecheck coverage so far, not a live Supabase or provider end-to-end test. Do not enable the flag in production until the migration and worker cron are deployed and smoke-tested in a non-production environment.
  
+## Manual live-run queue integration — 2026-10-10
+
+When `AUTOSTUDIO_DURABLE_QUEUE_ENABLED=true`, the authenticated `executeAutomationFlow` server function now enqueues live manual runs after owner-scoped automation lookup, saved-workflow validation, live preflight checks, and execution-plan validation. It accepts an optional caller request UUID and uses it to form a stable manual idempotency key. The Studio UI supplies a request UUID and displays a queued confirmation instead of pretending the workflow has already completed. Dry previews remain synchronous.
+
+The queue worker also claims the existing per-automation execution lease before it starts run history or performs steps. If another run owns the automation, the job is safely re-queued after a short delay without executing steps. The worker releases its lease in a `finally` block; a crashed worker relies on lease expiry and the existing uncertain-outcome review policy.
+
+**Still required before production activation:** queue migration deployment, worker cron configuration, end-to-end testing against a non-production Supabase project, and confirmation that run history, permissions, retries, and provider behavior work in the deployed runtime. The rollout flag remains disabled by default.
+ 
 ## Concurrent claim test — 2026-10-10
 
 Added a PostgreSQL CI concurrency check that seeds eight ready jobs, starts eight independent `psql` sessions concurrently, and asserts that all eight sessions receive a job and every claimed ID is unique. This tests the actual `FOR UPDATE SKIP LOCKED` claim RPC under competing database sessions rather than simulating concurrency in a unit test.
