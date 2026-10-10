@@ -88,3 +88,28 @@ describe("remote response audit summaries", () => {
     expect(detail).not.toContain("private customer payload");
   });
 });
+
+describe("outbound transport rollout gate", () => {
+  it("does not send a request while the transport readiness flag is absent", async () => {
+    const previous = process.env["AUTOSTUDIO_OUTBOUND_TRANSPORT_READY"];
+    delete process.env["AUTOSTUDIO_OUTBOUND_TRANSPORT_READY"];
+    try {
+      const { callWeb } = await import("../web-steps.server");
+      const result = await callWeb({
+        method: "GET",
+        url: "https://example.com/health",
+        timeoutSec: 2,
+      });
+      expect(result).toEqual({
+        ok: false,
+        status: 0,
+        ms: 0,
+        attempts: 0,
+        detail: "Outbound HTTP transport is not runtime-verified; no request was sent.",
+      });
+    } finally {
+      if (previous === undefined) delete process.env["AUTOSTUDIO_OUTBOUND_TRANSPORT_READY"];
+      else process.env["AUTOSTUDIO_OUTBOUND_TRANSPORT_READY"] = previous;
+    }
+  });
+});
