@@ -1,6 +1,6 @@
 // @ts-nocheck -- Bun's test runner supplies test types at runtime
 import { describe, it, expect } from "bun:test";
-import { isBlockedHost, resolvePublicTarget } from "../web-steps.server";
+import { isBlockedHost, isRetrySafeMethod, resolvePublicTarget } from "../web-steps.server";
 
 describe("web step address rules", () => {
   it("blocks localhost and local-only hostnames", () => {
@@ -55,5 +55,16 @@ describe("web step address rules", () => {
       { address: "8.8.8.8", family: 4 },
       { address: "2001:4860:4860::8888", family: 6 },
     ])).resolves.toEqual({ address: "8.8.8.8", family: 4 });
+  });
+});
+
+
+describe("outbound retry safety", () => {
+  it("retries only idempotent HTTP methods automatically", () => {
+    expect(isRetrySafeMethod("GET")).toBe(true);
+    expect(isRetrySafeMethod("PUT")).toBe(true);
+    expect(isRetrySafeMethod("DELETE")).toBe(true);
+    expect(isRetrySafeMethod("POST")).toBe(false);
+    expect(isRetrySafeMethod("PATCH")).toBe(false);
   });
 });
