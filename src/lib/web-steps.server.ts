@@ -1,4 +1,5 @@
 import { isIP } from "node:net";
+import { isOutboundTransportReady } from "@/lib/runtime-feature-gates";
 
 export type WebInput = {
   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -217,7 +218,7 @@ export function summarizeWebResponse(status: number, hostname: string, retried =
 
 export async function callWeb(data: WebInput): Promise<WebResult> {
   const started = Date.now();
-  if (process.env["AUTOSTUDIO_OUTBOUND_TRANSPORT_READY"] !== "true") {
+  if (!isOutboundTransportReady()) {
     return { ok: false, status: 0, ms: 0, attempts: 0, detail: "Outbound HTTP transport is not runtime-verified; no request was sent." };
   }
   let url: URL;
