@@ -56,6 +56,10 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
 
           const started = Date.now();
           const startedAt = new Date(started).toISOString();
+          // Keep lease cleanup around every post-claim operation, including unexpected
+          // database/runtime exceptions and early continues.
+          let leaseCursor = startedAt;
+          try {
           // Persist the run before any external side effects. If audit persistence
           // is unavailable, fail closed and release the lease without executing.
           const { data: run, error: runError } = await supabaseAdmin
@@ -76,12 +80,7 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
               automationId: row.id,
               errorCode: runError?.code ?? "NO_RUN_RECORD",
             });
-            const failedAt = new Date().toISOString();
-            await supabaseAdmin.rpc("release_scheduled_automation", {
-              _automation_id: row.id,
-              _lock_token: lockToken,
-              _last_run_at: failedAt,
-            });
+            leaseCursor = new Date().toISOString();
             failed++;
             continue;
           }
@@ -165,6 +164,7 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
           const hasFailure = steps.some((step) => step.status === "failed");
           if (hasFailure) failed++;
           const finishedAt = new Date().toISOString();
+          leaseCursor = finishedAt;
           const { error: finishError } = await supabaseAdmin
             .from("run_logs")
             .update({
@@ -183,17 +183,27 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
             });
           }
 
-          // Release only our own lease and advance the cadence cursor even after failure.
-          const { data: released, error: releaseError } = await supabaseAdmin.rpc("release_scheduled_automation", {
-            _automation_id: row.id,
-            _lock_token: lockToken,
-            _last_run_at: finishedAt,
-          });
-          if (releaseError || !released) {
-            console.error("[AutoStudio scheduler] Could not release scheduled-flow lease.", {
-              automationId: row.id,
-              errorCode: releaseError?.code ?? "LEASE_NOT_OWNED",
-            });
+          } finally {
+            // Token-checked release cannot clear another worker's lease. Keep the
+            // cadence cursor even when an unexpected exception interrupts this run.
+            try {
+              const { data: released, error: releaseError } = await supabaseAdmin.rpc("release_scheduled_automation", {
+                _automation_id: row.id,
+                _lock_token: lockToken,
+                _last_run_at: leaseCursor,
+              });
+              if (releaseError || !released) {
+                console.error("[AutoStudio scheduler] Could not release scheduled-flow lease.", {
+                  automationId: row.id,
+                  errorCode: releaseError?.code ?? "LEASE_NOT_OWNED",
+                });
+              }
+            } catch {
+              // Lease expiry is the fallback if the database itself is unavailable.
+              console.error("[AutoStudio scheduler] Lease cleanup threw unexpectedly.", {
+                automationId: row.id,
+              });
+            }
           }
         }
 
