@@ -17,6 +17,7 @@ for i in $(seq 1 8); do
     psql -X -A -t -v ON_ERROR_STOP=1 -c "select id from public.claim_execution_job(300)" \
       > "$tmp_dir/raw-$i"
     tr -d '[:space:]' < "$tmp_dir/raw-$i" > "$tmp_dir/claim-$i"
+    printf '\\n' >> "$tmp_dir/claim-$i"
   ) &
 done
 wait
