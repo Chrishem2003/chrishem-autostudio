@@ -27,10 +27,22 @@ export function liveCapabilityError(node: WorkflowNode): string | null {
   const tool = NODES[node.defId]?.tool;
   if (node.defId === "trigger.schedule" || node.defId === "trigger.manual") return null;
   if (NODES[node.defId]?.kind === "trigger") return `Trigger "${node.name}" has no live trigger adapter yet.`;
-  if (Object.values(node.config).some((value) =>
-    typeof value === "string" && /\{\{\s*[^{}]+\s*\}\}/.test(value)
-  )) {
-    return "Dynamic data tokens are not resolved by the live executor yet. Replace them with literal values; no external action will be taken.";
+  const mappingKeys = node.defId === "action.gmail"
+    ? new Set(["subject", "body"])
+    : node.defId === "action.http"
+      ? new Set(["body"])
+      : (node.defId === "action.slack" || (node.defId.startsWith("app.") && node.defId.endsWith(".create.message")))
+        ? new Set(["message"])
+        : new Set<string>();
+  for (const [key, value] of Object.entries(node.config)) {
+    if (typeof value !== "string" || (!value.includes("{{") && !value.includes("}}"))) continue;
+    if (!mappingKeys.has(key)) {
+      return `Dynamic data mapping is not allowed for "${key}" on this step; no external action will be taken.`;
+    }
+    const stripped = value.replace(/\{\{steps\.[A-Za-z0-9_-]+\.[A-Za-z][A-Za-z0-9_]*\}\}/g, "");
+    if (stripped.includes("{{") || stripped.includes("}}")) {
+      return `Config field "${key}" contains an invalid or unsupported data token; no external action will be taken.`;
+    }
   }
   const manifest = getConnectorManifestForNode(node.defId, tool);
   if (!manifest) {
@@ -101,6 +113,10 @@ export async function executeStep(args: {
   if (node.defId === "trigger.schedule") return result("success", "Scheduled trigger accepted; execution started.", 0);
   if (node.defId === "trigger.manual") return result("success", "Manual trigger accepted; execution started.", 0);
   if (definition?.kind === "trigger") return result("failed", `Trigger "${node.name}" has no live trigger adapter yet.`, 0);
+
+  if (Object.values(node.config).some((value) => typeof value === "string" && (value.includes("{{") || value.includes("}}")))) {
+    return result("failed", "Unresolved data tokens reached the executor. No external action was taken.", 0);
+  }
 
   const unsupported = liveCapabilityError(node);
   if (unsupported) return result("failed", unsupported, 0);
