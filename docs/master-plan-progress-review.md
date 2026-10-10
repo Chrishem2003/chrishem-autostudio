@@ -1,9 +1,9 @@
 # Automation Studio master-plan progress review
 
-Review date: 2026-10-10  
+Review date: 2026-10-11  
 Plan source: **Automation Studio Master Plan and Lovable Prompt Pack** (user-provided attachment)  
 Repository: https://github.com/Chrishem2003/chrishem-autostudio  
-Review branch: `audit/p0-hardening`
+Review branch: `main`
 
 ## Executive assessment
 
@@ -304,7 +304,7 @@ These are pure unit tests; they do not claim to simulate authenticated server-fu
 
 ## Main-branch promotion policy
 
-Keep the hardening work isolated on `audit/p0-hardening` while it is being evaluated. Promote to `main` only after the exact final commit has green application CI and queue migration smoke tests, the PR diff has been reviewed for accidental secret exposure and unsafe execution paths, duplicate/idempotency and interruption behavior have evidence, and staging confirms the queue/transport gates remain disabled by default and can be enabled safely with rollback documented. No production-ready claim is made until those checks are complete.
+The user has explicitly requested that accepted batches land on `main`, so hardening changes are being committed directly there. Keep `AUTOSTUDIO_DURABLE_QUEUE_ENABLED=false` and outbound transport readiness unset/false until the exact deployed staging environment passes the release gates. Each batch must have green exact-head application CI and queue database smoke tests; staging, provider effects, and rollback still require separate evidence. No production-ready claim is made until those checks are complete.
 
 
 ## Durable queue idempotency integrity — 2026-10-11
@@ -334,3 +334,20 @@ This verifies the SQL migration against the disposable PostgreSQL CI schema, not
 ### Master-plan status after this batch
 
 The build remains aligned with the plan's reliability-first sequence: execution boundaries, connector contracts, safe mapping, audit output minimization, and queue recovery precede wider connector coverage and production activation. Still outstanding are staging migration/worker/transport rehearsal, the provider-agnostic AI gateway, full natural-language draft/refine UX, accessibility acceptance, teams/approvals, complete run analytics/API, and the P8 differentiators.
+
+
+## Durable queue attribution and trigger integrity — 2026-10-11
+
+**Implemented on `main`; exact-head CI passed on commit `60fbca8b1093761f7eeac4e34732911b2fd3cc04`.** Both GitHub Actions jobs passed: typecheck, unit tests, production build, and PostgreSQL migration/idempotency/lease/concurrency smoke tests.
+
+- Queue claim parsing now requires a supported persisted trigger type (`manual`, `scheduled`, or `webhook`) and rejects unknown values before execution.
+- The worker records the run trigger from the validated queue row rather than guessing from the payload. Scheduled jobs map to the run-log value `schedule`; manual and webhook labels remain distinct.
+- Added a database trigger that rejects a non-null `requested_by` value unless that user owns the target automation. System-triggered jobs may use a null requester. This intentionally reflects the current owner-only authorization model; workspace/team membership has not yet been implemented.
+- Added disposable PostgreSQL regression coverage for forged requester attribution and applied the ownership migration in CI.
+
+### Remaining acceptance boundary
+
+1. Apply and verify the new migration against staging before queue activation.
+2. Add explicit team membership/role authorization before allowing shared-workspace users to enqueue jobs on another owner's automation.
+3. Add route-level authorization tests and verify authenticated/manual, scheduled, and webhook producers supply the intended requester and trigger metadata.
+4. Keep queue and outbound transport disabled until controlled staging validates worker authentication, provider effects, lease recovery, and rollback.
