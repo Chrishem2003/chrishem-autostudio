@@ -85,8 +85,10 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
           }
 
           let activeRunId: string | null = null;
+          let runStartedMs = Date.now();
           try {
           const started = Date.now();
+          runStartedMs = started;
           const startedAt = new Date(started).toISOString();
           const payload = job.payload && typeof job.payload === "object" && !Array.isArray(job.payload)
             ? job.payload as Record<string, unknown>
@@ -233,7 +235,7 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
                 .update({
                   status: "failed",
                   finished_at: finishedAt,
-                  duration_ms: Math.max(0, Date.now() - started),
+                  duration_ms: Math.max(0, Date.now() - runStartedMs),
                   error_summary: "Queued execution stopped unexpectedly. Verify uncertain step outcomes before retrying.",
                 })
                 .eq("id", activeRunId)
