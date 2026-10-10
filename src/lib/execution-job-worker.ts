@@ -56,9 +56,16 @@ export async function processOneExecutionJob(
 
   let leaseLost = false;
   const heartbeat = async (): Promise<boolean> => {
-    const alive = await dependencies.heartbeat(job);
-    if (!alive) leaseLost = true;
-    return alive;
+    try {
+      const alive = await dependencies.heartbeat(job);
+      if (!alive) leaseLost = true;
+      return alive;
+    } catch {
+      // A failed heartbeat is indistinguishable from lost ownership. Fail closed:
+      // never finalize based on a lease whose state could not be verified.
+      leaseLost = true;
+      return false;
+    }
   };
 
   let result: ExecutionJobResult;
@@ -94,7 +101,13 @@ export async function processOneExecutionJob(
     error = [error, decision.reason].filter(Boolean).join(" ").slice(0, 2000);
   }
 
-  const finalized = await dependencies.finish(job, finalStatus, error, result.retryAt ?? null);
+  let finalized: boolean;
+  try {
+    finalized = await dependencies.finish(job, finalStatus, error, result.retryAt ?? null);
+  } catch {
+    // A database/network error means finalization is unknown, not successful.
+    return { outcome: "finalization_rejected", jobId: job.id };
+  }
   if (!finalized) return { outcome: "finalization_rejected", jobId: job.id };
   return { outcome: "finished", jobId: job.id, status: finalStatus };
 }
