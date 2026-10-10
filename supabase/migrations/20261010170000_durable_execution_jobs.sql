@@ -55,7 +55,7 @@ returns setof public.execution_jobs
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $enqueue$
 begin
   if _trigger_type not in ('manual', 'scheduled', 'webhook') then
     raise exception 'Unsupported execution trigger';
@@ -100,7 +100,7 @@ begin
     raise exception 'Idempotency key was reused with a different request';
   end if;
 end;
-$;
+$enqueue$;
 
 -- A single worker atomically claims one ready job using SKIP LOCKED.
 -- Expired running jobs are sent to needs_review, not re-executed automatically.
