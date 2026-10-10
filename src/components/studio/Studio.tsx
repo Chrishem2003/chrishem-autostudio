@@ -270,6 +270,12 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
 
   const runFlow = async () => {
     if (!active) return;
+    const isCloudRun = signedIn && !!active.cloudId;
+    const isLiveRun = isCloudRun && active.live;
+    if (isLiveRun && !window.confirm(
+      "This flow is LIVE. Running it may send real emails or chat messages and make real HTTP requests. Continue only if you expect those side effects."
+    )) return;
+
     const connectedOrder = orderedNodes(active).filter(
       (node) => active.edges.some((edge) => edge.from === node.id || edge.to === node.id) || active.nodes.length === 1,
     );
@@ -281,14 +287,12 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
     setSteps([]);
     setRunning(true);
     setTab("run");
-    const isCloudRun = signedIn && !!active.cloudId;
     if (isCloudRun && savedAt[active.id] !== active.updatedAt) {
       toast.error("Save your latest changes before running a cloud Preview or live execution.");
       setRunning(false);
       return;
     }
 
-    const isLiveRun = isCloudRun && active.live;
     let result: RunStep[] = [];
 
     if (isCloudRun && active.cloudId) {
@@ -657,6 +661,7 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
                 issues={issues}
                 steps={steps}
                 running={running}
+                live={active.live}
                 onRun={runFlow}
                 onExport={exportFlow}
                 onSelectNode={setSelectedId}
