@@ -31,7 +31,7 @@ bun install --frozen-lockfile
 bun run dev
 ```
 
-Set the required Supabase values in your local environment or secret manager. Never commit `.env`, OAuth tokens, provider keys, service-role keys, or cron secrets.
+Set the required Supabase values and a trusted `APP_BASE_URL` in your local environment or secret manager. Use `http://localhost:3000` only for local development; production must use the exact HTTPS origin registered with the OAuth provider. Never commit `.env`, OAuth tokens, provider keys, service-role keys, or cron secrets.
 
 ### Quality gates
 
