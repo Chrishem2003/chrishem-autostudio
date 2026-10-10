@@ -191,7 +191,8 @@ export const listVersions = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ automationId: z.string().uuid() }).parse(input))
   .handler(async ({ context, data }): Promise<CloudVersion[]> => {
-    const { data: ownedAutomation } = await context.supabase.from("automations").select("id").eq("id", data.automationId).eq("user_id", context.userId).maybeSingle();
+    const { data: ownedAutomation, error: ownershipError } = await context.supabase.from("automations").select("id").eq("id", data.automationId).eq("user_id", context.userId).maybeSingle();
+    if (ownershipError) throw new Error("Could not verify automation ownership.");
     if (!ownedAutomation) throw new Error("Automation not found.");
     const { data: rows, error } = await context.supabase
       .from("automation_versions")
@@ -219,7 +220,8 @@ export const restoreVersion = createServerFn({ method: "POST" })
     z.object({ automationId: z.string().uuid(), versionNumber: z.number().int().positive() }).parse(input),
   )
   .handler(async ({ context, data }) => {
-    const { data: ownedAutomation } = await context.supabase.from("automations").select("id, version").eq("id", data.automationId).eq("user_id", context.userId).maybeSingle();
+    const { data: ownedAutomation, error: ownershipError } = await context.supabase.from("automations").select("id, version").eq("id", data.automationId).eq("user_id", context.userId).maybeSingle();
+    if (ownershipError) throw new Error("Could not verify automation ownership.");
     if (!ownedAutomation) throw new Error("Automation not found.");
     const { data: snapshot, error } = await context.supabase
       .from("automation_versions")
@@ -349,7 +351,11 @@ export const recordRun = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ context, data }) => {
-    const { data: ownedAutomation } = await context.supabase.from("automations").select("id").eq("id", data.automationId).eq("user_id", context.userId).maybeSingle();
+    if (!data.isDryRun) {
+      throw new Error("Client-submitted live run records are disabled. Live audit records are written only by the durable execution worker.");
+    }
+    const { data: ownedAutomation, error: ownershipError } = await context.supabase.from("automations").select("id").eq("id", data.automationId).eq("user_id", context.userId).maybeSingle();
+    if (ownershipError) throw new Error("Could not verify automation ownership.");
     if (!ownedAutomation) throw new Error("Automation not found.");
     const failed = data.steps.find((s) => s.status === "failed" || s.status === "halted");
     const duration = data.steps.reduce((sum, s) => sum + s.durationMs, 0);
@@ -481,8 +487,9 @@ export const disconnectIntegration = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ integrationId: z.string().uuid() }).parse(input))
   .handler(async ({ context, data }) => {
-    const { data: integ } = await context.supabase
+    const { data: integ, error: lookupError } = await context.supabase
       .from("integrations").select("provider").eq("id", data.integrationId).eq("user_id", context.userId).maybeSingle();
+    if (lookupError) throw new Error("Could not verify integration ownership.");
     const { error } = await context.supabase.from("integrations").delete().eq("id", data.integrationId).eq("user_id", context.userId);
     if (error) throw new Error(error.message);
     // Scoped revocation: pause only the live flows that use this app.
@@ -497,7 +504,8 @@ export const disconnectIntegration = createServerFn({ method: "POST" })
         return nodes.some((n) => NODES[n.defId]?.tool.toLowerCase() === provider);
       });
       if (hit.length) {
-        await context.supabase.from("automations").update({ status: "paused" }).in("id", hit.map((a) => a.id));
+        const { error: pauseError } = await context.supabase.from("automations").update({ status: "paused" }).in("id", hit.map((a) => a.id)).eq("user_id", context.userId);
+        if (pauseError) throw new Error("Integration was disconnected, but affected automations could not all be paused.");
         paused = hit.map((a) => a.name);
       }
     }
