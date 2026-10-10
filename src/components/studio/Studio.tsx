@@ -161,6 +161,39 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
     }
   };
 
+  const toggleLiveStatus = async () => {
+    if (!active || saving) return;
+    if (!signedIn) {
+      toast("Sign in to manage live status.");
+      navigate({ to: "/auth" });
+      return;
+    }
+
+    const nextLive = !active.live;
+    setSaving(true);
+    try {
+      const { cloudId, ...flow } = active;
+      const res = await saveFn({
+        data: {
+          ...(cloudId ? { automationId: cloudId } : {}),
+          flow: { ...flow, live: nextLive },
+          status: nextLive ? "live" : "paused",
+          changeSummary: nextLive ? "Activated from Studio" : "Paused from Studio",
+        },
+      });
+      setWorkflows((prev) => prev.map((w) =>
+        w.id === active.id ? { ...w, cloudId: res.automationId, live: nextLive } : w,
+      ));
+      toast.success(nextLive
+        ? "Flow saved and marked live. Provider execution still follows the durable queue rollout gate."
+        : "Flow saved and paused.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't update live status.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const commit = (next: Workflow[]) => {
     setPast((p) => [...p.slice(-40), workflows]);
     setFuture([]);
@@ -519,7 +552,8 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
           {active ? (
             <>
               <button
-                onClick={() => update((w) => ({ ...w, live: !w.live }))}
+                onClick={() => void toggleLiveStatus()}
+                disabled={saving}
                 className={cn(
                   "flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
                   active.live
@@ -528,7 +562,7 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
                 )}
               >
                 <span className={cn("size-1.5 rounded-full", active.live ? "bg-action" : "bg-muted-foreground")} />
-                {active.live ? "Live" : "Paused"}
+                {saving ? "Saving…" : active.live ? "Live" : "Paused"}
               </button>
               {workflows.length > 1 ? (
                 <button
