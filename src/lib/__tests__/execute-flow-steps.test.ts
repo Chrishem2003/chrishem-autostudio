@@ -34,6 +34,32 @@ describe("shared flow-step engine", () => {
     expect(result.failed).toBe(false);
   });
 
+  it("resolves a prior successful step output before the next step executes", async () => {
+    const receivedConfigs = [];
+    const result = await executeFlowSteps(baseInput({
+      execute: async ({ node }) => {
+        receivedConfigs.push({ id: node.id, config: node.config });
+        return node.id === "step-1"
+          ? { nodeId: node.id, label: node.name, status: "success", ms: 1, detail: "ok", outputs: { email: "person@example.com" } }
+          : { nodeId: node.id, label: node.name, status: "success", ms: 1, detail: "ok" };
+      },
+      nodes: [nodes[0], { ...nodes[1], config: {} }, { ...nodes[2], config: { to: "{{steps.step-1.email}}" } }],
+    }));
+    expect(result.failed).toBe(false);
+    expect(receivedConfigs[2].config.to).toBe("person@example.com");
+  });
+
+  it("halts before the executor when a mapping is missing", async () => {
+    let executions = 0;
+    const result = await executeFlowSteps(baseInput({
+      nodes: [nodes[0], { ...nodes[1], config: { to: "{{steps.trigger-1.email}}" } }],
+      execute: async ({ node }) => { executions++; return { nodeId: node.id, label: node.name, status: "success", ms: 1, detail: "should not run" }; },
+    }));
+    expect(result.failed).toBe(true);
+    expect(executions).toBe(1);
+    expect(result.steps[1].detail).toMatch(/Data mapping failed before the external action/i);
+  });
+
   it("halts without executing when intent persistence fails", async () => {
     let executions = 0;
     const result = await executeFlowSteps(baseInput({
