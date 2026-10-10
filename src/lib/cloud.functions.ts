@@ -107,6 +107,7 @@ export const saveAutomation = createServerFn({ method: "POST" })
         .from("automations")
         .select("version, status")
         .eq("id", automationId)
+        .eq("user_id", context.userId)
         .maybeSingle();
       if (readErr) throw new Error(readErr.message);
       if (!existing) throw new Error("That flow no longer exists.");
@@ -121,7 +122,8 @@ export const saveAutomation = createServerFn({ method: "POST" })
           version,
           flow_json: flow,
         })
-        .eq("id", automationId);
+        .eq("id", automationId)
+        .eq("user_id", context.userId);
       if (error) throw new Error(error.message);
     } else {
       const { data: created, error } = await context.supabase
@@ -157,7 +159,7 @@ export const deleteAutomation = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ automationId: z.string().uuid() }).parse(input))
   .handler(async ({ context, data }) => {
-    const { error } = await context.supabase.from("automations").delete().eq("id", data.automationId);
+    const { error } = await context.supabase.from("automations").delete().eq("id", data.automationId).eq("user_id", context.userId);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -268,14 +270,16 @@ export const restoreVersion = createServerFn({ method: "POST" })
       .from("automations")
       .select("version")
       .eq("id", data.automationId)
+      .eq("user_id", context.userId)
       .maybeSingle();
     if (curErr) throw new Error(curErr.message);
     const nextVersion = (current?.version ?? 1) + 1;
 
     const { error: upErr } = await context.supabase
       .from("automations")
-      .update({ flow_json: snapshot.flow_json, version: nextVersion })
-      .eq("id", data.automationId);
+      .update({ flow_json: snapshot.flow_json, version: nextVersion, status: "paused" })
+      .eq("id", data.automationId)
+      .eq("user_id", context.userId);
     if (upErr) throw new Error(upErr.message);
 
     const { error: insErr } = await context.supabase.from("automation_versions").insert({
@@ -344,12 +348,30 @@ export const listRuns = createServerFn({ method: "GET" })
 
 const SECRETISH = /(secret|token|key|password|authorization|bearer|credential)/i;
 
-/** Never persist anything that looks like a credential. */
+function redactText(value: string): string {
+  return value
+    .replace(/\\b(Bearer\\s+)[A-Za-z0-9._~+/-]+=*/gi, "$1[redacted]")
+    .replace(/((?:api[_-]?key|access[_-]?token|refresh[_-]?token|password|client[_-]?secret|authorization)\\s*[:=]\\s*)[^\\s,;]+/gi, "$1[redacted]")
+    .replace(/([?&](?:token|key|secret|password|access_token)=)[^&\\s]+/gi, "$1[redacted]")
+    .slice(0, 500);
+}
+
+function redactValue(value: unknown): unknown {
+  if (typeof value === "string") return redactText(value);
+  if (Array.isArray(value)) return value.map(redactValue);
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+      out[key] = SECRETISH.test(key) ? "[redacted]" : redactValue(item);
+    }
+    return out;
+  }
+  return value;
+}
+
+/** Never persist fields or text that look like credentials. */
 function redact(value: Record<string, unknown> | undefined) {
-  if (!value) return null;
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(value)) out[k] = SECRETISH.test(k) ? "[redacted]" : v;
-  return out;
+  return value ? redactValue(value) : null;
 }
 
 export const recordRun = createServerFn({ method: "POST" })
@@ -375,6 +397,15 @@ export const recordRun = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ context, data }) => {
+    const { data: ownedAutomation, error: ownershipError } = await context.supabase
+      .from("automations")
+      .select("id")
+      .eq("id", data.automationId)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (ownershipError) throw new Error("Could not verify automation ownership.");
+    if (!ownedAutomation) throw new Error("Automation not found.");
+
     const failed = data.steps.find((s) => s.status === "failed" || s.status === "halted");
     const duration = data.steps.reduce((sum, s) => sum + s.durationMs, 0);
 
@@ -387,7 +418,7 @@ export const recordRun = createServerFn({ method: "POST" })
         is_dry_run: data.isDryRun,
         finished_at: new Date().toISOString(),
         duration_ms: duration,
-        error_summary: failed ? `${failed.label}: ${failed.detail ?? "step failed"}` : null,
+        error_summary: failed ? redactText(`${failed.label}: ${failed.detail ?? "step failed"}`) : null,
       })
       .select("id")
       .single();
@@ -401,7 +432,7 @@ export const recordRun = createServerFn({ method: "POST" })
           node_label: s.label,
           status: s.status,
           duration_ms: s.durationMs,
-          error_detail: s.detail ?? null,
+          error_detail: s.detail ? redactText(s.detail) : null,
           output_snapshot: redact(s.output) as never,
         })),
       );
@@ -422,7 +453,8 @@ export const recordRun = createServerFn({ method: "POST" })
     await context.supabase
       .from("automations")
       .update({ last_run_at: new Date().toISOString(), health_score: health })
-      .eq("id", data.automationId);
+      .eq("id", data.automationId)
+      .eq("user_id", context.userId);
 
     return { runId: run.id, health };
   });
