@@ -242,3 +242,5 @@ The adapter's first CI pass found strict TypeScript issues around the recursive 
 A further worker review found an important edge case: a heartbeat RPC throwing is not evidence that the lease is still owned. The worker now treats heartbeat transport errors as lease loss and refuses to finalize. Finalization transport exceptions are surfaced as `finalization_rejected` rather than escaping as apparent success. Regression tests cover both cases.
 
 The server-only queue adapter also validates enqueue arguments and rejects unexpected RPC response shapes rather than silently treating malformed claim data as an empty queue. These are fail-closed code paths; database migration rehearsal remains outstanding.
+
+The adapter's response-shape hardening initially triggered strict TypeScript index-signature errors; the enqueue response is now explicitly narrowed to a record before field validation. CI for `c72602f616a48b51e5842356529e6d577e607f6d` passed typecheck, all 84 unit tests across 13 files, and the production build. This still does not substitute for a real Supabase migration rehearsal or RPC integration test.
