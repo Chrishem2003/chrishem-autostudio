@@ -3,6 +3,7 @@ import {
   type ExecutionJobStatus,
   type SideEffectCertainty,
 } from "@/lib/execution-job-policy";
+import { sanitizeExecutionError } from "@/lib/execution-error-sanitizer";
 
 export interface ClaimedExecutionJob {
   id: string;
@@ -78,14 +79,18 @@ export async function processOneExecutionJob(
     result = {
       status: "failed",
       sideEffectCertainty: "uncertain",
-      error: error instanceof Error ? error.message : "Worker execution threw an unknown error.",
+      error: error instanceof Error
+        ? sanitizeExecutionError(error.message, "Execution failed unexpectedly; verify the external outcome before retrying.")
+        : "Worker execution threw an unknown error.",
     };
   }
 
   if (leaseLost) return { outcome: "lease_lost", jobId: job.id };
 
   let finalStatus: Exclude<ExecutionJobStatus, "running">;
-  let error = result.error ?? null;
+  let error = result.error
+    ? sanitizeExecutionError(result.error, "Execution failed; inspect the run details and verify external outcome before retrying.")
+    : null;
   if (result.status === "succeeded") {
     finalStatus = "succeeded";
     error = null;
@@ -104,7 +109,10 @@ export async function processOneExecutionJob(
       stableIdempotencyKey: job.idempotencyKey,
     });
     finalStatus = decision.status;
-    error = [error, decision.reason].filter(Boolean).join(" ").slice(0, 2000);
+    error = sanitizeExecutionError(
+      [error, decision.reason].filter(Boolean).join(" "),
+      "Execution failed; inspect the run details and verify external outcome before retrying.",
+    );
   }
 
   let finalized: boolean;
