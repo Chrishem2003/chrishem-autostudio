@@ -19,6 +19,7 @@ describe("external step outcome certainty", () => {
   it("marks provider 5xx failures as uncertain", () => {
     expect(classifyExecutionOutcome("failed", "Webhook delivery failed (HTTP 503).")).toBe("uncertain");
     expect(classifyExecutionOutcome("failed", "Gmail refused the email (HTTP 500).")).toBe("uncertain");
+    expect(classifyExecutionOutcome("failed", "HTTP request failed (status 503).")).toBe("uncertain");
   });
 
   it("marks preflight/configuration failures as not attempted", () => {
