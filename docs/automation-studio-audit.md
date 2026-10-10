@@ -236,3 +236,9 @@ Added `src/lib/execution-job-queue.server.ts` and typed the four queue RPCs in t
 This connects the TypeScript worker boundary to the database RPC contract, but does not itself deploy a worker or validate that the migration is applied. Migration rehearsal and live database integration tests remain release gates.
 
 The adapter's first CI pass found strict TypeScript issues around the recursive Supabase `Json` payload type and index-signature access. Those were corrected; CI for commit `dbd542378ad892fe5c488acd34618666b4e38a7b` passed typecheck, tests, and production build. This remains code-level verification only; no live database RPC was invoked.
+
+## Queue transport failure hardening — 2026-10-10
+
+A further worker review found an important edge case: a heartbeat RPC throwing is not evidence that the lease is still owned. The worker now treats heartbeat transport errors as lease loss and refuses to finalize. Finalization transport exceptions are surfaced as `finalization_rejected` rather than escaping as apparent success. Regression tests cover both cases.
+
+The server-only queue adapter also validates enqueue arguments and rejects unexpected RPC response shapes rather than silently treating malformed claim data as an empty queue. These are fail-closed code paths; database migration rehearsal remains outstanding.
