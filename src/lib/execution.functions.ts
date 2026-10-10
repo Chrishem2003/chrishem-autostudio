@@ -264,7 +264,7 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
           outcome_state: outcomeState,
           duration_ms: Math.max(0, Math.round(step.ms)),
           error_detail: step.status === "failed" ? step.detail.slice(0, 500) : null,
-          output_snapshot: { detail: step.detail.slice(0, 500), outcomeState },
+          output_snapshot: { detail: step.detail.slice(0, 500), outcomeState, ...(step.outputs ? { outputs: step.outputs } : {}) },
         }).eq("id", intentId);
         return !stepLogError;
       },
