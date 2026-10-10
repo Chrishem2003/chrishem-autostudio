@@ -66,6 +66,25 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
             };
           }
 
+          // Serialize queue jobs per automation with the same lease used by
+          // manual and scheduled entry points. A busy automation is safe to retry.
+          const { data: executionLock, error: executionLockError } = await supabaseAdmin.rpc("claim_manual_automation", {
+            _automation_id: automation.id,
+            _lease_seconds: 300,
+          });
+          if (executionLockError) {
+            throw new Error("Could not safely claim automation execution lease.");
+          }
+          if (!executionLock) {
+            return {
+              status: "failed" as const,
+              sideEffectCertainty: "not_attempted" as const,
+              retryAt: new Date(Date.now() + 30_000).toISOString(),
+              error: "Another run currently owns this automation; this queued job did not execute any steps.",
+            };
+          }
+
+          try {
           const started = Date.now();
           const startedAt = new Date(started).toISOString();
           const payload = job.payload && typeof job.payload === "object" && !Array.isArray(job.payload)
@@ -192,6 +211,19 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
           }
 
           return { status: "succeeded" as const, sideEffectCertainty: "effect_confirmed" as const };
+          } finally {
+            const { error: releaseError } = await supabaseAdmin.rpc("release_manual_automation", {
+              _automation_id: automation.id,
+              _lock_token: executionLock,
+            });
+            if (releaseError) {
+              console.error("[AutoStudio queue worker] Automation lease release failed.", {
+                jobId: job.id,
+                automationId: automation.id,
+                errorCode: releaseError.code,
+              });
+            }
+          }
         });
 
         try {
