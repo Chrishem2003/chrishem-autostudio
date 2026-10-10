@@ -22,7 +22,7 @@ describe("shared persisted execution preflight", () => {
   });
 
   it("rejects malformed persisted JSON before producing a plan", () => {
-    const result = preparePersistedExecutionPlan({ name: "Broken", nodes: [], edges: [] });
+    const result = preparePersistedExecutionPlan({ name: "Broken", nodes: [{ id: "incomplete" }], edges: [] });
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error).toMatch(/saved automation is invalid/i);
   });
