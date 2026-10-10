@@ -4,6 +4,7 @@ import { isDue } from "@/lib/schedule";
 import type { Workflow } from "@/lib/workflow";
 import { planLinearExecution } from "@/lib/execution-plan";
 import { executeFlowSteps } from "@/lib/execute-flow-steps.server";
+import { buildRunFinalization } from "@/lib/run-finalization";
 
 const MAX_SCHEDULED_FLOW_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -189,17 +190,17 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
           });
           const steps = execution.steps;
 
-          const hasFailure = steps.some((step) => step.status === "failed");
-          if (hasFailure) failed++;
-          const finishedAt = new Date().toISOString();
+          const finalization = buildRunFinalization({ steps, mode: "live", startedAtMs: started });
+          if (finalization.status === "failed") failed++;
+          const finishedAt = finalization.finishedAt;
           leaseCursor = finishedAt;
           const { error: finishError } = await supabaseAdmin
             .from("run_logs")
             .update({
-              status: hasFailure ? "failed" : "success",
-              finished_at: finishedAt,
-              duration_ms: Date.now() - started,
-              error_summary: hasFailure ? steps.find((step) => step.status === "failed")!.detail.slice(0, 500) : null,
+              status: finalization.status,
+              finished_at: finalization.finishedAt,
+              duration_ms: finalization.durationMs,
+              error_summary: finalization.errorSummary,
             })
             .eq("id", run.id);
 
