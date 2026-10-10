@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import type { Json } from "@/integrations/supabase/types";
+import { validateExecutionJobPayload } from "@/lib/execution-job-input";
 import type { ExecutionJobStatus } from "@/lib/execution-job-policy";
 import type {
   ClaimedExecutionJob,
@@ -58,6 +59,9 @@ export async function enqueueExecutionJob(input: EnqueueExecutionJobInput): Prom
   if (!input.idempotencyKey || input.idempotencyKey.length > 200) {
     throw new Error("Idempotency key must contain between 1 and 200 characters.");
   }
+  const payloadValidation = validateExecutionJobPayload(input.payload);
+  if (!payloadValidation.success) throw new Error(payloadValidation.error);
+  const payload = payloadValidation.payload;
   const maxAttempts = input.maxAttempts ?? 3;
   if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 10) {
     throw new Error("Maximum attempts must be an integer from 1 to 10.");
@@ -69,7 +73,7 @@ export async function enqueueExecutionJob(input: EnqueueExecutionJobInput): Prom
     _automation_id: input.automationId,
     _trigger_type: input.triggerType,
     _idempotency_key: input.idempotencyKey,
-    _payload: input.payload ?? {},
+    _payload: payload,
     _requested_by: input.requestedBy ?? null,
     _max_attempts: maxAttempts,
     _available_at: input.availableAt ?? new Date().toISOString(),
