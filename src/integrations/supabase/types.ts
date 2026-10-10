@@ -485,6 +485,8 @@ export type Database = {
       consume_gmail_test_quota: { Args: Record<PropertyKey, never>; Returns: boolean }
       claim_scheduled_automation: { Args: { _automation_id: string; _lease_seconds?: number }; Returns: string | null }
       release_scheduled_automation: { Args: { _automation_id: string; _lock_token: string; _last_run_at: string }; Returns: boolean }
+      claim_manual_automation: { Args: { _automation_id: string; _lease_seconds?: number }; Returns: string | null }
+      release_manual_automation: { Args: { _automation_id: string; _lock_token: string }; Returns: boolean }
     }
     Enums: {
       automation_status: "draft" | "live" | "paused"
