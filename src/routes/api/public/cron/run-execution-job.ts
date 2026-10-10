@@ -84,6 +84,7 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
             };
           }
 
+          let activeRunId: string | null = null;
           try {
           const started = Date.now();
           const startedAt = new Date(started).toISOString();
@@ -108,6 +109,7 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
           if (runError || !run) {
             throw new Error("Could not persist the queued run before execution; no workflow steps were started.");
           }
+          activeRunId = run.id;
 
           const execution = await executeFlowSteps({
             nodes: plan.nodes,
@@ -211,6 +213,41 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
           }
 
           return { status: "succeeded" as const, sideEffectCertainty: "effect_confirmed" as const };
+          } catch (executionError) {
+            // Keep run history reconcilable when an unexpected error occurs after
+            // the run row exists. In-flight step intents stay explicitly uncertain.
+            if (activeRunId) {
+              const finishedAt = new Date().toISOString();
+              const { error: stepRecoveryError } = await supabaseAdmin
+                .from("run_step_logs")
+                .update({
+                  status: "failed",
+                  outcome_state: "uncertain",
+                  error_detail: "Worker stopped before confirming this step. Verify external effects before retrying.",
+                  output_snapshot: { recoveryHint: "Queued worker failed after recording intent; verify the external outcome before retrying." },
+                })
+                .eq("run_id", activeRunId)
+                .eq("status", "running");
+              const { error: runRecoveryError } = await supabaseAdmin
+                .from("run_logs")
+                .update({
+                  status: "failed",
+                  finished_at: finishedAt,
+                  duration_ms: Math.max(0, Date.now() - started),
+                  error_summary: "Queued execution stopped unexpectedly. Verify uncertain step outcomes before retrying.",
+                })
+                .eq("id", activeRunId)
+                .eq("status", "running");
+              if (stepRecoveryError || runRecoveryError) {
+                console.error("[AutoStudio queue worker] Interrupted run recovery was incomplete.", {
+                  jobId: job.id,
+                  runId: activeRunId,
+                  stepRecoveryFailed: Boolean(stepRecoveryError),
+                  runRecoveryFailed: Boolean(runRecoveryError),
+                });
+              }
+            }
+            throw executionError;
           } finally {
             const { error: releaseError } = await supabaseAdmin.rpc("release_manual_automation", {
               _automation_id: automation.id,
