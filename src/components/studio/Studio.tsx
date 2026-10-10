@@ -1,11 +1,8 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
-import { recordRun, saveAutomation } from "@/lib/cloud.functions";
-import { runWebStep } from "@/lib/web-steps.functions";
-import { sendGmailStep } from "@/lib/gmail.functions";
-import { isGmailSendStep } from "@/lib/gmail-steps";
-import { buildChatRequest, isChatMessageStep } from "@/lib/chat-steps";
+import { recordRun, saveAutomation, setAutomationStatus } from "@/lib/cloud.functions";
+import { executeAutomationStep } from "@/lib/execution.functions";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
@@ -80,8 +77,8 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
   const navigate = useNavigate();
   const saveFn = useServerFn(saveAutomation);
   const recordRunFn = useServerFn(recordRun);
-  const webStepFn = useServerFn(runWebStep);
-  const gmailFn = useServerFn(sendGmailStep);
+  const executeStepFn = useServerFn(executeAutomationStep);
+  const setStatusFn = useServerFn(setAutomationStatus);
 
 
   useEffect(() => {
@@ -270,89 +267,111 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
 
   const runFlow = async () => {
     if (!active) return;
-    const result = simulateRun(active);
-    if (result.length === 0) {
+    const connectedOrder = orderedNodes(active).filter(
+      (node) => active.edges.some((edge) => edge.from === node.id || edge.to === node.id) || active.nodes.length === 1,
+    );
+    if (connectedOrder.length === 0) {
       toast.error("Nothing to run yet — add and connect a couple of steps.");
       return;
     }
+
     setSteps([]);
     setRunning(true);
     setTab("run");
-    let live = false;
-    if (signedIn) {
-      for (let i = 0; i < result.length; i++) {
-        const r = result[i]!;
-        const node = active.nodes.find((n) => n.id === r.nodeId);
-        if (!node || r.status === "skipped") continue;
-        const tool = NODES[node.defId]?.tool;
-        let req: { method: "GET" | "POST"; url: string; body?: string | undefined } | null = null;
-        if (isGmailSendStep(node.defId)) {
-          if (!node.config["to"]?.trim()) continue;
-          live = true;
-          try {
-            const out = await gmailFn({ data: { config: node.config, flowName: active.name } });
-            result[i] = { ...r, status: out.ok ? "ok" : "failed", ms: out.ms ?? r.ms, detail: `Live: ${out.detail}` };
-          } catch {
-            result[i] = { ...r, status: "failed", detail: "Live: couldn't reach Gmail — try again shortly." };
-          }
-          continue;
-        }
-        if (isChatMessageStep(node.defId, tool)) {
-          const chat = buildChatRequest(tool!, node.config, active.name);
-          if (!chat) continue;
-          if ("error" in chat) {
-            live = true;
-            result[i] = { ...r, status: "failed", detail: `Live: ${chat.error}` };
-            continue;
-          }
-          req = { method: "POST", url: chat.url, body: chat.body };
-        } else if (node.defId === "action.http" || node.defId === "output.webhook") {
-          const url = node.config["url"]?.trim();
-          if (!url) continue;
-          req = {
-            method: (node.defId === "output.webhook" ? "POST" : (node.config["method"] || "GET")) as "GET",
-            url,
-            body: node.config["body"] || (node.defId === "output.webhook" ? JSON.stringify({ flow: active.name, sentAt: new Date().toISOString() }) : undefined),
-          };
-        } else continue;
-        live = true;
+    const isCloudRun = signedIn && !!active.cloudId;
+    const isLiveRun = isCloudRun && active.live;
+    let result: RunStep[] = [];
+
+    if (isCloudRun) {
+      for (const node of connectedOrder) {
         try {
-          const out = await webStepFn({
-            data: { ...req, timeoutSec: Math.min(60, Math.max(1, Number(node.config["timeout"]) || 30)) },
+          const executed = await executeStepFn({
+            data: {
+              automationId: active.cloudId!,
+              nodeId: node.id,
+              mode: isLiveRun ? "live" : "dry",
+            },
           });
-          result[i] = { ...r, status: out.ok ? "ok" : "failed", ms: out.ms, detail: `Live: ${out.detail}` };
-        } catch {
-          result[i] = { ...r, status: "failed", detail: "Live: that address isn't valid — use a full https:// link." };
+          result.push({
+            nodeId: executed.nodeId,
+            label: executed.label,
+            status: executed.status === "success" ? "ok" : executed.status === "failed" ? "failed" : "skipped",
+            ms: executed.ms,
+            detail: isLiveRun ? executed.detail : `Preview only: ${executed.detail}`,
+          });
+          if (executed.status === "failed") {
+            for (const remaining of connectedOrder.slice(result.length)) {
+              result.push({
+                nodeId: remaining.id,
+                label: remaining.name,
+                status: "skipped",
+                ms: 0,
+                detail: "Skipped because an earlier step failed.",
+              });
+            }
+            break;
+          }
+        } catch (error) {
+          result.push({
+            nodeId: node.id,
+            label: node.name,
+            status: "failed",
+            ms: 0,
+            detail: error instanceof Error ? error.message.slice(0, 500) : "The step could not be executed.",
+          });
+          for (const remaining of connectedOrder.slice(result.length)) {
+            result.push({
+              nodeId: remaining.id,
+              label: remaining.name,
+              status: "skipped",
+              ms: 0,
+              detail: "Skipped because an earlier step failed.",
+            });
+          }
+          break;
         }
       }
+    } else {
+      result = simulateRun(active).map((step) => ({
+        ...step,
+        detail: `Local preview only — no external services were called. ${step.detail}`,
+      }));
+      toast.message("Local preview only", {
+        description: "Save this flow to the cloud to run its server-side dry run. No messages or HTTP requests were sent.",
+      });
     }
-    result.forEach((s, i) => {
+
+    result.forEach((step, index) => {
       window.setTimeout(() => {
-        setRunningId(s.nodeId);
-        setSteps((prev) => [...prev, s]);
-        if (i === result.length - 1) {
+        setRunningId(step.nodeId);
+        setSteps((prev) => [...prev, step]);
+        if (index === result.length - 1) {
           setRunning(false);
           setRunningId(null);
-          const failed = result.filter((r) => r.status === "failed").length;
+          const failed = result.filter((item) => item.status === "failed").length;
           if (failed) toast.error(`Run finished with ${failed} failed step${failed > 1 ? "s" : ""}.`);
-          else toast.success("Run completed successfully.");
-          if (signedIn && active.cloudId) {
+          else if (isLiveRun) toast.success("Live execution completed.");
+          else toast.success("Preview completed — no external side effects were performed.");
+
+          if (isCloudRun && active.cloudId) {
             recordRunFn({
               data: {
                 automationId: active.cloudId,
                 triggerType: "manual",
-                isDryRun: !live,
-                steps: result.map((r) => ({
-                  label: r.label.slice(0, 160),
-                  status: r.status === "failed" ? "failed" : r.detail.startsWith("Live:") ? "success" : "dry_run",
-                  durationMs: Math.max(0, Math.round(r.ms)),
-                  detail: r.detail.slice(0, 500),
+                isDryRun: !isLiveRun,
+                steps: result.map((item) => ({
+                  label: item.label.slice(0, 160),
+                  status: item.status === "failed" ? "failed" : isLiveRun ? "success" : "dry_run",
+                  durationMs: Math.max(0, Math.round(item.ms)),
+                  detail: item.detail.slice(0, 500),
                 })),
               },
-            }).catch(() => {});
+            }).catch(() => {
+              toast.error("The run finished, but its history could not be saved.");
+            });
           }
         }
-      }, 320 * (i + 1));
+      }, 220 * (index + 1));
     });
   };
 
