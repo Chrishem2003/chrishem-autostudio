@@ -51,3 +51,19 @@ describe("resolveStepConfig", () => {
     expect(result.error).toMatch(/safety limit/);
   });
 });
+
+
+describe("mapping prototype-safety", () => {
+  it("resolves a special-looking node ID only when it is an own output entry", () => {
+    const prior = Object.create(null);
+    prior["__proto__"] = { httpStatus: 202 };
+    const result = resolveStepConfig({ body: "{{steps.__proto__.httpStatus}}" }, prior);
+    expect(result).toEqual({ ok: true, config: { body: "202" } });
+  });
+
+  it("creates a configuration result without an inherited object prototype", () => {
+    const result = resolveStepConfig({ body: "safe" }, {});
+    expect(result.ok).toBe(true);
+    expect(Object.getPrototypeOf(result.config)).toBeNull();
+  });
+});
