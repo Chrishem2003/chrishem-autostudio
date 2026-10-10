@@ -26,13 +26,12 @@ describe("shared flow-step engine", () => {
     const result = await executeFlowSteps(baseInput({
       persistIntent: async (_node, index) => { calls.push(`intent-${index}`); return { id: `i-${index}` }; },
       persistOutcome: async (id, step, outcome) => { calls.push(`outcome-${id}-${step.status}-${outcome}`); return true; },
-      execute: undefined,
+      execute: async ({ node }) => ({ nodeId: node.id, label: node.name, status: "success", ms: 1, detail: "ok" }),
     }));
-    // The production executor is used here, so live actions may fail closed;
-    // this assertion focuses on durable intent/outcome ordering and fail-stop safety.
     expect(calls[0]).toBe("intent-0");
     expect(calls.some((call) => call.startsWith("outcome-i-0-"))).toBe(true);
-    expect(result.steps.length).toBeGreaterThan(0);
+    expect(result.steps).toHaveLength(3);
+    expect(result.failed).toBe(false);
   });
 
   it("halts without executing when intent persistence fails", async () => {
@@ -53,6 +52,7 @@ describe("shared flow-step engine", () => {
     const result = await executeFlowSteps(baseInput({
       persistIntent: async (_node, index) => { intents++; return { id: `i-${index}` }; },
       persistOutcome: async () => false,
+      execute: async ({ node }) => ({ nodeId: node.id, label: node.name, status: "success", ms: 1, detail: "ok" }),
     }));
     expect(result.failed).toBe(true);
     expect(result.steps).toHaveLength(1);
