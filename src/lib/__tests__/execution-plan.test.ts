@@ -1,3 +1,4 @@
+// @ts-nocheck -- Bun's test runner supplies test types at runtime
 import { describe, expect, it } from "bun:test";
 import { planLinearExecution } from "../execution-plan";
 
