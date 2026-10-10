@@ -385,3 +385,13 @@ The build remains aligned with the plan's reliability-first sequence: execution 
 - Legacy direct web and Gmail send handlers now fail closed with an explicit “no external action was taken” error. This is intentionally conservative: provider sends remain unavailable through those legacy endpoints until the UI routes live runs through `executeAutomationFlow` and the durable queue. Gmail connection setup/status functions remain available.
 - Added a unit test for the direct-execution policy. This batch is not considered verified until CI passes at its exact latest `main` SHA.
 
+## Studio live-run queue integration — 2026-10-11
+
+- Removed browser-side step-by-step Gmail and web provider calls from the Studio run path. “Test run” now only simulates and records dry-run previews; it does not call provider APIs.
+- The Studio's Live/Paused control now persists the workflow and status through the authenticated cloud save operation. Activating a flow explicitly saves its latest canvas version as live; pausing persists paused status.
+- Live runs now call the authenticated `executeAutomationFlow` server function and submit a request UUID to the durable queue path. The browser reports the returned queue receipt rather than claiming that provider work has completed.
+- The request UUID is retained in component memory if enqueue returns an error, allowing a retry in the same open Studio session to reuse the idempotency key when the enqueue outcome may be uncertain. A confirmed queue receipt clears it.
+- Legacy single-step web and Gmail send endpoints remain fail-closed, preventing stale clients from bypassing the durable queue.
+- CI previously found and exposed strict TypeScript narrowing errors in the now-blocked Gmail handler; that handler was simplified to retain the guard without unreachable provider code. The current exact-head CI result must be checked before this batch is marked verified.
+- Remaining deployment boundary: live run queueing will return a safe error while `AUTOSTUDIO_DURABLE_QUEUE_ENABLED` is disabled. Provider execution must not be enabled until queue worker, auth, lease/recovery, and staging side effects have been rehearsed.
+
