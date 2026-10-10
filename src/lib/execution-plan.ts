@@ -34,6 +34,11 @@ export function planLinearExecution(flow: Pick<Workflow, "nodes" | "edges">): Ex
     if (!node || typeof node.id !== "string" || !node.id.trim() || byId.has(node.id)) {
       return { nodes: [], error: "The flow contains a missing or duplicate step ID." };
     }
+    if (typeof node.defId !== "string" || !node.defId.trim() ||
+        typeof node.name !== "string" || !node.name.trim() ||
+        !node.config || typeof node.config !== "object" || Array.isArray(node.config)) {
+      return { nodes: [], error: "A flow step is malformed. Reopen the builder and save the flow again." };
+    }
     byId.set(node.id, node);
   }
 
@@ -41,7 +46,9 @@ export function planLinearExecution(flow: Pick<Workflow, "nodes" | "edges">): Ex
   const incoming = new Map(nodes.map((node) => [node.id, 0]));
   const edgeKeys = new Set<string>();
   for (const edge of edges) {
-    if (!edge || !byId.has(edge.from) || !byId.has(edge.to) || edge.from === edge.to) {
+    if (!edge || typeof edge.from !== "string" || typeof edge.to !== "string" ||
+        typeof edge.id !== "string" || !edge.id.trim() ||
+        !byId.has(edge.from) || !byId.has(edge.to) || edge.from === edge.to) {
       return { nodes: [], error: "The flow contains an invalid connection. Fix the canvas links before running." };
     }
     const key = `${edge.from}\u0000${edge.to}`;
