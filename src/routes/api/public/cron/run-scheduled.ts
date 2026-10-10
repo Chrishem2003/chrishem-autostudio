@@ -7,6 +7,7 @@ import { executeFlowSteps } from "@/lib/execute-flow-steps.server";
 import { buildRunFinalization } from "@/lib/run-finalization";
 import { enqueueExecutionJob } from "@/lib/execution-job-queue.server";
 import { parsePersistedWorkflow } from "@/lib/persisted-workflow";
+import { isDurableQueueEnabled } from "@/lib/runtime-feature-gates";
 
 const MAX_SCHEDULED_FLOW_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -100,7 +101,7 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
           // configured and runtime-validated, the legacy direct path remains the
           // default. With the flag enabled, this branch only enqueues and never
           // executes workflow steps in the scheduler request.
-          if (process.env["AUTOSTUDIO_DURABLE_QUEUE_ENABLED"] === "true") {
+          if (isDurableQueueEnabled()) {
             const { data: queueLock, error: queueLockError } = await supabaseAdmin.rpc("claim_scheduled_automation", {
               _automation_id: row.id,
               _lease_seconds: 900,
