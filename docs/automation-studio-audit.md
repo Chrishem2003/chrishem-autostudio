@@ -244,3 +244,9 @@ A further worker review found an important edge case: a heartbeat RPC throwing i
 The server-only queue adapter also validates enqueue arguments and rejects unexpected RPC response shapes rather than silently treating malformed claim data as an empty queue. These are fail-closed code paths; database migration rehearsal remains outstanding.
 
 The adapter's response-shape hardening initially triggered strict TypeScript index-signature errors; the enqueue response is now explicitly narrowed to a record before field validation. CI for `c72602f616a48b51e5842356529e6d577e607f6d` passed typecheck, all 84 unit tests across 13 files, and the production build. This still does not substitute for a real Supabase migration rehearsal or RPC integration test.
+
+## Disposable PostgreSQL migration smoke test — 2026-10-10
+
+Added a separate CI job that starts PostgreSQL 16, creates a minimal Supabase-like `auth.users` and `automations` schema plus the expected roles, applies `20261010170000_durable_execution_jobs.sql`, and executes assertions against the actual SQL functions. The smoke test verifies duplicate enqueue returns the same job, a claim creates a running job with one attempt, stale heartbeat tokens are rejected, the current token can heartbeat and finalize once, and anon/authenticated roles cannot execute the claim RPC.
+
+CI run `38074752864` passed the PostgreSQL migration smoke test and the application typecheck, unit tests, and production build. This is a disposable PostgreSQL contract test, not a connection to the real Supabase project; deployment-specific policies, existing schema compatibility, and full concurrent-worker tests remain to be validated.
