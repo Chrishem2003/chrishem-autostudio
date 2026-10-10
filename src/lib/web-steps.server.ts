@@ -1,7 +1,4 @@
-import { lookup as dnsLookup } from "node:dns/promises";
 import { isIP } from "node:net";
-import { request as httpRequest } from "node:http";
-import { request as httpsRequest } from "node:https";
 
 export type WebInput = {
   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -115,7 +112,7 @@ type Resolver = (hostname: string, options: { all: true; verbatim: true }) => Pr
  */
 export async function resolvePublicTarget(
   hostname: string,
-  resolver: Resolver = dnsLookup,
+  resolver?: Resolver,
 ): Promise<PinnedAddress> {
   const host = hostname.replace(/^\[|\]$/g, "").replace(/\.$/, "");
   const family = isIP(host);
@@ -129,7 +126,10 @@ export async function resolvePublicTarget(
   let records: LookupAddressLike[];
   try {
     records = await Promise.race([
-      resolver(host, { all: true, verbatim: true }),
+      (resolver ?? (async (name, options) => {
+        const dns = await import("node:dns/promises");
+        return dns.lookup(name, options);
+      }))(host, { all: true, verbatim: true }),
       new Promise<LookupAddressLike[]>((_, reject) => {
         timeout = setTimeout(() => reject(new Error("DNS resolution timed out.")), 5_000);
       }),
@@ -161,7 +161,9 @@ function pinnedLookup(target: PinnedAddress): NonNullable<import("node:http").Re
 
 function requestOnce(url: URL, data: WebInput, target: PinnedAddress): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
-    const requestFn = url.protocol === "https:" ? httpsRequest : httpRequest;
+    const requestFn = url.protocol === "https:"
+      ? (await import("node:https")).request
+      : (await import("node:http")).request;
     const body = data.method !== "GET" && data.method !== "DELETE" ? data.body : undefined;
     const headers: Record<string, string> = { "user-agent": "Chrishem-AutoStudio/1.0", accept: "application/json, text/plain, */*" };
     if (body !== undefined) {
@@ -211,6 +213,9 @@ function requestOnce(url: URL, data: WebInput, target: PinnedAddress): Promise<{
 
 export async function callWeb(data: WebInput): Promise<WebResult> {
   const started = Date.now();
+  if (process.env["AUTOSTUDIO_OUTBOUND_TRANSPORT_READY"] !== "true") {
+    return { ok: false, status: 0, ms: 0, attempts: 0, detail: "Outbound HTTP transport is not runtime-verified; no request was sent." };
+  }
   let url: URL;
   try {
     url = new URL(data.url);
