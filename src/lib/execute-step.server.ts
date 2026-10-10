@@ -24,7 +24,7 @@ export type ExecutedStep = {
 
 export function liveCapabilityError(node: WorkflowNode): string | null {
   const tool = NODES[node.defId]?.tool;
-  if (node.defId === "trigger.schedule") return null;
+  if (node.defId === "trigger.schedule" || node.defId === "trigger.manual") return null;
   if (NODES[node.defId]?.kind === "trigger") return `Trigger "${node.name}" has no live trigger adapter yet.`;
   const manifest = getConnectorManifestForNode(node.defId, tool);
   if (!manifest) {
@@ -90,6 +90,7 @@ export async function executeStep(args: {
 
   const definition = NODES[node.defId];
   if (node.defId === "trigger.schedule") return result("success", "Scheduled trigger accepted; execution started.", 0);
+  if (node.defId === "trigger.manual") return result("success", "Manual trigger accepted; execution started.", 0);
   if (definition?.kind === "trigger") return result("failed", `Trigger "${node.name}" has no live trigger adapter yet.`, 0);
 
   const unsupported = liveCapabilityError(node);
