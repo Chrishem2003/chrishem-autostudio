@@ -28,39 +28,40 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
           .lt("started_at", staleBefore)
           .limit(100);
         if (staleQueryError) {
-          console.error("[AutoStudio scheduler] Could not inspect stale runs.", { errorCode: staleQueryError.code });
-        } else {
-          for (const stale of staleRuns ?? []) {
-            const { error: stepRecoveryError } = await supabaseAdmin
-              .from("run_step_logs")
-              .update({
-                status: "failed",
-                outcome_state: "uncertain",
-                error_detail: "The worker stopped before confirming this step. Verify external effects before retrying.",
-                output_snapshot: { recoveryHint: "Stale in-flight step; external outcome is uncertain. Verify before retry." },
-              })
-              .eq("run_id", stale.id)
-              .eq("status", "running");
-            if (stepRecoveryError) {
-              console.error("[AutoStudio scheduler] Could not recover stale step logs.", {
-                runId: stale.id, errorCode: stepRecoveryError.code,
-              });
-              continue;
-            }
-            const { error: runRecoveryError } = await supabaseAdmin
-              .from("run_logs")
-              .update({
-                status: "failed",
-                finished_at: new Date().toISOString(),
-                error_summary: "The scheduled worker stopped before finalizing this run. Inspect uncertain step outcomes before retrying.",
-              })
-              .eq("id", stale.id)
-              .eq("status", "running");
-            if (runRecoveryError) {
-              console.error("[AutoStudio scheduler] Could not finalize stale run.", {
-                runId: stale.id, errorCode: runRecoveryError.code,
-              });
-            }
+          console.error("[AutoStudio scheduler] Could not inspect stale runs; refusing to schedule new work.", { errorCode: staleQueryError.code });
+          return new Response("stale-run reconciliation failed", { status: 500 });
+        }
+        for (const stale of staleRuns ?? []) {
+          const { error: stepRecoveryError } = await supabaseAdmin
+            .from("run_step_logs")
+            .update({
+              status: "failed",
+              outcome_state: "uncertain",
+              error_detail: "The worker stopped before confirming this step. Verify external effects before retrying.",
+              output_snapshot: { recoveryHint: "Stale in-flight step; external outcome is uncertain. Verify before retry." },
+            })
+            .eq("run_id", stale.id)
+            .eq("status", "running");
+          if (stepRecoveryError) {
+            console.error("[AutoStudio scheduler] Could not recover stale step logs; refusing to schedule new work.", {
+              runId: stale.id, errorCode: stepRecoveryError.code,
+            });
+            return new Response("stale-step reconciliation failed", { status: 500 });
+          }
+          const { error: runRecoveryError } = await supabaseAdmin
+            .from("run_logs")
+            .update({
+              status: "failed",
+              finished_at: new Date().toISOString(),
+              error_summary: "The scheduled worker stopped before finalizing this run. Inspect uncertain step outcomes before retrying.",
+            })
+            .eq("id", stale.id)
+            .eq("status", "running");
+          if (runRecoveryError) {
+            console.error("[AutoStudio scheduler] Could not finalize stale run; refusing to schedule new work.", {
+              runId: stale.id, errorCode: runRecoveryError.code,
+            });
+            return new Response("stale-run finalization failed", { status: 500 });
           }
         }
         const { data: rows, error } = await supabaseAdmin
