@@ -160,41 +160,42 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
         .lt("started_at", staleBefore)
         .limit(50);
       if (staleQueryError) {
-        console.error("[AutoStudio executor] Could not inspect stale manual runs.", {
+        console.error("[AutoStudio executor] Could not inspect stale manual runs; refusing to start another live run.", {
           automationId: row.id, errorCode: staleQueryError.code,
         });
-      } else {
-        for (const stale of staleRuns ?? []) {
-          const { error: stepRecoveryError } = await context.supabase
-            .from("run_step_logs")
-            .update({
-              status: "failed",
-              outcome_state: "uncertain",
-              error_detail: "The worker stopped before confirming this step. Verify external effects before retrying.",
-              output_snapshot: { recoveryHint: "Stale in-flight step; external outcome is uncertain. Verify before retry." },
-            })
-            .eq("run_id", stale.id)
-            .eq("status", "running");
-          if (stepRecoveryError) {
-            console.error("[AutoStudio executor] Could not recover stale step logs.", {
-              runId: stale.id, errorCode: stepRecoveryError.code,
-            });
-            continue;
-          }
-          const { error: runRecoveryError } = await context.supabase
-            .from("run_logs")
-            .update({
-              status: "failed",
-              finished_at: new Date().toISOString(),
-              error_summary: "The manual worker stopped before finalizing this run. Inspect uncertain step outcomes before retrying.",
-            })
-            .eq("id", stale.id)
-            .eq("status", "running");
-          if (runRecoveryError) {
-            console.error("[AutoStudio executor] Could not finalize stale manual run.", {
-              runId: stale.id, errorCode: runRecoveryError.code,
-            });
-          }
+        throw new Error("Could not safely reconcile previous runs. No new live run was started; inspect run history and try again.");
+      }
+      for (const stale of staleRuns ?? []) {
+        const { error: stepRecoveryError } = await context.supabase
+          .from("run_step_logs")
+          .update({
+            status: "failed",
+            outcome_state: "uncertain",
+            error_detail: "The worker stopped before confirming this step. Verify external effects before retrying.",
+            output_snapshot: { recoveryHint: "Stale in-flight step; external outcome is uncertain. Verify before retry." },
+          })
+          .eq("run_id", stale.id)
+          .eq("status", "running");
+        if (stepRecoveryError) {
+          console.error("[AutoStudio executor] Could not recover stale step logs; refusing to start another live run.", {
+            runId: stale.id, errorCode: stepRecoveryError.code,
+          });
+          throw new Error("Could not safely recover an earlier run. No new live run was started; inspect run history and try again.");
+        }
+        const { error: runRecoveryError } = await context.supabase
+          .from("run_logs")
+          .update({
+            status: "failed",
+            finished_at: new Date().toISOString(),
+            error_summary: "The manual worker stopped before finalizing this run. Inspect uncertain step outcomes before retrying.",
+          })
+          .eq("id", stale.id)
+          .eq("status", "running");
+        if (runRecoveryError) {
+          console.error("[AutoStudio executor] Could not finalize stale manual run; refusing to start another live run.", {
+            runId: stale.id, errorCode: runRecoveryError.code,
+          });
+          throw new Error("Could not safely finalize an earlier run. No new live run was started; inspect run history and try again.");
         }
       }
     }
