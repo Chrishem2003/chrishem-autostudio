@@ -227,3 +227,10 @@ This is orchestration logic only. It is not yet connected to a Supabase RPC adap
 
 
 Worker orchestration CI note: the first typecheck exposed an `exactOptionalPropertyTypes` mismatch when passing an optional provider-idempotency flag. The worker now omits that field when it is undefined. Latest verified CI on commit `3d4a2718f679dc3c11d3019a250c279dba48ea9f` passed typecheck, unit tests (**82 passed, 0 failed**), and production build.
+
+
+## Server-only queue RPC adapter — 2026-10-10
+
+Added `src/lib/execution-job-queue.server.ts` and typed the four queue RPCs in the Supabase database type map. The adapter wraps enqueue, atomic claim, heartbeat and fenced finalization; it validates claimed row fields before passing a job into the worker. The module imports the server-only service-role client and must not be imported from browser-facing modules.
+
+This connects the TypeScript worker boundary to the database RPC contract, but does not itself deploy a worker or validate that the migration is applied. Migration rehearsal and live database integration tests remain release gates.
