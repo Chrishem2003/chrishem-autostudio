@@ -147,6 +147,57 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
     let activeRunId: string | null = null;
     let runStartedMs = Date.now();
     try {
+    // Recover abandoned manual runs for this automation only after the maximum
+    // lease and runtime window. Unfinished step intents remain uncertain.
+    if (data.mode === "live") {
+      const staleBefore = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+      const { data: staleRuns, error: staleQueryError } = await context.supabase
+        .from("run_logs")
+        .select("id")
+        .eq("automation_id", row.id)
+        .eq("status", "running")
+        .eq("trigger_type", "manual")
+        .lt("started_at", staleBefore)
+        .limit(50);
+      if (staleQueryError) {
+        console.error("[AutoStudio executor] Could not inspect stale manual runs.", {
+          automationId: row.id, errorCode: staleQueryError.code,
+        });
+      } else {
+        for (const stale of staleRuns ?? []) {
+          const { error: stepRecoveryError } = await context.supabase
+            .from("run_step_logs")
+            .update({
+              status: "failed",
+              outcome_state: "uncertain",
+              error_detail: "The worker stopped before confirming this step. Verify external effects before retrying.",
+              output_snapshot: { recoveryHint: "Stale in-flight step; external outcome is uncertain. Verify before retry." },
+            })
+            .eq("run_id", stale.id)
+            .eq("status", "running");
+          if (stepRecoveryError) {
+            console.error("[AutoStudio executor] Could not recover stale step logs.", {
+              runId: stale.id, errorCode: stepRecoveryError.code,
+            });
+            continue;
+          }
+          const { error: runRecoveryError } = await context.supabase
+            .from("run_logs")
+            .update({
+              status: "failed",
+              finished_at: new Date().toISOString(),
+              error_summary: "The manual worker stopped before finalizing this run. Inspect uncertain step outcomes before retrying.",
+            })
+            .eq("id", stale.id)
+            .eq("status", "running");
+          if (runRecoveryError) {
+            console.error("[AutoStudio executor] Could not finalize stale manual run.", {
+              runId: stale.id, errorCode: runRecoveryError.code,
+            });
+          }
+        }
+      }
+    }
     const startedAt = new Date().toISOString();
     const startedMs = Date.now();
     runStartedMs = startedMs;
