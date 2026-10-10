@@ -50,6 +50,12 @@ describe("parseClaimedExecutionJob", () => {
     }
   });
 
+  test("rejects unsupported persisted trigger types", () => {
+    const row = validRow();
+    row.trigger_type = "admin_override";
+    expect(() => parseClaimedExecutionJob(row)).toThrow("missing required fields");
+  });
+
   test("rejects oversized idempotency keys", () => {
     const row = validRow();
     row.idempotency_key = "x".repeat(201);
