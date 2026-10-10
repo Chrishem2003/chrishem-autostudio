@@ -33,7 +33,7 @@ describe("server-side execution guardrails", () => {
 
   it("rejects a private HTTP destination during live preflight", async () => {
     const result = await livePreflightError(node("action.http", { url: "http://127.0.0.1/admin" }), "user_1");
-    expect(result).toMatch(/public-address safety check/i);
+    expect(result).toMatch(/private or local/i);
   });
 
   it("requires a destination URL for an HTTP action", () => {
