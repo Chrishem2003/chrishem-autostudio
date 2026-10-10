@@ -320,3 +320,17 @@ The workflow boundary CI failure on the previous head was also traced to a test 
 ### Remaining rollout boundary
 
 This verifies the SQL migration against the disposable PostgreSQL CI schema, not the user's live Supabase project. Keep the durable queue and outbound transport flags disabled until the staging runbook verifies real worker authentication, manual/scheduled queue flows, audit recovery, and provider-side effect evidence. Do not merge to `main` solely on the basis of CI.
+
+## Shared saved-workflow preflight — 2026-10-11
+
+**Implemented on the active hardening branch; exact-head CI is pending.**
+
+- Added `preparePersistedExecutionPlan` as a shared boundary that parses untrusted saved workflow JSON and validates graph structure plus mapping contracts before returning an executable linear plan.
+- The scheduled-run producer and durable queue worker now use this same helper instead of maintaining separate parser/planner sequences. This reduces the chance that one entry point accepts a saved workflow that another entry point rejects.
+- Added unit tests for valid plans, malformed persisted JSON, dangling graph connections, and invalid mappings that reference undeclared trigger outputs.
+- The supported runtime remains a single linear chain. This change does not enable branching, parallel paths, new connectors, or production side effects.
+- The latest exact-head CI run must pass typecheck, unit tests, production build, and the PostgreSQL queue migration smoke test before this batch is considered verified.
+
+### Master-plan status after this batch
+
+The build remains aligned with the plan's reliability-first sequence: execution boundaries, connector contracts, safe mapping, audit output minimization, and queue recovery precede wider connector coverage and production activation. Still outstanding are staging migration/worker/transport rehearsal, the provider-agnostic AI gateway, full natural-language draft/refine UX, accessibility acceptance, teams/approvals, complete run analytics/API, and the P8 differentiators.
