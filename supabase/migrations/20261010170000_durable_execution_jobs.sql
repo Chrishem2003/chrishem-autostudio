@@ -7,7 +7,7 @@ create table if not exists public.execution_jobs (
   requested_by uuid references auth.users(id) on delete set null,
   trigger_type text not null check (trigger_type in ('manual', 'scheduled', 'webhook')),
   idempotency_key text not null check (length(idempotency_key) between 1 and 200),
-  payload jsonb not null default '{}'::jsonb check (pg_column_size(payload) <= 65536),
+  payload jsonb not null default '{}'::jsonb check (octet_length(payload::text) <= 65536),
   status text not null default 'queued'
     check (status in ('queued', 'running', 'succeeded', 'failed', 'needs_review', 'dead_letter')),
   attempts integer not null default 0 check (attempts >= 0),
@@ -66,7 +66,7 @@ begin
   if _max_attempts < 1 or _max_attempts > 10 then
     raise exception 'Invalid maximum attempt count';
   end if;
-  if _payload is null or pg_column_size(_payload) > 65536 then
+  if _payload is null or octet_length(_payload::text) > 65536 then
     raise exception 'Execution payload exceeds 64 KiB';
   end if;
   if not exists (
