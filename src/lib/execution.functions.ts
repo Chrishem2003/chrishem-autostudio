@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { type ExecutionMode } from "@/lib/execute-step.server";
+import { executeStep, type ExecutionMode } from "@/lib/execute-step.server";
 import { executeStepSafely } from "@/lib/execute-step-safely.server";
 import type { WorkflowNode } from "@/lib/workflow";
 import { planLinearExecution } from "@/lib/execution-plan";
