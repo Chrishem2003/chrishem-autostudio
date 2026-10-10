@@ -96,4 +96,4 @@ The queue flag controls producers, not already queued jobs. Stopping the worker 
 
 ## Current environment boundary
 
-GitHub CI currently validates the worker code and the migration against a disposable PostgreSQL 16 schema. It does not authenticate to the user's Supabase project, deploy the application, configure a cron provider, or send a real provider action. Those steps require the project's own deployment access and must be completed in staging before production activation.
+GitHub CI currently validates the worker code and the migration against a disposable PostgreSQL 16 schema. Unit tests also exercise outbound HTTP preflight rejection for non-HTTP schemes, embedded credentials, unsupported methods, and oversized bodies without allowing a request attempt. It does not authenticate to the user's Supabase project, deploy the application, configure a cron provider, or send a real provider action. Those steps require the project's own deployment access and must be completed in staging before production activation.
