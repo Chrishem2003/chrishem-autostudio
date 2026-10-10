@@ -20,6 +20,7 @@ export type ExecutedStep = {
   status: "success" | "failed" | "dry_run";
   ms: number;
   detail: string;
+  outputs?: Readonly<Record<string, string | number | boolean>>;
 };
 
 export function liveCapabilityError(node: WorkflowNode): string | null {
@@ -77,12 +78,13 @@ export async function executeStep(args: {
 }): Promise<ExecutedStep> {
   const { node, flowName, userId, mode } = args;
   const started = Date.now();
-  const result = (status: ExecutedStep["status"], detail: string, ms = Date.now() - started): ExecutedStep => ({
+  const result = (status: ExecutedStep["status"], detail: string, ms = Date.now() - started, outputs?: Readonly<Record<string, string | number | boolean>>): ExecutedStep => ({
     nodeId: node.id,
     label: node.name.slice(0, 160),
     status,
     ms: Math.max(0, Math.round(ms)),
     detail: safeDetail(detail),
+    ...(outputs ? { outputs } : {}),
   });
 
   if (mode !== "live") {
@@ -146,10 +148,16 @@ export async function executeStep(args: {
       await response.arrayBuffer().catch(() => undefined);
       return result("failed", `Gmail refused the email (HTTP ${response.status}). Check the recipient and Gmail permissions.`);
     }
-    await response.arrayBuffer().catch(() => undefined);
+    const providerPayload: unknown = await response.json().catch(() => null);
+    const providerMessageId = providerPayload && typeof providerPayload === "object" && "id" in providerPayload && typeof providerPayload.id === "string" && /^[A-Za-z0-9_-]{1,256}$/.test(providerPayload.id)
+      ? providerPayload.id
+      : undefined;
     const { markConnectionVerified } = await import("@/lib/app-user-connections.server");
     await markConnectionVerified(userId, GMAIL_CONNECTOR);
-    return result("success", "Email sent from your verified Gmail connection to the configured recipient(s).");
+    return result("success", "Email accepted by your verified Gmail connection. Provider acceptance does not guarantee recipient delivery.", undefined, {
+      accepted: true,
+      ...(providerMessageId ? { providerMessageId } : {}),
+    });
   }
 
   const tool = definition?.tool;
@@ -162,6 +170,7 @@ export async function executeStep(args: {
       response.ok ? "success" : "failed",
       response.ok ? `Webhook accepted the message for ${tool}.` : `Webhook delivery failed (HTTP ${response.status || "network error"}). Check the provider URL and permissions.`,
       response.ms,
+      { httpStatus: response.status },
     );
   }
 
@@ -184,6 +193,7 @@ export async function executeStep(args: {
         ? `HTTP ${response.status} response from ${new URL(input.url).hostname}.`
         : `HTTP request failed (status ${response.status || "network error"}). Check the destination and request settings.`,
       response.ms,
+      { httpStatus: response.status },
     );
   }
 
