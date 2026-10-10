@@ -72,7 +72,7 @@ Do not use production mailboxes, public webhook targets, or customer-connected a
 
 Record the deployment SHA, migration status, test automation ID, queue job ID, run ID, provider-side evidence, and CI run URLs. Never include secret values or full credential-bearing payloads.
 
-Acceptance requires all of the following:
+Before any staging enablement, verify the deployed build is using the centralized fail-closed helpers: only the exact string `true` enables `AUTOSTUDIO_DURABLE_QUEUE_ENABLED` or `AUTOSTUDIO_OUTBOUND_TRANSPORT_READY`; unset values must leave both capabilities disabled. Do not set either flag in production as part of this rehearsal.\n\nAcceptance requires all of the following:
 
 1. App typecheck, unit tests, production build, and PostgreSQL concurrency CI are green on the exact deployed commit.
 2. The migration chain succeeds on staging and the intended RPC permissions are verified.
