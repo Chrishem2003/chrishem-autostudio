@@ -146,3 +146,22 @@ GitHub CI is evidence for code/build/unit-test and disposable PostgreSQL behavio
 3. Resolve mappings using only successfully completed prior nodes, before the next step's intent/external action; fail closed on absent values.
 4. Add tests proving missing mappings stop before provider calls and sensitive values are not persisted in output snapshots.
 5. Keep branching, parallel execution, and automatic retry of uncertain external side effects out of scope until their semantics are explicitly modeled.
+
+
+## Runtime mapping integration — 2026-10-10
+
+**Implemented on the active hardening branch; exact-head CI verification pending.**
+
+- The shared ordered execution engine now resolves explicit `{{steps.<node-id>.<field>}}` references against outputs from earlier steps that completed successfully.
+- Missing, malformed, or unsupported mappings fail the step before invoking the executor; the flow halts and the result explains that no external action was attempted.
+- The executor now exposes only allowlisted scalar outputs for supported side effects: Gmail acceptance and a validated provider message ID when present, or HTTP status for chat/HTTP actions. It does not expose response bodies as mapping fields.
+- Both durable-worker and legacy scheduled-run audit snapshots persist the allowlisted output object separately from the step detail. Existing detail remains bounded; no arbitrary provider response body is added to the output snapshot.
+- Added flow-engine regression coverage for successful mapping and missing-output fail-stop behavior.
+- Scope remains intentionally linear. Only successful prior nodes can supply outputs; failed steps cannot feed later steps, and no automatic replay semantics were added.
+
+### Remaining acceptance checks
+
+1. Exact-head CI passes typecheck, unit tests, production build and PostgreSQL smoke test.
+2. Confirm route persistence serializes only the output fields from reviewed executors.
+3. Add provider-adapter integration tests and a deployment staging rehearsal before enabling the durable queue or outbound HTTP transport.
+4. Validate that mapping tokens in all supported config fields are resolved before any external request; unsupported token syntax must fail closed.
