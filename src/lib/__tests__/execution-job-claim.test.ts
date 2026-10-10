@@ -1,0 +1,66 @@
+// @ts-nocheck -- Bun's test runner supplies test types at runtime
+import { describe, expect, test } from "bun:test";
+import { parseClaimedExecutionJob } from "../execution-job-claim";
+
+const validRow = () => ({
+  id: "job-1",
+  automation_id: "automation-1",
+  payload: { greeting: "hello" },
+  attempts: 1,
+  max_attempts: 3,
+  worker_token: "lease-token",
+  idempotency_key: "automation-1:job-1",
+});
+
+describe("parseClaimedExecutionJob", () => {
+  test("normalizes a valid database claim", () => {
+    expect(parseClaimedExecutionJob(validRow())).toEqual({
+      id: "job-1",
+      automationId: "automation-1",
+      payload: { greeting: "hello" },
+      attempts: 1,
+      maxAttempts: 3,
+      workerToken: "lease-token",
+      idempotencyKey: "automation-1:job-1",
+    });
+  });
+
+  test("rejects null, arrays, and non-object RPC results", () => {
+    for (const value of [null, [], "job", 42]) {
+      expect(() => parseClaimedExecutionJob(value)).toThrow("invalid job row");
+    }
+  });
+
+  test("rejects blank identity and fencing fields", () => {
+    for (const field of ["id", "automation_id", "worker_token", "idempotency_key"]) {
+      const row = validRow();
+      row[field] = "   ";
+      expect(() => parseClaimedExecutionJob(row)).toThrow("missing required fields");
+    }
+  });
+
+  test("rejects invalid attempt counters", () => {
+    for (const [attempts, max_attempts] of [[0, 3], [4, 3], [1, 0], [1, 11], [1.5, 3]]) {
+      const row = validRow();
+      row.attempts = attempts;
+      row.max_attempts = max_attempts;
+      expect(() => parseClaimedExecutionJob(row)).toThrow("invalid attempt counters");
+    }
+  });
+
+  test("rejects oversized idempotency keys", () => {
+    const row = validRow();
+    row.idempotency_key = "x".repeat(201);
+    expect(() => parseClaimedExecutionJob(row)).toThrow("missing required fields");
+  });
+
+  test("rejects invalid or oversized stored payloads", () => {
+    const primitivePayload = validRow();
+    primitivePayload.payload = ["not", "an", "object"];
+    expect(() => parseClaimedExecutionJob(primitivePayload)).toThrow("invalid payload");
+
+    const oversizedPayload = validRow();
+    oversizedPayload.payload = { body: "x".repeat(17 * 1024) };
+    expect(() => parseClaimedExecutionJob(oversizedPayload)).toThrow("invalid payload");
+  });
+});
