@@ -69,3 +69,148 @@ export const executeAutomationStep = createServerFn({ method: "POST" })
       };
     }
   });
+
+/**
+ * Executes a complete saved flow in one authenticated server request.
+ * The browser can no longer orchestrate live side effects by calling individual
+ * step endpoints in arbitrary order and then fabricate a successful run record.
+ */
+export const executeAutomationFlow = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({
+    automationId: z.string().uuid(),
+    mode: z.enum(["dry", "live"]).default("dry"),
+  }).parse(input))
+  .handler(async ({ context, data }) => {
+    const { data: row, error } = await context.supabase
+      .from("automations")
+      .select("id, user_id, name, status, flow_json, workspace_id")
+      .eq("id", data.automationId)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (error) throw new Error("Could not load the saved automation.");
+    if (!row) throw new Error("Automation not found.");
+
+    const parsed = flowShape.safeParse(row.flow_json);
+    if (!parsed.success) throw new Error("The saved automation is invalid. Open it in the builder and save a corrected version.");
+
+    const flow = {
+      id: row.id,
+      name: parsed.data.name || row.name,
+      vertical: "general",
+      live: row.status === "live",
+      updatedAt: Date.now(),
+      nodes: parsed.data.nodes as WorkflowNode[],
+      edges: parsed.data.edges,
+    };
+    const issues = (await import("@/lib/workflow")).validate(flow);
+    const blocking = issues.filter((issue) => issue.level === "error" || issue.level === "warn");
+    if (blocking.length) throw new Error(`Fix the flow before running it: ${blocking[0]!.message}`);
+
+    if (data.mode === "live") {
+      if (row.status !== "live") throw new Error("This automation is not live in the cloud. No external action was taken.");
+      for (const node of flow.nodes) {
+        const reason = await (await import("@/lib/execute-step.server")).livePreflightError(node, context.userId);
+        if (reason) throw new Error(reason);
+      }
+    }
+
+    const connectedOrder = (await import("@/lib/workflow")).orderedNodes(flow).filter(
+      (node) => flow.edges.some((edge) => edge.from === node.id || edge.to === node.id) || flow.nodes.length === 1,
+    );
+    if (!connectedOrder.length) throw new Error("Nothing to run yet — add and connect a couple of steps.");
+
+    const startedAt = new Date().toISOString();
+    const startedMs = Date.now();
+    const { data: run, error: runError } = await context.supabase
+      .from("run_logs")
+      .insert({
+        automation_id: row.id,
+        workspace_id: row.workspace_id,
+        status: "running",
+        trigger_type: "manual",
+        is_dry_run: data.mode === "dry",
+        started_at: startedAt,
+      })
+      .select("id")
+      .single();
+    if (runError || !run) throw new Error("Could not start the run log. No external action was taken.");
+
+    const steps: Array<{
+      nodeId: string;
+      label: string;
+      status: "success" | "failed" | "dry_run";
+      ms: number;
+      detail: string;
+    }> = [];
+
+    for (let index = 0; index < connectedOrder.length; index++) {
+      const node = connectedOrder[index]!;
+      if (steps.some((step) => step.status === "failed")) break;
+      let step;
+      try {
+        step = await executeStep({ node, flowName: flow.name, userId: context.userId, mode: data.mode });
+      } catch (error) {
+        step = {
+          nodeId: node.id,
+          label: node.name,
+          status: "failed" as const,
+          ms: 0,
+          detail: error instanceof Error ? error.message.slice(0, 500) : "The step failed unexpectedly.",
+        };
+      }
+      steps.push(step);
+      const { error: stepLogError } = await context.supabase.from("run_step_logs").insert({
+        run_id: run.id,
+        workspace_id: row.workspace_id,
+        step_index: index,
+        node_id: node.id,
+        node_label: step.label.slice(0, 160),
+        status: step.status,
+        duration_ms: Math.max(0, Math.round(step.ms)),
+        error_detail: step.status === "failed" ? step.detail.slice(0, 500) : null,
+        output_snapshot: { detail: step.detail.slice(0, 500) },
+      });
+      if (stepLogError) {
+        steps[steps.length - 1] = {
+          ...step,
+          status: "failed",
+          detail: "The step result could not be safely recorded. Stop and verify external effects before retrying.",
+        };
+        break;
+      }
+    }
+
+    const hasFailure = steps.some((step) => step.status === "failed");
+    const finalStatus = hasFailure ? "failed" : data.mode === "dry" ? "dry_run" : "success";
+    const finishedAt = new Date().toISOString();
+    const { error: finishError } = await context.supabase
+      .from("run_logs")
+      .update({
+        status: finalStatus,
+        finished_at: finishedAt,
+        duration_ms: Date.now() - startedMs,
+        error_summary: hasFailure ? steps.find((step) => step.status === "failed")!.detail.slice(0, 500) : null,
+      })
+      .eq("id", run.id);
+    if (finishError) {
+      throw new Error("The run's final status could not be saved. Verify external effects before retrying.");
+    }
+
+    const { data: recent } = await context.supabase
+      .from("run_logs")
+      .select("status")
+      .eq("automation_id", row.id)
+      .order("started_at", { ascending: false })
+      .limit(20);
+    const history = recent ?? [];
+    const successful = history.filter((entry) => entry.status === "success").length;
+    const health = history.length ? Math.round((successful / history.length) * 100) : 0;
+    await context.supabase
+      .from("automations")
+      .update({ last_run_at: finishedAt, health_score: health })
+      .eq("id", row.id)
+      .eq("user_id", context.userId);
+
+    return { runId: run.id, status: finalStatus, mode: data.mode, steps };
+  });
