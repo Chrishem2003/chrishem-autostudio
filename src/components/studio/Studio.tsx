@@ -78,6 +78,7 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
   const saveFn = useServerFn(saveAutomation);
   const recordRunFn = useServerFn(recordRun);
   const executeAutomationFlowFn = useServerFn(executeAutomationFlow);
+  const liveRequestIds = useRef<Record<string, string>>({});
 
 
   useEffect(() => {
@@ -321,10 +322,11 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
           data: {
             automationId: active.cloudId,
             mode: "live",
-            requestId: crypto.randomUUID(),
+            requestId: liveRequestIds.current[active.id] ?? (liveRequestIds.current[active.id] = crypto.randomUUID()),
           },
         });
         if ("queued" in queued && queued.queued) {
+          delete liveRequestIds.current[active.id];
           toast.success(`Live run queued (${queued.status}). Job ID: ${queued.jobId}`);
         } else {
           toast.message("Live run request returned without a queue receipt.");
