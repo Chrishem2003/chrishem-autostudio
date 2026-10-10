@@ -45,26 +45,17 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
             };
           }
 
-          const parsedWorkflow = parsePersistedWorkflow(automation.flow_json);
-          if (!parsedWorkflow.success) {
+          const prepared = preparePersistedExecutionPlan(automation.flow_json);
+          if (!prepared.success) {
             return {
               status: "failed" as const,
               sideEffectCertainty: "not_attempted" as const,
-              error: "Saved workflow is malformed; no steps were executed.",
+              error: "Saved workflow failed validation; no steps were executed.",
               retryable: false,
             };
           }
-          const workflow = parsedWorkflow.data as unknown as Workflow;
-
-          const plan = planLinearExecution(workflow);
-          if (plan.error) {
-            return {
-              status: "failed" as const,
-              sideEffectCertainty: "not_attempted" as const,
-              error: "Saved workflow failed execution-plan validation; no steps were executed.",
-              retryable: false,
-            };
-          }
+          const workflow = prepared.workflow as unknown as Workflow;
+          const plan = prepared.plan;
 
           // Re-run live capability checks in the worker. The workflow or its
           // credentials may have changed after enqueue, so producer-side preflight
