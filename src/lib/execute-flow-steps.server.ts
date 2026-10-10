@@ -72,7 +72,7 @@ export async function executeFlowSteps(input: ExecuteFlowStepsInput): Promise<Ex
         flowName: input.flowName,
         userId: input.userId,
         mode: input.mode,
-        execute: input.execute,
+        ...(input.execute ? { execute: input.execute } : {}),
         onUnexpectedError: (error) => input.onUnexpectedError?.(node, error),
       });
     }
