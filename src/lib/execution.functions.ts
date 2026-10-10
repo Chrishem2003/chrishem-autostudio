@@ -125,7 +125,7 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       const { data: lockToken, error: lockError } = await supabaseAdmin.rpc("claim_manual_automation", {
         _automation_id: row.id,
-        _lease_seconds: 300,
+        _lease_seconds: 600,
       });
       if (lockError) throw new Error("Could not safely claim this flow for execution.");
       if (!lockToken) throw new Error("This flow is already running. Wait for the current run to finish before starting another.");
