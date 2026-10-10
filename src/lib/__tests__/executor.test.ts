@@ -31,6 +31,21 @@ describe("server-side execution guardrails", () => {
     expect(liveCapabilityError(node("trigger.schedule", { cadence: "Hourly" }))).toBeNull();
   });
 
+  it("allows the manually invoked trigger during live preflight", () => {
+    expect(liveCapabilityError(node("trigger.manual"))).toBeNull();
+  });
+
+  it("records the manual trigger as accepted when a live flow is invoked", async () => {
+    const result = await executeStep({
+      node: node("trigger.manual"),
+      flowName: "Manual flow",
+      userId: "user_1",
+      mode: "live",
+    });
+    expect(result.status).toBe("success");
+    expect(result.detail).toMatch(/Manual trigger accepted/i);
+  });
+
   it("rejects a private HTTP destination during live preflight", async () => {
     const result = await livePreflightError(node("action.http", { url: "http://127.0.0.1/admin" }), "user_1");
     expect(result).toMatch(/private or local/i);
