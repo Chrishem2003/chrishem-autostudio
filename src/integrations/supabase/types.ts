@@ -44,6 +44,30 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_usage: {
+        Row: {
+          created_at: string
+          id: string
+          task: string
+          tokens: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          task: string
+          tokens?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          task?: string
+          tokens?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       automation_versions: {
         Row: {
           automation_id: string
@@ -433,6 +457,7 @@ export type Database = {
     Functions: {
       owns_automation: { Args: { _automation_id: string }; Returns: boolean }
       owns_run: { Args: { _run_id: string }; Returns: boolean }
+      consume_ai_plan_quota: { Args: { _task: string; _limit: number }; Returns: string | null }
     }
     Enums: {
       automation_status: "draft" | "live" | "paused"
