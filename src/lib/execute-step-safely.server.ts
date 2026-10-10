@@ -7,6 +7,7 @@ export interface SafeStepExecutionInput {
   userId: string;
   mode: ExecutionMode;
   onUnexpectedError?: (error: unknown) => void;
+  execute?: typeof executeStep;
 }
 
 /**
@@ -15,9 +16,9 @@ export interface SafeStepExecutionInput {
  * The caller remains responsible for persisting intent and final outcome.
  */
 export async function executeStepSafely(input: SafeStepExecutionInput): Promise<ExecutedStep> {
-  const { onUnexpectedError, ...stepInput } = input;
+  const { onUnexpectedError, execute = executeStep, ...stepInput } = input;
   try {
-    return await executeStep(stepInput);
+    return await execute(stepInput);
   } catch (error) {
     onUnexpectedError?.(error);
     return {
