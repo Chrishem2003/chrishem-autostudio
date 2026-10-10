@@ -34,30 +34,36 @@ describe("shared flow-step engine", () => {
     expect(result.failed).toBe(false);
   });
 
-  it("resolves a prior successful step output before the next step executes", async () => {
+  it("resolves a declared prior-step output after whole-flow preflight", async () => {
     const receivedConfigs = [];
+    const source = { ...nodes[1], defId: "action.http", config: {} };
+    const target = { ...nodes[2], defId: "action.gmail", config: { subject: "Result: {{steps.step-1.httpStatus}}" } };
     const result = await executeFlowSteps(baseInput({
       execute: async ({ node }) => {
         receivedConfigs.push({ id: node.id, config: node.config });
         return node.id === "step-1"
-          ? { nodeId: node.id, label: node.name, status: "success", ms: 1, detail: "ok", outputs: { email: "person@example.com" } }
+          ? { nodeId: node.id, label: node.name, status: "success", ms: 1, detail: "ok", outputs: { httpStatus: 201 } }
           : { nodeId: node.id, label: node.name, status: "success", ms: 1, detail: "ok" };
       },
-      nodes: [nodes[0], { ...nodes[1], config: {} }, { ...nodes[2], config: { to: "{{steps.step-1.email}}" } }],
+      nodes: [nodes[0], source, target],
     }));
     expect(result.failed).toBe(false);
-    expect(receivedConfigs[2].config.to).toBe("person@example.com");
+    expect(receivedConfigs[2].config.subject).toBe("Result: 201");
   });
 
-  it("halts before the executor when a mapping is missing", async () => {
+  it("blocks the entire flow before any executor when a later mapping is invalid", async () => {
     let executions = 0;
+    const persisted = [];
     const result = await executeFlowSteps(baseInput({
-      nodes: [nodes[0], { ...nodes[1], config: { to: "{{steps.trigger-1.email}}" } }],
-      execute: async ({ node }) => { executions++; return { nodeId: node.id, label: node.name, status: "success", ms: 1, detail: "should not run" }; },
+      nodes: [nodes[0], { ...nodes[1], defId: "action.http", config: {} }, { ...nodes[2], defId: "action.gmail", config: { subject: "{{steps.trigger-1.httpStatus}}" } }],
+      execute: async ({ node }) => { executions++; return { nodeId: node.id, label: node.name, status: "success", ms: 1, detail: "unexpected" }; },
+      persistOutcome: async (_id, step, outcomeState) => { persisted.push({ step, outcomeState }); return true; },
     }));
     expect(result.failed).toBe(true);
-    expect(executions).toBe(1);
-    expect(result.steps[1].detail).toMatch(/Data mapping failed before the external action/i);
+    expect(executions).toBe(0);
+    expect(persisted).toHaveLength(1);
+    expect(result.steps[0].detail).toMatch(/preflight failed before any step executed/i);
+    expect(result.steps[0].detail).toMatch(/not an earlier step/i);
   });
 
   it("halts without executing when intent persistence fails", async () => {
