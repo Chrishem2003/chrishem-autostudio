@@ -103,6 +103,8 @@ function Automations() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [openId, setOpenId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const q = useQuery({ queryKey: ["automations"], queryFn: () => list() });
   const refresh = () => qc.invalidateQueries({ queryKey: ["automations"] });
 
@@ -120,6 +122,11 @@ function Automations() {
   if (q.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
   if (q.error) return <p className="text-sm text-destructive">Couldn't load your automations. <button onClick={() => q.refetch()} className="underline">Try again</button></p>;
   const rows = q.data ?? [];
+  const visibleRows = rows.filter((automation) => {
+    const matchesQuery = `${automation.name} ${automation.status}`.toLowerCase().includes(query.trim().toLowerCase());
+    const matchesStatus = statusFilter === "all" || automation.status === statusFilter;
+    return matchesQuery && matchesStatus;
+  });
   if (!rows.length)
     return (
       <div className="rounded-2xl border border-dashed border-border p-10 text-center">
@@ -140,8 +147,36 @@ function Automations() {
         ))}
       </div>
     )}
+    <div className="mb-4 flex flex-wrap items-center gap-2">
+      <input
+        aria-label="Search automations"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder="Search automations…"
+        className="min-w-48 flex-1 rounded-lg border border-input bg-surface-raised px-3 py-2 text-sm outline-none transition-colors focus:border-primary"
+      />
+      <select
+        aria-label="Filter automations by status"
+        value={statusFilter}
+        onChange={(event) => setStatusFilter(event.target.value)}
+        className="rounded-lg border border-input bg-surface-raised px-3 py-2 text-sm outline-none focus:border-primary"
+      >
+        <option value="all">All statuses</option>
+        <option value="draft">Draft</option>
+        <option value="live">Live</option>
+        <option value="paused">Paused</option>
+      </select>
+      <span className="text-xs text-muted-foreground">{visibleRows.length} of {rows.length} automations</span>
+    </div>
+    {visibleRows.length === 0 ? (
+      <div className="rounded-xl border border-dashed border-border p-8 text-center">
+        <p className="font-medium">No automations match these filters</p>
+        <p className="mt-1 text-sm text-muted-foreground">Try another name or choose a different status.</p>
+        <button onClick={() => { setQuery(""); setStatusFilter("all"); }} className="mt-3 rounded-lg border border-border px-3 py-1.5 text-sm hover:border-primary/60">Clear filters</button>
+      </div>
+    ) : (
     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-      {rows.map((a) => (
+      {visibleRows.map((a) => (
         <div key={a.id} className="rounded-xl border border-border bg-surface p-4">
           <div className="flex items-start justify-between gap-2">
             <div>
@@ -167,6 +202,7 @@ function Automations() {
         </div>
       ))}
     </div>
+    )}
     </>
   );
 }
