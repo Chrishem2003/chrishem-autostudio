@@ -39,4 +39,15 @@ describe("server-side execution guardrails", () => {
   it("requires a destination URL for an HTTP action", () => {
     expect(liveCapabilityError(node("action.http"))).toMatch(/destination URL/i);
   });
+
+  it("fails closed on live HTTP until the deployment runtime is explicitly verified", async () => {
+    const result = await executeStep({
+      node: node("action.http", { url: "https://example.com", method: "GET" }),
+      flowName: "Runtime gate",
+      userId: "user_1",
+      mode: "live",
+    });
+    expect(result.status).toBe("failed");
+    expect(result.detail).toMatch(/runtime smoke test/i);
+  });
 });
