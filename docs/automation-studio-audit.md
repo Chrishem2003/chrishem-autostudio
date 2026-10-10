@@ -234,3 +234,5 @@ Worker orchestration CI note: the first typecheck exposed an `exactOptionalPrope
 Added `src/lib/execution-job-queue.server.ts` and typed the four queue RPCs in the Supabase database type map. The adapter wraps enqueue, atomic claim, heartbeat and fenced finalization; it validates claimed row fields before passing a job into the worker. The module imports the server-only service-role client and must not be imported from browser-facing modules.
 
 This connects the TypeScript worker boundary to the database RPC contract, but does not itself deploy a worker or validate that the migration is applied. Migration rehearsal and live database integration tests remain release gates.
+
+The adapter's first CI pass found strict TypeScript issues around the recursive Supabase `Json` payload type and index-signature access. Those were corrected; CI for commit `dbd542378ad892fe5c488acd34618666b4e38a7b` passed typecheck, tests, and production build. This remains code-level verification only; no live database RPC was invoked.
