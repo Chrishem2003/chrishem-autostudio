@@ -113,3 +113,63 @@ describe("outbound transport rollout gate", () => {
     }
   });
 });
+
+
+describe("outbound HTTP preflight rejects unsafe requests before DNS or network access", () => {
+  async function withReadyTransport<T>(run: () => Promise<T>): Promise<T> {
+    const previous = process.env["AUTOSTUDIO_OUTBOUND_TRANSPORT_READY"];
+    process.env["AUTOSTUDIO_OUTBOUND_TRANSPORT_READY"] = "true";
+    try {
+      return await run();
+    } finally {
+      if (previous === undefined) delete process.env["AUTOSTUDIO_OUTBOUND_TRANSPORT_READY"];
+      else process.env["AUTOSTUDIO_OUTBOUND_TRANSPORT_READY"] = previous;
+    }
+  }
+
+  it("rejects non-HTTP schemes without attempting a request", async () => {
+    await withReadyTransport(async () => {
+      const { callWeb } = await import("../web-steps.server");
+      const result = await callWeb({ method: "GET", url: "file:///etc/passwd", timeoutSec: 2 });
+      expect(result.ok).toBe(false);
+      expect(result.attempts).toBe(0);
+      expect(result.detail).toMatch(/Only http\/https/i);
+    });
+  });
+
+  it("rejects embedded credentials before resolving the host", async () => {
+    await withReadyTransport(async () => {
+      const { callWeb } = await import("../web-steps.server");
+      const result = await callWeb({ method: "GET", url: "https://user:secret@example.com/path", timeoutSec: 2 });
+      expect(result.ok).toBe(false);
+      expect(result.attempts).toBe(0);
+      expect(result.detail).toMatch(/embedded usernames or passwords/i);
+      expect(result.detail).not.toContain("secret");
+    });
+  });
+
+  it("rejects unsupported HTTP methods before resolving the host", async () => {
+    await withReadyTransport(async () => {
+      const { callWeb } = await import("../web-steps.server");
+      const result = await callWeb({ method: "TRACE", url: "https://example.com/", timeoutSec: 2 });
+      expect(result.ok).toBe(false);
+      expect(result.attempts).toBe(0);
+      expect(result.detail).toMatch(/method isn't supported/i);
+    });
+  });
+
+  it("rejects oversized request bodies before resolving the host", async () => {
+    await withReadyTransport(async () => {
+      const { callWeb } = await import("../web-steps.server");
+      const result = await callWeb({
+        method: "POST",
+        url: "https://example.com/",
+        body: "x".repeat(65_537),
+        timeoutSec: 2,
+      });
+      expect(result.ok).toBe(false);
+      expect(result.attempts).toBe(0);
+      expect(result.detail).toMatch(/64 KB safety limit/i);
+    });
+  });
+});
