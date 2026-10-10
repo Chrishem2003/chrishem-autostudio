@@ -1,47 +1,13 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import type { Json } from "@/integrations/supabase/types";
 import { validateExecutionJobPayload } from "@/lib/execution-job-input";
+import { parseClaimedExecutionJob } from "@/lib/execution-job-claim";
 import type { ExecutionJobStatus } from "@/lib/execution-job-policy";
 import type {
   ClaimedExecutionJob,
   ExecutionJobWorkerDependencies,
 } from "@/lib/execution-job-worker";
 
-type RpcJobRow = {
-  id: string;
-  automation_id: string;
-  payload: unknown;
-  attempts: number;
-  max_attempts: number;
-  worker_token: string | null;
-  idempotency_key: string;
-};
-
-function parseClaimedJob(value: unknown): ClaimedExecutionJob {
-  if (!value || typeof value !== "object") {
-    throw new Error("Queue claim returned an invalid job row.");
-  }
-  const row = value as Partial<RpcJobRow>;
-  if (
-    typeof row.id !== "string" ||
-    typeof row.automation_id !== "string" ||
-    typeof row.attempts !== "number" ||
-    typeof row.max_attempts !== "number" ||
-    typeof row.worker_token !== "string" ||
-    typeof row.idempotency_key !== "string"
-  ) {
-    throw new Error("Queue claim row is missing required fields.");
-  }
-  return {
-    id: row.id,
-    automationId: row.automation_id,
-    payload: row.payload,
-    attempts: row.attempts,
-    maxAttempts: row.max_attempts,
-    workerToken: row.worker_token,
-    idempotencyKey: row.idempotency_key,
-  };
-}
 
 export interface EnqueueExecutionJobInput {
   automationId: string;
@@ -106,7 +72,7 @@ export function createSupabaseExecutionJobDependencies(
       if (data === null) return null;
       if (!Array.isArray(data)) throw new Error("Queue claim returned an unexpected response.");
       if (data.length === 0) return null;
-      return parseClaimedJob(data[0]);
+      return parseClaimedExecutionJob(data[0]);
     },
     heartbeat: async (job) => {
       const { data, error } = await supabaseAdmin.rpc("heartbeat_execution_job", {
