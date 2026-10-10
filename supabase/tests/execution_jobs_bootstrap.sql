@@ -5,6 +5,7 @@ create schema if not exists auth;
 create table if not exists auth.users (id uuid primary key);
 create table if not exists public.automations (
   id uuid primary key,
+  user_id uuid,
   status text not null
 );
 
