@@ -32,9 +32,10 @@ export async function authorizeAppUserOAuth(params: AppUserOAuthAuthorizeParams)
       return_url: params.returnUrl,
       credentials_configuration: params.credentialsConfiguration,
     }),
+    signal: AbortSignal.timeout(15_000),
   });
   const text = await res.text();
-  if (!res.ok) throw new Error(`App User OAuth start failed (${res.status}): ${text || res.statusText}`);
+  if (!res.ok) throw new Error(`App User OAuth start failed (${res.status}).`);
   let body: { authorization_url?: string; session_id?: string };
   try {
     body = text ? JSON.parse(text) : {};
@@ -60,7 +61,7 @@ export async function callAsAppUser({ gatewayBaseUrl, connectionAPIKey, connecto
   headers.set("Authorization", `Bearer ${requireApiKey()}`);
   headers.set("X-Connection-Api-Key", connectionAPIKey);
   if (requiredScopes?.length) headers.set("X-Lovable-Required-Scopes", requiredScopes.join(" "));
-  return fetch(`${gatewayBaseUrl}/${connectorId}${normalizedPath}`, { ...init, headers });
+  return fetch(`${gatewayBaseUrl}/${connectorId}${normalizedPath}`, { ...init, headers, signal: init?.signal ?? AbortSignal.timeout(30_000) });
 }
 
 export async function appUserReconnectRequired(res: Response): Promise<boolean> {
@@ -78,9 +79,10 @@ export async function disconnectAppUser({ gatewayBaseUrl, connectionAPIKey, conn
     method: "DELETE",
     headers,
     body: JSON.stringify({ connector_id: connectorId }),
+    signal: AbortSignal.timeout(10_000),
   });
   const text = await res.text();
-  if (!res.ok) throw new Error(`App User disconnect failed (${res.status}): ${text || res.statusText}`);
+  if (!res.ok) throw new Error(`App User disconnect failed (${res.status}).`);
 }
 
 export async function exchangeAppUserOAuthCode(gatewayBaseUrl: string, code: string): Promise<{ connectionAPIKey: string; connectorId: string }> {
@@ -88,9 +90,10 @@ export async function exchangeAppUserOAuthCode(gatewayBaseUrl: string, code: str
     method: "POST",
     headers: { Authorization: `Bearer ${requireApiKey()}`, "Content-Type": "application/json" },
     body: JSON.stringify({ code }),
+    signal: AbortSignal.timeout(15_000),
   });
   const text = await res.text();
-  if (!res.ok) throw new Error(`App User OAuth exchange failed (${res.status}): ${text || res.statusText}`);
+  if (!res.ok) throw new Error(`App User OAuth exchange failed (${res.status}).`);
   let body: { api_key?: string; connector_id?: string };
   try {
     body = text ? JSON.parse(text) : {};
