@@ -16,6 +16,53 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
         if (denied) return denied;
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+        // Recover abandoned scheduled runs only after the maximum lease plus
+        // runtime window. Their in-flight steps are uncertain, never replayed here.
+        const staleBefore = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+        const { data: staleRuns, error: staleQueryError } = await supabaseAdmin
+          .from("run_logs")
+          .select("id, started_at")
+          .eq("status", "running")
+          .eq("trigger_type", "schedule")
+          .lt("started_at", staleBefore)
+          .limit(100);
+        if (staleQueryError) {
+          console.error("[AutoStudio scheduler] Could not inspect stale runs.", { errorCode: staleQueryError.code });
+        } else {
+          for (const stale of staleRuns ?? []) {
+            const { error: stepRecoveryError } = await supabaseAdmin
+              .from("run_step_logs")
+              .update({
+                status: "failed",
+                outcome_state: "uncertain",
+                error_detail: "The worker stopped before confirming this step. Verify external effects before retrying.",
+                output_snapshot: { recoveryHint: "Stale in-flight step; external outcome is uncertain. Verify before retry." },
+              })
+              .eq("run_id", stale.id)
+              .eq("status", "running");
+            if (stepRecoveryError) {
+              console.error("[AutoStudio scheduler] Could not recover stale step logs.", {
+                runId: stale.id, errorCode: stepRecoveryError.code,
+              });
+              continue;
+            }
+            const { error: runRecoveryError } = await supabaseAdmin
+              .from("run_logs")
+              .update({
+                status: "failed",
+                finished_at: new Date().toISOString(),
+                error_summary: "The scheduled worker stopped before finalizing this run. Inspect uncertain step outcomes before retrying.",
+              })
+              .eq("id", stale.id)
+              .eq("status", "running");
+            if (runRecoveryError) {
+              console.error("[AutoStudio scheduler] Could not finalize stale run.", {
+                runId: stale.id, errorCode: runRecoveryError.code,
+              });
+            }
+          }
+        }
         const { data: rows, error } = await supabaseAdmin
           .from("automations")
           .select("id, user_id, name, flow_json, last_run_at, workspace_id")
