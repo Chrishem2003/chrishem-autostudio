@@ -24,7 +24,8 @@ export type ExecutedStep = {
 
 export function liveCapabilityError(node: WorkflowNode): string | null {
   const tool = NODES[node.defId]?.tool;
-  if (NODES[node.defId]?.kind === "trigger") return null;
+  if (node.defId === "trigger.schedule") return null;
+  if (NODES[node.defId]?.kind === "trigger") return `Trigger "${node.name}" has no live trigger adapter yet.`;
   if (isGmailSendStep(node.defId)) {
     return node.config["to"]?.trim()
       ? null
@@ -84,7 +85,8 @@ export async function executeStep(args: {
   }
 
   const definition = NODES[node.defId];
-  if (definition?.kind === "trigger") return result("success", "Trigger accepted; execution started.", 0);
+  if (node.defId === "trigger.schedule") return result("success", "Scheduled trigger accepted; execution started.", 0);
+  if (definition?.kind === "trigger") return result("failed", `Trigger "${node.name}" has no live trigger adapter yet.`, 0);
 
   const unsupported = liveCapabilityError(node);
   if (unsupported) return result("failed", unsupported, 0);
