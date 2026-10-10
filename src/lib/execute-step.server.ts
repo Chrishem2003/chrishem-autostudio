@@ -10,6 +10,7 @@ const GMAIL_GATEWAY = "https://connector-gateway.lovable.dev";
 const GMAIL_CONNECTOR = "google_mail";
 const GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.send"];
 const GMAIL_VERIFICATION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+const outboundTransportReady = () => process.env["AUTOSTUDIO_OUTBOUND_TRANSPORT_READY"] === "true";
 
 export type ExecutionMode = "dry" | "test" | "live";
 export type ExecutedStep = {
@@ -88,6 +89,14 @@ export async function executeStep(args: {
 
   const unsupported = liveCapabilityError(node);
   if (unsupported) return result("failed", unsupported, 0);
+
+  const liveTool = NODES[node.defId]?.tool;
+  if (
+    (node.defId === "action.http" || node.defId === "output.webhook" || isChatMessageStep(node.defId, liveTool)) &&
+    !outboundTransportReady()
+  ) {
+    return result("failed", "Outbound HTTP transport has not passed the deployment runtime smoke test. No request was sent.", 0);
+  }
 
   if (isGmailSendStep(node.defId)) {
     const message = buildGmailMessage(node.config, flowName);
@@ -198,6 +207,9 @@ export async function livePreflightError(node: WorkflowNode, userId: string): Pr
       await resolvePublicTarget(url.hostname);
     } catch {
       return "The destination could not pass the public-address safety check. Check its URL and DNS configuration.";
+    }
+    if (!outboundTransportReady()) {
+      return "Outbound HTTP transport has not passed the deployment runtime smoke test. Keep this flow in Preview until an operator enables the verified transport.";
     }
   }
   return null;
