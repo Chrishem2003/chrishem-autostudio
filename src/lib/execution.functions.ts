@@ -7,25 +7,9 @@ import type { RunStep, WorkflowNode } from "@/lib/workflow";
 import { planLinearExecution } from "@/lib/execution-plan";
 import { buildRunFinalization } from "@/lib/run-finalization";
 import { enqueueExecutionJob } from "@/lib/execution-job-queue.server";
+import { parsePersistedWorkflow } from "@/lib/persisted-workflow";
 
 const MAX_FLOW_RUNTIME_MS = 4 * 60 * 1000;
-
-const flowShape = z.object({
-  name: z.string().min(1).max(200),
-  nodes: z.array(z.object({
-    id: z.string().min(1).max(120),
-    defId: z.string().min(1).max(160),
-    x: z.number(),
-    y: z.number(),
-    name: z.string().min(1).max(200),
-    config: z.record(z.string(), z.string()),
-  })).max(200),
-  edges: z.array(z.object({
-    id: z.string().min(1).max(120),
-    from: z.string().min(1).max(120),
-    to: z.string().min(1).max(120),
-  })).max(500),
-});
 
 export const executeAutomationStep = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -44,7 +28,7 @@ export const executeAutomationStep = createServerFn({ method: "POST" })
     if (error) throw new Error("Could not load the saved automation.");
     if (!row) throw new Error("Automation not found.");
 
-    const parsed = flowShape.safeParse(row.flow_json);
+    const parsed = parsePersistedWorkflow(row.flow_json);
     if (!parsed.success) throw new Error("The saved automation is invalid. Open it in the builder and save a corrected version.");
     const node = parsed.data.nodes.find((candidate) => candidate.id === data.nodeId) as WorkflowNode | undefined;
     if (!node) throw new Error("That step is no longer part of the saved automation.");
