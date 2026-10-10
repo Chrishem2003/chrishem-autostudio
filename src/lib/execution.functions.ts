@@ -6,6 +6,7 @@ import { executeFlowSteps } from "@/lib/execute-flow-steps.server";
 import type { WorkflowNode } from "@/lib/workflow";
 import { planLinearExecution } from "@/lib/execution-plan";
 import { buildRunFinalization } from "@/lib/run-finalization";
+import { enqueueExecutionJob } from "@/lib/execution-job-queue.server";
 
 const MAX_FLOW_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -83,6 +84,7 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => z.object({
     automationId: z.string().uuid(),
     mode: z.enum(["dry", "live"]).default("dry"),
+    requestId: z.string().uuid().optional(),
   }).parse(input))
   .handler(async ({ context, data }) => {
     const { data: row, error } = await context.supabase
@@ -121,6 +123,19 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
     const executionPlan = planLinearExecution(flow);
     if (executionPlan.error) throw new Error(executionPlan.error);
     const connectedOrder = executionPlan.nodes;
+
+    // Queue only authenticated, owner-scoped live runs after all workflow and
+    // provider preflight checks have passed. Preview remains synchronous.
+    if (data.mode === "live" && process.env["AUTOSTUDIO_DURABLE_QUEUE_ENABLED"] === "true") {
+      const { id, status } = await enqueueExecutionJob({
+        automationId: row.id,
+        triggerType: "manual",
+        idempotencyKey: "manual:" + context.userId + ":" + (data.requestId ?? crypto.randomUUID()),
+        requestedBy: context.userId,
+        payload: { triggerType: "manual", requestedAt: new Date().toISOString() },
+      });
+      return { queued: true as const, jobId: id, status, mode: "live" as const, steps: [] as RunStep[] };
+    }
 
     let releaseManualLock: (() => Promise<void>) | null = null;
     if (data.mode === "live") {
