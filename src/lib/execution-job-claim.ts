@@ -40,6 +40,10 @@ export function parseClaimedExecutionJob(value: unknown): ClaimedExecutionJob {
     throw new Error("Queue claim row has invalid attempt counters.");
   }
 
+  if (!Object.prototype.hasOwnProperty.call(row, "payload") || row.payload === undefined) {
+    throw new Error("Queue claim row has an invalid payload.");
+  }
+
   const payloadValidation = validateExecutionJobPayload(row.payload);
   if (!payloadValidation.success) {
     throw new Error("Queue claim row has an invalid payload.");
