@@ -51,7 +51,6 @@ export const composeFlow = createServerFn({ method: "POST" })
     // Atomic DB quota check: fails closed if the quota service is unavailable.
     const { data: usageId, error: quotaError } = await context.supabase.rpc("consume_ai_plan_quota", {
       _task: "compose_flow",
-      _limit: PLAN_LIMIT_PER_HOUR,
     });
     if (quotaError) {
       console.error("[AI planner] Quota check failed.");
