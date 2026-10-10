@@ -153,7 +153,7 @@ export async function executeStep(args: {
       method: methodValue as WebInput["method"],
       url: node.config["url"]!.trim(),
       body: node.config["body"] || (node.defId === "output.webhook" ? JSON.stringify({ flow: flowName, sentAt: new Date().toISOString() }) : undefined),
-      timeoutSec: Math.min(120, Math.max(1, Number(node.config["timeout"]) || 30)),
+      timeoutSec: Math.min(30, Math.max(1, Number(node.config["timeout"]) || 30)),
     };
     const response = await callWeb(input);
     return result(
