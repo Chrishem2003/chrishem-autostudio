@@ -28,7 +28,7 @@ export function liveCapabilityError(node: WorkflowNode): string | null {
   if (NODES[node.defId]?.kind === "trigger") return `Trigger "${node.name}" has no live trigger adapter yet.`;
   const manifest = getConnectorManifestForNode(node.defId, tool);
   if (!manifest) {
-    return `"${node.name}" has no reviewed live connector manifest and executor. It must remain Test only until both are implemented.`;
+    return `"${node.name}" has no verified live executor or reviewed connector manifest. It must remain Test only until both are implemented.`;
   }
   if (isGmailSendStep(node.defId)) {
     return node.config["to"]?.trim()
