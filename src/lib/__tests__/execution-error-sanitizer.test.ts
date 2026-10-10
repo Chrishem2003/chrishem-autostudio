@@ -24,7 +24,7 @@ describe("sanitizeExecutionError", () => {
   });
 
   test("normalizes line breaks and bounds audit text", () => {
-    expect(sanitizeExecutionError("first\\nsecond", "fallback")).toBe("first second");
+    expect(sanitizeExecutionError("first\nsecond", "fallback")).toBe("first second");
     expect(sanitizeExecutionError("x".repeat(900), "fallback")).toHaveLength(500);
   });
 });
