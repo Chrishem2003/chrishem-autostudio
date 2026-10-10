@@ -64,7 +64,7 @@ export async function executeFlowSteps(input: ExecuteFlowStepsInput): Promise<Ex
         label: node.name.slice(0, 160),
         status: "failed",
         ms: 0,
-        detail: "The flow exceeded its execution budget. Remaining steps were halted.",
+        detail: "The flow exceeded its execution budget. No action was attempted for this step; remaining steps were halted.",
       };
     } else {
       step = await executeStepSafely({
