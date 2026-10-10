@@ -377,3 +377,11 @@ The build remains aligned with the plan's reliability-first sequence: execution 
 - Manual live runs now stop with an explicit no-side-effect message until the durable queue is enabled; authenticated dry-run previews remain available.
 - Centralized this decision in `src/lib/live-execution-policy.ts` and added unit tests for enabled live runs, disabled live runs, and dry-run behavior.
 - CI acceptance is tied to the exact latest `main` SHA. This hardening intentionally reduces availability until staging proves the queue worker is ready; it does not enable the feature flag or claim production readiness.
+
+## Legacy direct provider endpoint closure — 2026-10-11
+
+- CI exposed unreachable inline-live branches after the durable queue fail-closed policy; those obsolete inline lock/recovery branches were removed. Exact-head typecheck, unit tests and production build passed at commit `b6041c8879f841234c38821f5521d3fec6bea305`; queue SQL smoke test also passed.
+- A follow-up execution-path review found the Studio UI still called legacy single-step web/Gmail server functions directly, outside the durable queue. That path could bypass queue idempotency, worker leases, and recovery even when the queue rollout flag changed.
+- Legacy direct web and Gmail send handlers now fail closed with an explicit “no external action was taken” error. This is intentionally conservative: provider sends remain unavailable through those legacy endpoints until the UI routes live runs through `executeAutomationFlow` and the durable queue. Gmail connection setup/status functions remain available.
+- Added a unit test for the direct-execution policy. This batch is not considered verified until CI passes at its exact latest `main` SHA.
+
