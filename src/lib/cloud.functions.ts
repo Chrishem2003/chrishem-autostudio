@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { assertClientRunRecordIsDryRun } from "@/lib/client-run-record-policy";
 
 /**
  * Cloud persistence for the studio. Every save writes an immutable version row
@@ -351,9 +352,7 @@ export const recordRun = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ context, data }) => {
-    if (!data.isDryRun) {
-      throw new Error("Client-submitted live run records are disabled. Live audit records are written only by the durable execution worker.");
-    }
+    assertClientRunRecordIsDryRun(data.isDryRun);
     const { data: ownedAutomation, error: ownershipError } = await context.supabase.from("automations").select("id").eq("id", data.automationId).eq("user_id", context.userId).maybeSingle();
     if (ownershipError) throw new Error("Could not verify automation ownership.");
     if (!ownedAutomation) throw new Error("Automation not found.");
