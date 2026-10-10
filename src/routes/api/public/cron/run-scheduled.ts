@@ -6,6 +6,7 @@ import { planLinearExecution } from "@/lib/execution-plan";
 import { executeFlowSteps } from "@/lib/execute-flow-steps.server";
 import { buildRunFinalization } from "@/lib/run-finalization";
 import { enqueueExecutionJob } from "@/lib/execution-job-queue.server";
+import { parsePersistedWorkflow } from "@/lib/persisted-workflow";
 
 const MAX_SCHEDULED_FLOW_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -76,8 +77,12 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
         let ran = 0;
         let failed = 0;
         for (const row of rows ?? []) {
-          const wf = row.flow_json as unknown as Workflow | null;
-          if (!wf?.nodes || !Array.isArray(wf.nodes)) continue;
+          const parsedWorkflow = parsePersistedWorkflow(row.flow_json);
+          if (!parsedWorkflow.success) {
+            console.warn("[AutoStudio scheduler] Skipping malformed saved workflow.", { automationId: row.id });
+            continue;
+          }
+          const wf = parsedWorkflow.data as unknown as Workflow;
           const executionPlan = planLinearExecution(wf);
           if (executionPlan.error) {
             console.warn("[AutoStudio scheduler] Flow rejected by execution planner.", {
