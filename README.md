@@ -33,6 +33,8 @@ bun run dev
 
 Set the required Supabase values and a trusted `APP_BASE_URL` in your local environment or secret manager. Use `http://localhost:3000` only for local development; production must use the exact HTTPS origin registered with the OAuth provider. Never commit `.env`, OAuth tokens, provider keys, service-role keys, or cron secrets.
 
+For live Gmail, configure `GOOGLE_MAIL_APP_USER_CONNECTOR_CLIENT_API_KEY` and a stable, high-entropy `APP_USER_CONNECTION_KEY_SECRET`; the latter encrypts stored connector keys. For AI planning, configure `LOVABLE_API_KEY`. For scheduling, configure `LOVABLE_CRON_SECRET`. Put these server-only values in the deployment secret manager, not in `VITE_*` variables.
+
 ### Quality gates
 
 ```sh
