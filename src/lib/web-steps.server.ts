@@ -8,6 +8,11 @@ export type WebInput = {
 };
 export type WebResult = { ok: boolean; status: number; ms: number; attempts: number; detail: string };
 
+/** Automatic retries are restricted to methods that are idempotent by HTTP semantics. */
+export function isRetrySafeMethod(method: WebInput["method"]): boolean {
+  return method === "GET" || method === "PUT" || method === "DELETE";
+}
+
 const MAX_REQUEST_BODY_BYTES = 64 * 1024;
 const MAX_RESPONSE_BYTES = 1024 * 1024;
 const PREVIEW_BYTES = 300;
@@ -247,12 +252,16 @@ export async function callWeb(data: WebInput): Promise<WebResult> {
 
   let attempts = 0;
   let last = "The destination did not respond.";
+  const retrySafe = isRetrySafeMethod(data.method);
   while (attempts < 3) {
     attempts++;
     try {
       const response = await requestOnce(url, data, target);
       if (response.status === 429 || response.status >= 500) {
         last = `Got ${response.status} from ${url.hostname}.`;
+        if (!retrySafe) {
+          return { ok: false, status: response.status, ms: Date.now() - started, attempts, detail: `${last} Automatic retry was suppressed because ${data.method} may have side effects.` };
+        }
       } else {
         const ms = Date.now() - started;
         const retried = attempts > 1 ? ` (succeeded on try ${attempts})` : "";
@@ -266,7 +275,7 @@ export async function callWeb(data: WebInput): Promise<WebResult> {
         : error instanceof Error && error.message.includes("1 MB")
           ? error.message
           : `Couldn't reach ${url.hostname}.`;
-      if (last.includes("1 MB")) break;
+      if (last.includes("1 MB") || !retrySafe) break;
     }
     if (attempts < 3) await new Promise((resolve) => setTimeout(resolve, 250 * 2 ** (attempts - 1)));
   }
