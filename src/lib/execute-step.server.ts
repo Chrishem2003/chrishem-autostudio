@@ -4,6 +4,7 @@ import { buildChatRequest, isChatMessageStep } from "@/lib/chat-steps";
 import { buildGmailMessage, isGmailSendStep, toRawEmail } from "@/lib/gmail-steps";
 import { callWeb, isBlockedHost, resolvePublicTarget, type WebInput } from "@/lib/web-steps.server";
 import { NODES } from "@/lib/automation-catalog";
+import { getConnectorManifestForNode } from "@/lib/connector-manifests";
 import type { WorkflowNode } from "@/lib/workflow";
 
 const GMAIL_GATEWAY = "https://connector-gateway.lovable.dev";
@@ -25,6 +26,10 @@ export function liveCapabilityError(node: WorkflowNode): string | null {
   const tool = NODES[node.defId]?.tool;
   if (node.defId === "trigger.schedule") return null;
   if (NODES[node.defId]?.kind === "trigger") return `Trigger "${node.name}" has no live trigger adapter yet.`;
+  const manifest = getConnectorManifestForNode(node.defId, tool);
+  if (!manifest) {
+    return `"${node.name}" has no reviewed live connector manifest and executor. It must remain Test only until both are implemented.`;
+  }
   if (isGmailSendStep(node.defId)) {
     return node.config["to"]?.trim()
       ? null
