@@ -60,6 +60,23 @@ describe("linear live execution planner", () => {
     expect(planLinearExecution(malformed).error).toMatch(/malformed/i);
   });
 
+  it("rejects non-string persisted configuration values without throwing", () => {
+    const malformed = flow([node("trigger", "trigger.webhook"), node("action")], [["trigger", "action"]]);
+    malformed.nodes[1].config = { body: { nested: "unexpected object" } };
+    expect(planLinearExecution(malformed).error).toMatch(/invalid configuration values/i);
+  });
+
+  it("rejects duplicate connection IDs even when endpoints differ", () => {
+    const malformed = {
+      nodes: [node("trigger", "trigger.webhook"), node("middle"), node("last")],
+      edges: [
+        { id: "same", from: "trigger", to: "middle" },
+        { id: "same", from: "middle", to: "last" },
+      ],
+    };
+    expect(planLinearExecution(malformed).error).toMatch(/duplicate connection IDs/i);
+  });
+
   it("requires exactly one trigger", () => {
     const result = planLinearExecution(flow(
       [node("trigger-a", "trigger.webhook"), node("trigger-b", "trigger.schedule")],
