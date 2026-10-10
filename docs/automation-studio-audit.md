@@ -193,3 +193,16 @@ Added migration `supabase/migrations/20261010170000_durable_execution_jobs.sql` 
 - The table and RPC functions are service-role-only; normal browser roles have no queue access.
 
 **Important boundary:** this is the database queue foundation, not yet a deployed worker and not yet connected to manual/scheduled execution entry points. The migration has not been applied to a live or disposable Supabase project in this environment. Before wiring producers, validate the complete migration chain, concurrent enqueue/claim behavior, lease fencing, role grants, and expired-job recovery in a non-production database. Retry only when the caller can establish that repeating the operation is safe; otherwise use `needs_review`.
+
+
+## Retry-policy guard and regression tests — 2026-10-10
+
+Added `src/lib/execution-job-policy.ts` as a pure policy boundary for the future queue worker, with regression coverage in `src/lib/__tests__/execution-job-policy.test.ts`.
+
+- A known-not-attempted or confirmed-no-effect operation may be retried while attempts remain.
+- An uncertain outcome moves to `needs_review` unless the specific provider's idempotency support is verified and a stable key is supplied for reuse.
+- An already-confirmed side effect is never automatically repeated.
+- Safe retries at the configured attempt limit become `dead_letter`.
+- Invalid attempt counters are rejected.
+
+This module is deliberately not wired into production execution yet; that requires a worker adapter and verified provider-specific idempotency contracts. Unit tests can validate the policy, but they do not validate SQL behavior or a real provider's guarantees.
