@@ -61,7 +61,7 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
 
           let idempotencyKey: string;
           try {
-            idempotencyKey = scheduledExecutionIdempotencyKey(row.id, cadence, now, timezone);
+            idempotencyKey = scheduledExecutionIdempotencyKey(\n              row.id,\n              cadence,\n              row.last_run_at ? new Date(row.last_run_at) : null,\n            );
           } catch {
             skippedInvalid++;
             continue;
