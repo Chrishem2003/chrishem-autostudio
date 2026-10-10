@@ -27,7 +27,10 @@ function isBlockedIPv4(host: string): boolean {
     (a === 172 && b >= 16 && b <= 31) ||
     (a === 192 && b === 168) ||
     (a === 192 && b === 0) ||
+    (a === 192 && b === 31 && c === 196) ||
+    (a === 192 && b === 52 && c === 193) ||
     (a === 192 && b === 88 && c === 99) ||
+    (a === 192 && b === 175 && c === 48) ||
     (a === 198 && (b === 18 || b === 19 || (b === 51 && c === 100))) ||
     (a === 203 && b === 0 && c === 113) ||
     a >= 224
@@ -87,6 +90,7 @@ function isBlockedIPv6(host: string): boolean {
   if ((first & 0xe000) !== 0x2000) return true; // not in 2000::/3 global unicast
   if (first === 0x2001 && groups[1]! <= 0x01ff) return true; // special-purpose 2001::/23
   if (first === 0x2001 && groups[1] === 0x0db8) return true; // documentation range
+  if (first === 0x3fff && groups[1]! <= 0x0fff) return true; // IPv6 documentation range 3fff::/20
   if (first === 0x2002) return true; // deprecated 6to4 embeds an IPv4 destination
   return false;
 }
