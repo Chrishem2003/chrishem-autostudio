@@ -86,6 +86,29 @@ describe("processOneExecutionJob", () => {
     expect(calls.finished).toHaveLength(0);
   });
 
+  test("fails closed when heartbeat transport throws", async () => {
+    const { deps, calls } = dependencies({
+      execute: async (_job, context) => {
+        const alive = await context.heartbeat();
+        expect(alive).toBe(false);
+        return { status: "succeeded", sideEffectCertainty: "effect_confirmed" };
+      },
+      heartbeat: async () => { throw new Error("database unavailable"); },
+    });
+    expect(await processOneExecutionJob(deps)).toEqual({ outcome: "lease_lost", jobId: "job-1" });
+    expect(calls.finished).toHaveLength(0);
+  });
+
+  test("reports uncertain finalization when finish transport throws", async () => {
+    const { deps } = dependencies({
+      finish: async () => { throw new Error("database unavailable"); },
+    });
+    expect(await processOneExecutionJob(deps)).toEqual({
+      outcome: "finalization_rejected",
+      jobId: "job-1",
+    });
+  });
+
   test("treats thrown execution errors as uncertain", async () => {
     const { deps, calls } = dependencies({ execute: async () => { throw new Error("network timeout"); } });
     const result = await processOneExecutionJob(deps);
