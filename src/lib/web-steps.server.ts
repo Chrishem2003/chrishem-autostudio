@@ -125,7 +125,18 @@ export async function resolvePublicTarget(
   }
   if (isBlockedHost(host)) throw new Error("Private or local addresses can't be called from a flow.");
 
-  const records = await resolver(host, { all: true, verbatim: true });
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  let records: LookupAddressLike[];
+  try {
+    records = await Promise.race([
+      resolver(host, { all: true, verbatim: true }),
+      new Promise<LookupAddressLike[]>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error("DNS resolution timed out.")), 5_000);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
   if (!records.length || records.some((record) => isBlockedHost(record.address))) {
     throw new Error("The hostname resolves to a private, local, or special-use address.");
   }
