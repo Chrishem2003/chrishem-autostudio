@@ -31,7 +31,7 @@ describe("sanitizeRunOutput", () => {
 
   test("bounds nested collection size, depth, and strings", () => {
     const deep = { a: { b: { c: { d: { e: { f: { g: "hidden" } } } } } } };
-    expect(sanitizeRunOutput(deep).a.b.c.d.e.f.g).toBe("[MAX_DEPTH]");
+    expect(sanitizeRunOutput(deep).a.b.c.d.e.f).toBe("[MAX_DEPTH]");
     expect(sanitizeRunOutput({ value: "x".repeat(900) }).value).toHaveLength(500);
     expect(sanitizeRunOutput({ list: Array.from({ length: 55 }, (_, i) => i) }).list).toHaveLength(51);
   });
