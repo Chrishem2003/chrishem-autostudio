@@ -294,3 +294,14 @@ Regression tests cover common token/key/URL/email patterns, fallback behavior, w
 1. Exact-head CI must pass typecheck, unit tests, production build and queue database smoke tests.
 2. Confirm a thrown provider error is redacted before the finalization RPC receives it.
 3. Keep queue and outbound transport gates disabled until controlled staging confirms worker auth, lease fencing, audit recovery, and provider idempotency behavior.
+
+
+## Persisted workflow boundary expansion — 2026-10-11
+
+Expanded regression coverage for the persisted workflow → execution planner boundary. The tests now explicitly verify that duplicate node IDs and dangling edges are rejected by the planner even when the persisted JSON passes structural parsing, and that overlong workflow/node/edge identifiers and excessive edge counts are rejected before graph planning.
+
+These are pure unit tests; they do not claim to simulate authenticated server-function middleware, Supabase transactions, or provider calls. Route-level integration tests and a controlled staging exercise remain required before promoting this branch to `main`.
+
+## Main-branch promotion policy
+
+Keep the hardening work isolated on `audit/p0-hardening` while it is being evaluated. Promote to `main` only after the exact final commit has green application CI and queue migration smoke tests, the PR diff has been reviewed for accidental secret exposure and unsafe execution paths, duplicate/idempotency and interruption behavior have evidence, and staging confirms the queue/transport gates remain disabled by default and can be enabled safely with rollback documented. No production-ready claim is made until those checks are complete.
