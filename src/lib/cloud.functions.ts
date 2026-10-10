@@ -105,6 +105,7 @@ export const saveAutomation = createServerFn({ method: "POST" })
         .from("automations")
         .select("version")
         .eq("id", automationId)
+        .eq("user_id", context.userId)
         .maybeSingle();
       if (readErr) throw new Error(readErr.message);
       if (!existing) throw new Error("That flow no longer exists.");
@@ -119,7 +120,8 @@ export const saveAutomation = createServerFn({ method: "POST" })
           version,
           flow_json: flow,
         })
-        .eq("id", automationId);
+        .eq("id", automationId)
+        .eq("user_id", context.userId);
       if (error) throw new Error(error.message);
     } else {
       const { data: created, error } = await context.supabase
@@ -155,7 +157,7 @@ export const deleteAutomation = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ automationId: z.string().uuid() }).parse(input))
   .handler(async ({ context, data }) => {
-    const { error } = await context.supabase.from("automations").delete().eq("id", data.automationId);
+    const { error } = await context.supabase.from("automations").delete().eq("id", data.automationId).eq("user_id", context.userId);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -171,7 +173,8 @@ export const setAutomationStatus = createServerFn({ method: "POST" })
     const { error } = await context.supabase
       .from("automations")
       .update({ status: data.status })
-      .eq("id", data.automationId);
+      .eq("id", data.automationId)
+      .eq("user_id", context.userId);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -188,6 +191,8 @@ export const listVersions = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ automationId: z.string().uuid() }).parse(input))
   .handler(async ({ context, data }): Promise<CloudVersion[]> => {
+    const { data: ownedAutomation } = await context.supabase.from("automations").select("id").eq("id", data.automationId).eq("user_id", context.userId).maybeSingle();
+    if (!ownedAutomation) throw new Error("Automation not found.");
     const { data: rows, error } = await context.supabase
       .from("automation_versions")
       .select("id, version_number, change_summary, created_at, flow_json")
@@ -214,6 +219,8 @@ export const restoreVersion = createServerFn({ method: "POST" })
     z.object({ automationId: z.string().uuid(), versionNumber: z.number().int().positive() }).parse(input),
   )
   .handler(async ({ context, data }) => {
+    const { data: ownedAutomation } = await context.supabase.from("automations").select("id, version").eq("id", data.automationId).eq("user_id", context.userId).maybeSingle();
+    if (!ownedAutomation) throw new Error("Automation not found.");
     const { data: snapshot, error } = await context.supabase
       .from("automation_versions")
       .select("flow_json")
@@ -227,14 +234,17 @@ export const restoreVersion = createServerFn({ method: "POST" })
       .from("automations")
       .select("version")
       .eq("id", data.automationId)
+      .eq("user_id", context.userId)
       .maybeSingle();
     if (curErr) throw new Error(curErr.message);
-    const nextVersion = (current?.version ?? 1) + 1;
+    if (!current) throw new Error("Automation not found.");
+    const nextVersion = current.version + 1;
 
     const { error: upErr } = await context.supabase
       .from("automations")
       .update({ flow_json: snapshot.flow_json, version: nextVersion })
-      .eq("id", data.automationId);
+      .eq("id", data.automationId)
+      .eq("user_id", context.userId);
     if (upErr) throw new Error(upErr.message);
 
     const { error: insErr } = await context.supabase.from("automation_versions").insert({
@@ -271,11 +281,16 @@ export interface CloudRun {
 export const listRuns = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<CloudRun[]> => {
+    const { data: ownedAutomations, error: ownershipError } = await context.supabase.from("automations").select("id").eq("user_id", context.userId);
+    if (ownershipError) throw new Error(ownershipError.message);
+    const automationIds = (ownedAutomations ?? []).map((automation) => automation.id);
+    if (automationIds.length === 0) return [];
     const { data, error } = await context.supabase
       .from("run_logs")
       .select(
         "id, automation_id, status, trigger_type, is_dry_run, started_at, duration_ms, error_summary, run_step_logs(id, node_label, status, duration_ms, error_detail, output_snapshot, step_index)",
       )
+      .in("automation_id", automationIds)
       .order("started_at", { ascending: false })
       .limit(60);
     if (error) throw new Error(error.message);
@@ -334,6 +349,8 @@ export const recordRun = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ context, data }) => {
+    const { data: ownedAutomation } = await context.supabase.from("automations").select("id").eq("id", data.automationId).eq("user_id", context.userId).maybeSingle();
+    if (!ownedAutomation) throw new Error("Automation not found.");
     const failed = data.steps.find((s) => s.status === "failed" || s.status === "halted");
     const duration = data.steps.reduce((sum, s) => sum + s.durationMs, 0);
 
@@ -381,7 +398,8 @@ export const recordRun = createServerFn({ method: "POST" })
     await context.supabase
       .from("automations")
       .update({ last_run_at: new Date().toISOString(), health_score: health })
-      .eq("id", data.automationId);
+      .eq("id", data.automationId)
+      .eq("user_id", context.userId);
 
     return { runId: run.id, health };
   });
@@ -402,6 +420,7 @@ export const listIntegrations = createServerFn({ method: "GET" })
     const { data, error } = await context.supabase
       .from("integrations")
       .select("id, provider, account_label, auth_kind, status, scopes, last_verified_at")
+      .eq("user_id", context.userId)
       .order("provider");
     if (error) throw new Error(error.message);
     return (data ?? []).map((r) => ({
@@ -452,7 +471,8 @@ export const verifyIntegration = createServerFn({ method: "POST" })
     const { error } = await context.supabase
       .from("integrations")
       .update({ status: "connected", last_verified_at: new Date().toISOString() })
-      .eq("id", data.integrationId);
+      .eq("id", data.integrationId)
+      .eq("user_id", context.userId);
     if (error) throw new Error(error.message);
     return { ok: true, verifiedAt: new Date().toISOString() };
   });
@@ -462,8 +482,8 @@ export const disconnectIntegration = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => z.object({ integrationId: z.string().uuid() }).parse(input))
   .handler(async ({ context, data }) => {
     const { data: integ } = await context.supabase
-      .from("integrations").select("provider").eq("id", data.integrationId).maybeSingle();
-    const { error } = await context.supabase.from("integrations").delete().eq("id", data.integrationId);
+      .from("integrations").select("provider").eq("id", data.integrationId).eq("user_id", context.userId).maybeSingle();
+    const { error } = await context.supabase.from("integrations").delete().eq("id", data.integrationId).eq("user_id", context.userId);
     if (error) throw new Error(error.message);
     // Scoped revocation: pause only the live flows that use this app.
     let paused: string[] = [];
