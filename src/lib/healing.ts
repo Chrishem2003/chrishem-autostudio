@@ -77,12 +77,12 @@ export function detectDrift(workflow: Workflow): DriftEvent[] {
 export function healLabel(kind: DriftEvent["kind"]): string {
   switch (kind) {
     case "renamed":
-      return "Field renamed at the source — reference repointed";
+      return "Illustrative field-rename scenario — sample rewrite";
     case "nested":
-      return "Payload now nested one level deeper — path rewritten";
+      return "Illustrative nested-payload scenario — sample rewrite";
     case "type-changed":
-      return "Type changed — a coercion wrapper was inserted";
+      return "Illustrative type-change scenario — sample coercion";
     default:
-      return "Field removed — safe fallback applied";
+      return "Illustrative removed-field scenario — sample fallback";
   }
 }
