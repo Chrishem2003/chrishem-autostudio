@@ -13,7 +13,7 @@ create table if not exists public.app_user_connections (
 );
 
 alter table public.app_user_connections enable row level security;
-revoke all on table public.app_user_connections from anon, authenticated;
+revoke all on table public.app_user_connections from public, anon, authenticated;
 grant all on table public.app_user_connections to service_role;
 
 create table if not exists public.ai_usage (
@@ -28,7 +28,7 @@ create index if not exists ai_usage_user_task_created_idx
   on public.ai_usage (user_id, task, created_at desc);
 
 alter table public.ai_usage enable row level security;
-revoke all on table public.ai_usage from anon, authenticated;
+revoke all on table public.ai_usage from public, anon, authenticated;
 grant select on table public.ai_usage to authenticated;
 grant all on table public.ai_usage to service_role;
 
