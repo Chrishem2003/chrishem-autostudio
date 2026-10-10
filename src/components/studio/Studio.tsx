@@ -303,8 +303,17 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
           data: {
             automationId: active.cloudId,
             mode: isLiveRun ? "live" : "dry",
+            ...(isLiveRun ? { requestId: crypto.randomUUID() } : {}),
           },
         });
+        if ("queued" in executed && executed.queued) {
+          toast.message("Live run queued", {
+            description: "AutoStudio accepted the run into the durable queue. Check run history for the worker result.",
+          });
+          setRunning(false);
+          setRunningId(null);
+          return;
+        }
         result = executed.steps.map((step) => ({
           nodeId: step.nodeId,
           label: step.label,
