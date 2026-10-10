@@ -11,7 +11,10 @@ export function sanitizeStepOutputs(node: WorkflowNode, step: ExecutedStep): Exe
   if (!step.outputs) return step;
   const tool = NODES[node.defId]?.tool;
   const contract = getConnectorActionForNode(node.defId, tool)?.action;
-  if (!contract) return { ...step, outputs: undefined };
+  if (!contract) {
+    const { outputs: _discarded, ...withoutOutputs } = step;
+    return withoutOutputs;
+  }
 
   const safe: Record<string, string | number | boolean> = {};
   for (const field of contract.output.fields) {
