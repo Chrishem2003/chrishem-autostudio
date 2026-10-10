@@ -280,3 +280,17 @@ Added tests verify:
 - Transient server errors on a safe method can recover and return the final successful status.
 
 These are unit-level policy tests, not proof of real socket-level timeout or streaming-response enforcement. Staging still needs a controlled transport smoke test, and route-level tests are still needed to prove invalid workflow data cannot create queue/run records or invoke a provider.
+
+
+## Durable audit error redaction — 2026-10-11
+
+Added a shared, bounded sanitizer for error text before the durable worker persists job failures. It redacts authorization headers, common secret assignments, JWT-like tokens, URLs, and email addresses; normalizes control whitespace and caps output at 500 characters. Non-string, empty, or effectively redacted messages fall back to static operator guidance.
+
+The worker applies the sanitizer both to executor-thrown exceptions and returned error strings before passing them to the queue finalization RPC. This reduces accidental credential/PII leakage from provider SDK messages into durable job audit fields. It is defense in depth, not a guarantee that every proprietary secret format is recognized; structured provider error codes and safe internal correlation IDs are preferable to raw provider messages.
+
+Regression tests cover common token/key/URL/email patterns, fallback behavior, whitespace normalization, and output bounds.
+
+### Acceptance checks
+1. Exact-head CI must pass typecheck, unit tests, production build and queue database smoke tests.
+2. Confirm a thrown provider error is redacted before the finalization RPC receives it.
+3. Keep queue and outbound transport gates disabled until controlled staging confirms worker auth, lease fencing, audit recovery, and provider idempotency behavior.
