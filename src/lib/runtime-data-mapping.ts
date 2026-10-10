@@ -27,7 +27,7 @@ export function resolveStepConfig(
   config: Readonly<Record<string, string>>,
   priorOutputs: PriorStepOutputs,
 ): StepConfigResolution {
-  const resolved: Record<string, string> = {};
+  const resolved: Record<string, string> = Object.create(null) as Record<string, string>;
 
   for (const [key, rawValue] of Object.entries(config)) {
     if (typeof rawValue !== "string") {
@@ -36,7 +36,7 @@ export function resolveStepConfig(
 
     let missingReference: string | null = null;
     const value = rawValue.replace(TOKEN, (_token, nodeId: string, field: string) => {
-      const output = priorOutputs[nodeId];
+      const output = Object.prototype.hasOwnProperty.call(priorOutputs, nodeId) ? priorOutputs[nodeId] : undefined;
       if (!output || !Object.prototype.hasOwnProperty.call(output, field)) {
         missingReference = `steps.${nodeId}.${field}`;
         return "";
