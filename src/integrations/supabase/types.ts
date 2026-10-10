@@ -129,7 +129,7 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
-      }
+      },
       automations: {
         Row: {
           created_at: string
