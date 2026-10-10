@@ -15,7 +15,6 @@ export function isRetrySafeMethod(method: WebInput["method"]): boolean {
 
 const MAX_REQUEST_BODY_BYTES = 64 * 1024;
 const MAX_RESPONSE_BYTES = 1024 * 1024;
-const PREVIEW_BYTES = 300;
 
 function isBlockedIPv4(host: string): boolean {
   const parts = host.split(".").map(Number);
@@ -164,7 +163,7 @@ function pinnedLookup(target: PinnedAddress): NonNullable<import("node:http").Re
   }) as NonNullable<import("node:http").RequestOptions["lookup"]>;
 }
 
-async function requestOnce(url: URL, data: WebInput, target: PinnedAddress): Promise<{ status: number; body: string }> {
+async function requestOnce(url: URL, data: WebInput, target: PinnedAddress): Promise<{ status: number }> {
   const requestFn = url.protocol === "https:"
     ? (await import("node:https")).request
     : (await import("node:http")).request;
@@ -181,9 +180,7 @@ async function requestOnce(url: URL, data: WebInput, target: PinnedAddress): Pro
       lookup: pinnedLookup(target),
       signal: AbortSignal.timeout(Math.max(1, Math.min(120, data.timeoutSec)) * 1000),
     }, (res) => {
-      const chunks: Buffer[] = [];
       let size = 0;
-      let previewSize = 0;
       let settled = false;
       const finish = (fn: () => void) => {
         if (settled) return;
@@ -191,23 +188,13 @@ async function requestOnce(url: URL, data: WebInput, target: PinnedAddress): Pro
         fn();
       };
       res.on("data", (chunk: Buffer | string) => {
-        const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-        size += bytes.length;
+        size += Buffer.isBuffer(chunk) ? chunk.length : Buffer.byteLength(chunk);
         if (size > MAX_RESPONSE_BYTES) {
           finish(() => reject(new Error("The remote response exceeded the 1 MB safety limit.")));
           res.destroy();
-          return;
-        }
-        if (previewSize < PREVIEW_BYTES) {
-          const previewChunk = bytes.subarray(0, PREVIEW_BYTES - previewSize);
-          chunks.push(previewChunk);
-          previewSize += previewChunk.length;
         }
       });
-      res.on("end", () => finish(() => resolve({
-        status: res.statusCode ?? 0,
-        body: Buffer.concat(chunks).toString("utf8").slice(0, PREVIEW_BYTES),
-      })));
+      res.on("end", () => finish(() => resolve({ status: res.statusCode ?? 0 })));
       res.on("error", (error) => finish(() => reject(error)));
     });
     req.on("error", reject);
@@ -272,7 +259,6 @@ export async function callWeb(data: WebInput): Promise<WebResult> {
         }
       } else {
         const ms = Date.now() - started;
-        const retried = attempts > 1 ? ` (succeeded on try ${attempts})` : "";
         return response.status >= 200 && response.status < 300
           ? { ok: true, status: response.status, ms, attempts, detail: summarizeWebResponse(response.status, url.hostname, attempts > 1) }
           : { ok: false, status: response.status, ms, attempts, detail: summarizeWebResponse(response.status, url.hostname) };
