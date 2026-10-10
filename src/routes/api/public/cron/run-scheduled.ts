@@ -126,7 +126,7 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
             const { error: queueReleaseError } = await supabaseAdmin.rpc("release_scheduled_automation", {
               _automation_id: row.id,
               _lock_token: queueLock,
-              _last_run_at: enqueueSucceeded ? enqueuedAt : (row.last_run_at ?? enqueuedAt),
+              _last_run_at: enqueueSucceeded ? enqueuedAt : (row.last_run_at ?? "1970-01-01T00:00:00.000Z"),
             });
             if (queueReleaseError) {
               console.error("[AutoStudio scheduler] Could not release queue-enqueue lease.", {
