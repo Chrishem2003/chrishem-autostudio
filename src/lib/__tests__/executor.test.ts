@@ -62,8 +62,12 @@ describe("server-side execution guardrails", () => {
     }))).toMatch(/dynamic data tokens are not resolved/i);
     expect(liveCapabilityError(node("action.http", {
       url: "https://example.com",
-      body: JSON.stringify({ customer: "{{previous.output}}" }),
-    }))).toMatch(/no external action will be taken/i);
+      body: JSON.stringify({ customer: "{{steps.previous.output}}" }),
+    }))).toBeNull();
+    expect(liveCapabilityError(node("action.http", {
+      url: "{{steps.previous.url}}",
+      body: "{}",
+    }))).toMatch(/not allowed for "url"/i);
   });
 
 
@@ -77,6 +81,17 @@ describe("server-side execution guardrails", () => {
       execute: async ({ node: current }) => ({ nodeId: current.id, label: current.name, status: "success", ms: 1, detail: "ok", ...(current.id === "http" ? { outputs: { httpStatus: 201 } } : {}) }),
     });
     expect(result.steps[1].outputs).toEqual({ httpStatus: 201 });
+  });
+
+  it("refuses unresolved mapping tokens if the executor is called without the flow engine", async () => {
+    const result = await executeStep({
+      node: node("action.http", { url: "https://example.com", body: "{{steps.previous.body}}" }),
+      flowName: "Unresolved mapping",
+      userId: "user_1",
+      mode: "live",
+    });
+    expect(result.status).toBe("failed");
+    expect(result.detail).toMatch(/unresolved data tokens/i);
   });
 
   it("fails closed on live HTTP until the deployment runtime is explicitly verified", async () => {
