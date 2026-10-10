@@ -118,6 +118,30 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
     );
     if (!connectedOrder.length) throw new Error("Nothing to run yet — add and connect a couple of steps.");
 
+    let releaseManualLock: (() => Promise<void>) | null = null;
+    if (data.mode === "live") {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: lockToken, error: lockError } = await supabaseAdmin.rpc("claim_manual_automation", {
+        _automation_id: row.id,
+        _lease_seconds: 300,
+      });
+      if (lockError) throw new Error("Could not safely claim this flow for execution.");
+      if (!lockToken) throw new Error("This flow is already running. Wait for the current run to finish before starting another.");
+      releaseManualLock = async () => {
+        const { error: releaseError } = await supabaseAdmin.rpc("release_manual_automation", {
+          _automation_id: row.id,
+          _lock_token: lockToken,
+        });
+        if (releaseError) {
+          console.error("[AutoStudio executor] Manual run lease release failed.", {
+            automationId: row.id,
+            errorCode: releaseError.code,
+          });
+        }
+      };
+    }
+
+    try {
     const startedAt = new Date().toISOString();
     const startedMs = Date.now();
     const { data: run, error: runError } = await context.supabase
@@ -211,4 +235,14 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
       .eq("user_id", context.userId);
 
     return { runId: run.id, status: finalStatus, mode: data.mode, steps };
+    } finally {
+      if (releaseManualLock) {
+        try {
+          await releaseManualLock();
+        } catch {
+          // Lease expiry is the final safety net; never mask the run result with cleanup failure.
+          console.error("[AutoStudio executor] Manual run lease cleanup failed.");
+        }
+      }
+    }
   });
