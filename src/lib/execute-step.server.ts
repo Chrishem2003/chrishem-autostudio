@@ -8,10 +8,8 @@ import type { WorkflowNode } from "@/lib/workflow";
 
 const GMAIL_GATEWAY = "https://connector-gateway.lovable.dev";
 const GMAIL_CONNECTOR = "google_mail";
-const GMAIL_SCOPES = [
-  "https://www.googleapis.com/auth/userinfo.email",
-  "https://www.googleapis.com/auth/gmail.send",
-];
+const GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.send"];
+const GMAIL_VERIFICATION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 export type ExecutionMode = "dry" | "test" | "live";
 export type ExecutedStep = {
@@ -97,7 +95,11 @@ export async function executeStep(args: {
     if ("error" in message) return result("failed", message.error, 0);
 
     const connection = await getConnectionForUser(userId, GMAIL_CONNECTOR);
-    if (!connection) return result("failed", "Gmail isn't connected. Reconnect Gmail before running this flow.", 0);
+    if (!connection) return result("failed", "Gmail is not connected. Connect Gmail before running this flow.", 0);
+    const verifiedAt = connection.verifiedAt ? Date.parse(connection.verifiedAt) : 0;
+    if (!verifiedAt || Date.now() - verifiedAt >= GMAIL_VERIFICATION_MAX_AGE_MS) {
+      return result("failed", "Gmail needs a fresh test email before live execution. Open Accounts and verify Gmail.", 0);
+    }
 
     const response = await callAsAppUser({
       gatewayBaseUrl: GMAIL_GATEWAY,
@@ -109,16 +111,20 @@ export async function executeStep(args: {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ raw: toRawEmail(message) }),
+        signal: AbortSignal.timeout(30_000),
       },
     });
-    if (await appUserReconnectRequired(response)) {
-      return result("failed", "Gmail access needs renewing. Reconnect Gmail before retrying.");
+    if (await appUserReconnectRequired(response) || response.status === 401 || response.status === 403) {
+      const { markConnectionUnverified } = await import("@/lib/app-user-connections.server");
+      await markConnectionUnverified(userId, GMAIL_CONNECTOR);
+      return result("failed", "Gmail access needs renewing. Reconnect Gmail and verify it again.");
     }
     if (!response.ok) {
-      // Do not log the provider body: it can contain account data or diagnostics.
-      return result("failed", `Gmail refused the email (${response.status}). Check the recipient and Gmail permissions.`);
+      return result("failed", `Gmail refused the email (HTTP ${response.status}). Check the recipient and Gmail permissions.`);
     }
-    return result("success", `Email sent from ${connection.email ?? "your Gmail"} to ${message.to.length} recipient(s).`);
+    const { markConnectionVerified } = await import("@/lib/app-user-connections.server");
+    await markConnectionVerified(userId, GMAIL_CONNECTOR);
+    return result("success", "Email sent from your verified Gmail connection to the configured recipient(s).");
   }
 
   const tool = definition?.tool;
@@ -173,19 +179,9 @@ export async function livePreflightError(node: WorkflowNode, userId: string): Pr
   if (isGmailSendStep(node.defId)) {
     const connection = await getConnectionForUser(userId, GMAIL_CONNECTOR);
     if (!connection) return "Connect Gmail before enabling this flow.";
-    try {
-      const response = await callAsAppUser({
-        gatewayBaseUrl: GMAIL_GATEWAY,
-        connectionAPIKey: connection.key,
-        connectorId: GMAIL_CONNECTOR,
-        path: "/gmail/v1/users/me/profile",
-        requiredScopes: GMAIL_SCOPES,
-      });
-      if (await appUserReconnectRequired(response) || !response.ok) {
-        return "Gmail could not be verified. Reconnect Gmail before enabling this flow.";
-      }
-    } catch {
-      return "Gmail verification failed. Try reconnecting Gmail before enabling this flow.";
+    const verifiedAt = connection.verifiedAt ? Date.parse(connection.verifiedAt) : 0;
+    if (!verifiedAt || Date.now() - verifiedAt >= GMAIL_VERIFICATION_MAX_AGE_MS) {
+      return "Send a test email from Accounts to verify Gmail send-only permission before enabling this flow.";
     }
     return null;
   }
