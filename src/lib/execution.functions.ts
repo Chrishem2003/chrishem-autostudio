@@ -143,9 +143,12 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
       };
     }
 
+    let activeRunId: string | null = null;
+    let runStartedMs = Date.now();
     try {
     const startedAt = new Date().toISOString();
     const startedMs = Date.now();
+    runStartedMs = startedMs;
     const { data: run, error: runError } = await context.supabase
       .from("run_logs")
       .insert({
@@ -159,6 +162,7 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
       .select("id")
       .single();
     if (runError || !run) throw new Error("Could not start the run log. No external action was taken.");
+    activeRunId = run.id;
 
     const steps: Array<{
       nodeId: string;
@@ -230,6 +234,7 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
     if (finishError) {
       throw new Error("The run's final status could not be saved. Verify external effects before retrying.");
     }
+    activeRunId = null;
 
     const { data: recent } = await context.supabase
       .from("run_logs")
@@ -247,6 +252,34 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
       .eq("user_id", context.userId);
 
     return { runId: run.id, status: finalStatus, mode: data.mode, steps };
+    } catch (error) {
+      if (activeRunId) {
+        try {
+          const failedAt = new Date().toISOString();
+          const { error: auditError } = await context.supabase
+            .from("run_logs")
+            .update({
+              status: "failed",
+              finished_at: failedAt,
+              duration_ms: Date.now() - runStartedMs,
+              error_summary: "The manual run stopped unexpectedly. Verify external effects before retrying.",
+            })
+            .eq("id", activeRunId);
+          if (auditError) {
+            console.error("[AutoStudio executor] Could not mark interrupted manual run failed.", {
+              automationId: row.id,
+              runId: activeRunId,
+              errorCode: auditError.code,
+            });
+          }
+        } catch {
+          console.error("[AutoStudio executor] Failed to record unexpected manual run failure.", {
+            automationId: row.id,
+            runId: activeRunId,
+          });
+        }
+      }
+      throw error;
     } finally {
       if (releaseManualLock) {
         try {
