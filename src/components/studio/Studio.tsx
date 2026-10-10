@@ -293,7 +293,7 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
             const out = await gmailFn({ data: { config: node.config, flowName: active.name } });
             result[i] = { ...r, status: out.ok ? "ok" : "failed", ms: out.ms ?? r.ms, detail: `Live: ${out.detail}` };
           } catch {
-            result[i] = { ...r, status: "failed", detail: "Live: couldn't reach Gmail — try again shortly." };
+            result[i] = { ...r, status: "failed", detail: "Live: provider actions are temporarily disabled until durable queue execution is connected. No external action was taken." };
           }
           continue;
         }
@@ -322,7 +322,7 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
           });
           result[i] = { ...r, status: out.ok ? "ok" : "failed", ms: out.ms, detail: `Live: ${out.detail}` };
         } catch {
-          result[i] = { ...r, status: "failed", detail: "Live: that address isn't valid — use a full https:// link." };
+          result[i] = { ...r, status: "failed", detail: "Live: provider actions are temporarily disabled until durable queue execution is connected. No external action was taken." };
         }
       }
     }
