@@ -108,12 +108,15 @@ export const sendGmailTest = createServerFn({ method: "POST" })
         },
       });
       if (await appUserReconnectRequired(response) || response.status === 401 || response.status === 403) {
+        await response.arrayBuffer().catch(() => undefined);
         await markConnectionUnverified(context.userId, CONNECTOR);
         return { ok: false as const, detail: "Gmail authorization needs renewing. Reconnect Gmail and send a new test email." };
       }
       if (!response.ok) {
+        await response.arrayBuffer().catch(() => undefined);
         return { ok: false as const, detail: `Gmail test email failed (HTTP ${response.status}). Check the address and try again.` };
       }
+      await response.arrayBuffer().catch(() => undefined);
       await markConnectionVerified(context.userId, CONNECTOR);
       return { ok: true as const, detail: `Test email sent to ${data.recipient}. Gmail is verified for live sends.` };
     } catch {
