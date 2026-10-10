@@ -1,5 +1,5 @@
 // @ts-nocheck -- vitest types are resolved at test time
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { isDue } from "../schedule";
 
 const at = (iso: string) => new Date(iso);

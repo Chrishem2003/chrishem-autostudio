@@ -1,11 +1,8 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
-import { recordRun, saveAutomation } from "@/lib/cloud.functions";
-import { runWebStep } from "@/lib/web-steps.functions";
-import { sendGmailStep } from "@/lib/gmail.functions";
-import { isGmailSendStep } from "@/lib/gmail-steps";
-import { buildChatRequest, isChatMessageStep } from "@/lib/chat-steps";
+import { saveAutomation, setAutomationStatus } from "@/lib/cloud.functions";
+import { executeAutomationFlow } from "@/lib/execution.functions";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
@@ -72,16 +69,18 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
   const [past, setPast] = useState<Workflow[][]>([]);
   const [future, setFuture] = useState<Workflow[][]>([]);
   const undoRef = useRef<() => void>(() => {});
+  const runInFlightRef = useRef(false);
+  const runRequestIdRef = useRef<string | null>(null);
   const redoRef = useRef<() => void>(() => {});
   const [cmdOpen, setCmdOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState<Record<string, number>>({});
   const { user } = useAuth();
   const signedIn = !!user;
   const navigate = useNavigate();
   const saveFn = useServerFn(saveAutomation);
-  const recordRunFn = useServerFn(recordRun);
-  const webStepFn = useServerFn(runWebStep);
-  const gmailFn = useServerFn(sendGmailStep);
+  const executeFlowFn = useServerFn(executeAutomationFlow);
+  const setStatusFn = useServerFn(setAutomationStatus);
 
 
   useEffect(() => {
@@ -156,8 +155,11 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
           changeSummary: cloudId ? "Saved from studio" : "First save",
         },
       });
-      setWorkflows((prev) => prev.map((w) => (w.id === active.id ? { ...w, cloudId: res.automationId } : w)));
-      toast.success(`Saved as version ${res.version}.`);
+      setWorkflows((prev) => prev.map((w) => (w.id === active.id ? { ...w, cloudId: res.automationId, live: false } : w)));
+      setSavedAt((prev) => ({ ...prev, [active.id]: active.updatedAt }));
+      toast.success(active.live
+        ? `Saved as version ${res.version}. Live execution was paused; Preview again before re-enabling.`
+        : `Saved as version ${res.version}.`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't save — try again.");
     } finally {
@@ -269,91 +271,91 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
   };
 
   const runFlow = async () => {
-    if (!active) return;
-    const result = simulateRun(active);
-    if (result.length === 0) {
+    if (!active || runInFlightRef.current) return;
+    const isCloudRun = signedIn && !!active.cloudId;
+    const isLiveRun = isCloudRun && active.live;
+    if (isLiveRun && !window.confirm(
+      "This flow is LIVE. Running it may send real emails or chat messages and make real HTTP requests. Continue only if you expect those side effects."
+    )) return;
+
+    const connectedOrder = orderedNodes(active).filter(
+      (node) => active.edges.some((edge) => edge.from === node.id || edge.to === node.id) || active.nodes.length === 1,
+    );
+    if (connectedOrder.length === 0) {
       toast.error("Nothing to run yet — add and connect a couple of steps.");
       return;
     }
+
+    runInFlightRef.current = true;
+    runRequestIdRef.current = isLiveRun ? crypto.randomUUID() : null;
     setSteps([]);
     setRunning(true);
     setTab("run");
-    let live = false;
-    if (signedIn) {
-      for (let i = 0; i < result.length; i++) {
-        const r = result[i]!;
-        const node = active.nodes.find((n) => n.id === r.nodeId);
-        if (!node || r.status === "skipped") continue;
-        const tool = NODES[node.defId]?.tool;
-        let req: { method: "GET" | "POST"; url: string; body?: string | undefined } | null = null;
-        if (isGmailSendStep(node.defId)) {
-          if (!node.config["to"]?.trim()) continue;
-          live = true;
-          try {
-            const out = await gmailFn({ data: { config: node.config, flowName: active.name } });
-            result[i] = { ...r, status: out.ok ? "ok" : "failed", ms: out.ms ?? r.ms, detail: `Live: ${out.detail}` };
-          } catch {
-            result[i] = { ...r, status: "failed", detail: "Live: couldn't reach Gmail — try again shortly." };
-          }
-          continue;
-        }
-        if (isChatMessageStep(node.defId, tool)) {
-          const chat = buildChatRequest(tool!, node.config, active.name);
-          if (!chat) continue;
-          if ("error" in chat) {
-            live = true;
-            result[i] = { ...r, status: "failed", detail: `Live: ${chat.error}` };
-            continue;
-          }
-          req = { method: "POST", url: chat.url, body: chat.body };
-        } else if (node.defId === "action.http" || node.defId === "output.webhook") {
-          const url = node.config["url"]?.trim();
-          if (!url) continue;
-          req = {
-            method: (node.defId === "output.webhook" ? "POST" : (node.config["method"] || "GET")) as "GET",
-            url,
-            body: node.config["body"] || (node.defId === "output.webhook" ? JSON.stringify({ flow: active.name, sentAt: new Date().toISOString() }) : undefined),
-          };
-        } else continue;
-        live = true;
-        try {
-          const out = await webStepFn({
-            data: { ...req, timeoutSec: Math.min(60, Math.max(1, Number(node.config["timeout"]) || 30)) },
-          });
-          result[i] = { ...r, status: out.ok ? "ok" : "failed", ms: out.ms, detail: `Live: ${out.detail}` };
-        } catch {
-          result[i] = { ...r, status: "failed", detail: "Live: that address isn't valid — use a full https:// link." };
-        }
-      }
+    if (isCloudRun && savedAt[active.id] !== active.updatedAt) {
+      toast.error("Save your latest changes before running a cloud Preview or live execution.");
+      setRunning(false);
+      runInFlightRef.current = false;
+      runRequestIdRef.current = null;
+      return;
     }
-    result.forEach((s, i) => {
-      window.setTimeout(() => {
-        setRunningId(s.nodeId);
-        setSteps((prev) => [...prev, s]);
-        if (i === result.length - 1) {
+
+    let result: RunStep[] = [];
+
+    if (isCloudRun && active.cloudId) {
+      try {
+        // One authenticated server request owns the whole run. The browser never
+        // sequences individual side-effecting steps or writes its own success logs.
+        const executed = await executeFlowFn({
+          data: {
+            automationId: active.cloudId,
+            mode: isLiveRun ? "live" : "dry",
+            ...(isLiveRun && runRequestIdRef.current ? { requestId: runRequestIdRef.current } : {}),
+          },
+        });
+        if ("queued" in executed && executed.queued) {
+          toast.message("Live run queued", {
+            description: "AutoStudio accepted the run into the durable queue. Check run history for the worker result.",
+          });
           setRunning(false);
           setRunningId(null);
-          const failed = result.filter((r) => r.status === "failed").length;
-          if (failed) toast.error(`Run finished with ${failed} failed step${failed > 1 ? "s" : ""}.`);
-          else toast.success("Run completed successfully.");
-          if (signedIn && active.cloudId) {
-            recordRunFn({
-              data: {
-                automationId: active.cloudId,
-                triggerType: "manual",
-                isDryRun: !live,
-                steps: result.map((r) => ({
-                  label: r.label.slice(0, 160),
-                  status: r.status === "failed" ? "failed" : r.detail.startsWith("Live:") ? "success" : "dry_run",
-                  durationMs: Math.max(0, Math.round(r.ms)),
-                  detail: r.detail.slice(0, 500),
-                })),
-              },
-            }).catch(() => {});
-          }
+          runInFlightRef.current = false;
+          runRequestIdRef.current = null;
+          return;
         }
-      }, 320 * (i + 1));
-    });
+        result = executed.steps.map((step) => ({
+          nodeId: step.nodeId,
+          label: step.label,
+          status: step.status === "success" ? "ok" : step.status === "failed" ? "failed" : "skipped",
+          ms: step.ms,
+          detail: isLiveRun ? step.detail : `Preview only: ${step.detail}`,
+        }));
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "The flow could not be executed.");
+        setRunning(false);
+        setRunningId(null);
+        runInFlightRef.current = false;
+        runRequestIdRef.current = null;
+        return;
+      }
+    } else {
+      result = simulateRun(active).map((step) => ({
+        ...step,
+        detail: `Local preview only — no external services were called. ${step.detail}`,
+      }));
+      toast.message("Local preview only", {
+        description: "Save this flow to the cloud to run its server-side dry run. No messages or HTTP requests were sent.",
+      });
+    }
+
+    setSteps(result);
+    setRunning(false);
+    setRunningId(null);
+    runInFlightRef.current = false;
+    runRequestIdRef.current = null;
+    const failed = result.filter((item) => item.status === "failed").length;
+    if (failed) toast.error(`Run finished with ${failed} failed step${failed > 1 ? "s" : ""}.`);
+    else if (isLiveRun) toast.success("Live execution completed and its run history was recorded by the server.");
+    else toast.success("Preview completed — no external side effects were performed.");
   };
 
   const exportFlow = async () => {
@@ -461,6 +463,14 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
         <ThemeToggle />
 
         {!embedded && (
+          <nav aria-label="Primary navigation" className="flex items-center gap-1 rounded-lg border border-border bg-background/60 p-1 text-xs">
+            <Link to="/marketplace" className="rounded-md px-2 py-1.5 text-muted-foreground transition-colors hover:bg-surface-raised hover:text-foreground">Marketplace</Link>
+            <Link to="/gallery" className="rounded-md px-2 py-1.5 text-muted-foreground transition-colors hover:bg-surface-raised hover:text-foreground">Gallery</Link>
+            <Link to="/impact" className="rounded-md px-2 py-1.5 text-muted-foreground transition-colors hover:bg-surface-raised hover:text-foreground">Impact</Link>
+          </nav>
+        )}
+
+        {!embedded && (
           <>
             <button
               onClick={saveToCloud}
@@ -532,7 +542,30 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
           {active ? (
             <>
               <button
-                onClick={() => update((w) => ({ ...w, live: !w.live }))}
+                onClick={async () => {
+                  if (!active) return;
+                  if (!signedIn) {
+                    toast.error("Sign in to manage live automations.");
+                    navigate({ to: "/auth" });
+                    return;
+                  }
+                  if (!active.cloudId) {
+                    toast.error("Save this flow to the cloud before enabling live execution.");
+                    return;
+                  }
+                  if (savedAt[active.id] !== active.updatedAt) {
+                    toast.error("Save your latest changes before enabling live execution.");
+                    return;
+                  }
+                  const nextStatus = active.live ? "paused" : "live";
+                  try {
+                    await setStatusFn({ data: { automationId: active.cloudId, status: nextStatus } });
+                    update((w) => ({ ...w, live: nextStatus === "live" }));
+                    toast.success(nextStatus === "live" ? "Live execution enabled." : "Automation paused.");
+                  } catch (error) {
+                    toast.error(error instanceof Error ? error.message : "Could not change the automation status.");
+                  }
+                }}
                 className={cn(
                   "flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
                   active.live
@@ -657,6 +690,7 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
                 issues={issues}
                 steps={steps}
                 running={running}
+                live={!!active?.live}
                 onRun={runFlow}
                 onExport={exportFlow}
                 onSelectNode={setSelectedId}

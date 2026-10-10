@@ -54,10 +54,10 @@ function Workspace() {
   };
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
-      <aside className="w-56 shrink-0 border-r border-border bg-surface p-4">
+    <div className="flex min-h-screen bg-background text-foreground max-md:flex-col">
+      <aside className="w-56 shrink-0 border-r border-border bg-surface p-4 max-md:w-full max-md:border-b max-md:border-r-0">
         <Link to="/" className="font-display text-sm font-semibold">Chrishem AutoStudio</Link>
-        <nav className="mt-6 space-y-1 text-sm">
+        <nav aria-label="Workspace navigation" className="mt-6 space-y-1 text-sm max-md:flex max-md:flex-wrap max-md:gap-1 max-md:space-y-0">
           {(
             [
               ["automations", "My Automations"],
@@ -66,19 +66,23 @@ function Workspace() {
             ] as const
           ).map(([id, label]) => (
             <button key={id} onClick={() => setSection(id)}
-              className={cn("block w-full rounded-lg px-3 py-2 text-left", section === id ? "bg-surface-raised text-foreground" : "text-muted-foreground hover:text-foreground")}>
+              aria-current={section === id ? "page" : undefined}
+              className={cn("rounded-lg px-3 py-2 text-left transition-colors", section === id ? "bg-primary/10 text-foreground ring-1 ring-primary/30" : "text-muted-foreground hover:bg-surface-raised hover:text-foreground")}>
               {label}
             </button>
           ))}
-          <Link to="/marketplace" className="block rounded-lg px-3 py-2 text-muted-foreground hover:text-foreground">Templates</Link>
+          <Link to="/marketplace" className="rounded-lg px-3 py-2 text-muted-foreground transition-colors hover:bg-surface-raised hover:text-foreground">Marketplace</Link>
+          <Link to="/gallery" className="rounded-lg px-3 py-2 text-muted-foreground transition-colors hover:bg-surface-raised hover:text-foreground">Community gallery</Link>
+          <Link to="/impact" className="rounded-lg px-3 py-2 text-muted-foreground transition-colors hover:bg-surface-raised hover:text-foreground">Impact & plans</Link>
+          <Link to="/sdk" className="rounded-lg px-3 py-2 text-muted-foreground transition-colors hover:bg-surface-raised hover:text-foreground">Embed SDK</Link>
         </nav>
-        <div className="mt-10 text-xs text-muted-foreground">
+        <div className="mt-10 border-t border-border pt-4 text-xs text-muted-foreground max-md:mt-4">
           <p className="truncate">{user.email}</p>
           <button onClick={signOut} className="mt-2 text-primary">Sign out</button>
         </div>
       </aside>
-      <main className="flex-1 p-6">
-        <div className="mb-6 flex items-center justify-between">
+      <main className="min-w-0 flex-1 p-6 max-sm:p-4">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <h1 className="font-display text-xl font-semibold">
             {section === "automations" ? "My Automations" : section === "runs" ? "Run History" : "Integrations"}
           </h1>
@@ -99,6 +103,8 @@ function Automations() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [openId, setOpenId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const q = useQuery({ queryKey: ["automations"], queryFn: () => list() });
   const refresh = () => qc.invalidateQueries({ queryKey: ["automations"] });
 
@@ -116,6 +122,11 @@ function Automations() {
   if (q.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
   if (q.error) return <p className="text-sm text-destructive">Couldn't load your automations. <button onClick={() => q.refetch()} className="underline">Try again</button></p>;
   const rows = q.data ?? [];
+  const visibleRows = rows.filter((automation) => {
+    const matchesQuery = `${automation.name} ${automation.status}`.toLowerCase().includes(query.trim().toLowerCase());
+    const matchesStatus = statusFilter === "all" || automation.status === statusFilter;
+    return matchesQuery && matchesStatus;
+  });
   if (!rows.length)
     return (
       <div className="rounded-2xl border border-dashed border-border p-10 text-center">
@@ -136,8 +147,36 @@ function Automations() {
         ))}
       </div>
     )}
+    <div className="mb-4 flex flex-wrap items-center gap-2">
+      <input
+        aria-label="Search automations"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder="Search automations…"
+        className="min-w-48 flex-1 rounded-lg border border-input bg-surface-raised px-3 py-2 text-sm outline-none transition-colors focus:border-primary"
+      />
+      <select
+        aria-label="Filter automations by status"
+        value={statusFilter}
+        onChange={(event) => setStatusFilter(event.target.value)}
+        className="rounded-lg border border-input bg-surface-raised px-3 py-2 text-sm outline-none focus:border-primary"
+      >
+        <option value="all">All statuses</option>
+        <option value="draft">Draft</option>
+        <option value="live">Live</option>
+        <option value="paused">Paused</option>
+      </select>
+      <span className="text-xs text-muted-foreground">{visibleRows.length} of {rows.length} automations</span>
+    </div>
+    {visibleRows.length === 0 ? (
+      <div className="rounded-xl border border-dashed border-border p-8 text-center">
+        <p className="font-medium">No automations match these filters</p>
+        <p className="mt-1 text-sm text-muted-foreground">Try another name or choose a different status.</p>
+        <button onClick={() => { setQuery(""); setStatusFilter("all"); }} className="mt-3 rounded-lg border border-border px-3 py-1.5 text-sm hover:border-primary/60">Clear filters</button>
+      </div>
+    ) : (
     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-      {rows.map((a) => (
+      {visibleRows.map((a) => (
         <div key={a.id} className="rounded-xl border border-border bg-surface p-4">
           <div className="flex items-start justify-between gap-2">
             <div>
@@ -163,6 +202,7 @@ function Automations() {
         </div>
       ))}
     </div>
+    )}
     </>
   );
 }
@@ -206,12 +246,34 @@ function Runs() {
             <span className="mono-label">{new Date(r.startedAt).toLocaleString()} · {r.durationMs ?? 0}ms</span>
           </button>
           {r.errorSummary && <p className="mt-1 text-xs text-destructive">{r.errorSummary}</p>}
+          {r.steps.some((step) => step.outcomeState === "uncertain") && (
+            <p role="alert" className="mt-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-foreground">
+              One or more steps have an uncertain external outcome. Check the destination/provider activity before manually running this flow again. AutoStudio will not automatically replay these steps.
+            </p>
+          )}
           {(r.status === "failed" || r.status === "halted") && <ExplainFailure runId={r.id} />}
           {open === r.id && (
-            <ol className="mt-2 space-y-1 border-t border-border pt-2 text-xs">
+            <ol className="mt-2 space-y-2 border-t border-border pt-2 text-xs">
               {r.steps.map((s) => (
-                <li key={s.id}>
-                  <span className="font-medium">{s.label}</span> — {s.status} ({s.durationMs ?? 0}ms){s.errorDetail ? ` · ${s.errorDetail}` : ""}
+                <li key={s.id} className="rounded-md border border-border/70 p-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">{s.label ?? "Unnamed step"}</span>
+                    <span className="text-muted-foreground">— {s.status} ({s.durationMs ?? 0}ms)</span>
+                    <span className={cn(
+                      "rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                      s.outcomeState === "uncertain"
+                        ? "border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                        : s.outcomeState === "confirmed"
+                          ? "border-primary/40 bg-primary/10 text-primary"
+                          : "border-border text-muted-foreground",
+                    )}>
+                      {s.outcomeState === "uncertain" ? "Verify before retry" : s.outcomeState === "confirmed" ? "Confirmed" : "Not attempted"}
+                    </span>
+                  </div>
+                  {s.errorDetail && <p className="mt-1 text-muted-foreground">{s.errorDetail}</p>}
+                  {s.outcomeState === "uncertain" && (
+                    <p className="mt-1 text-amber-700 dark:text-amber-300">Operator action: inspect the external service's activity/logs and confirm whether the action happened. Only rerun after checking to avoid duplicate sends or writes.</p>
+                  )}
                 </li>
               ))}
             </ol>

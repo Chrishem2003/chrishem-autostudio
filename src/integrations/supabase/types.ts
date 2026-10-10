@@ -23,6 +23,7 @@ export type Database = {
           id: string
           updated_at: string
           user_id: string
+          verified_at: string | null
         }
         Insert: {
           account_email?: string | null
@@ -32,6 +33,7 @@ export type Database = {
           id?: string
           updated_at?: string
           user_id: string
+          verified_at?: string | null
         }
         Update: {
           account_email?: string | null
@@ -40,6 +42,31 @@ export type Database = {
           created_at?: string
           id?: string
           updated_at?: string
+          user_id?: string
+          verified_at?: string | null
+        }
+        Relationships: []
+      }
+      ai_usage: {
+        Row: {
+          created_at: string
+          id: string
+          task: string
+          tokens: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          task: string
+          tokens?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          task?: string
+          tokens?: number
           user_id?: string
         }
         Relationships: []
@@ -84,7 +111,28 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
+      },
+      scheduled_run_locks: {
+        Row: {
+          automation_id: string
+          lock_token: string
+          locked_until: string
+          updated_at: string
+        }
+        Insert: {
+          automation_id: string
+          lock_token: string
+          locked_until: string
+          updated_at?: string
+        }
+        Update: {
+          automation_id?: string
+          lock_token?: string
+          locked_until?: string
+          updated_at?: string
+        }
+        Relationships: []
+      },
       automations: {
         Row: {
           created_at: string
@@ -369,6 +417,7 @@ export type Database = {
       run_step_logs: {
         Row: {
           created_at: string
+          outcome_state: string
           duration_ms: number | null
           error_detail: string | null
           id: string
@@ -383,6 +432,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          outcome_state?: string
           duration_ms?: number | null
           error_detail?: string | null
           id?: string
@@ -397,6 +447,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          outcome_state?: string
           duration_ms?: number | null
           error_detail?: string | null
           id?: string
@@ -433,6 +484,39 @@ export type Database = {
     Functions: {
       owns_automation: { Args: { _automation_id: string }; Returns: boolean }
       owns_run: { Args: { _run_id: string }; Returns: boolean }
+      consume_ai_plan_quota: { Args: { _task: string }; Returns: string | null }
+      consume_gmail_test_quota: { Args: Record<PropertyKey, never>; Returns: boolean }
+      claim_scheduled_automation: { Args: { _automation_id: string; _lease_seconds?: number }; Returns: string | null }
+      release_scheduled_automation: { Args: { _automation_id: string; _lock_token: string; _last_run_at: string }; Returns: boolean }
+      claim_manual_automation: { Args: { _automation_id: string; _lease_seconds?: number }; Returns: string | null }
+      release_manual_automation: { Args: { _automation_id: string; _lock_token: string }; Returns: boolean }
+      enqueue_execution_job: {
+        Args: {
+          _automation_id: string;
+          _trigger_type: string;
+          _idempotency_key: string;
+          _payload?: Json;
+          _requested_by?: string | null;
+          _max_attempts?: number;
+          _available_at?: string;
+        };
+        Returns: Json[];
+      }
+      claim_execution_job: { Args: { _lease_seconds?: number }; Returns: Json[] }
+      heartbeat_execution_job: {
+        Args: { _job_id: string; _worker_token: string; _lease_seconds?: number };
+        Returns: boolean;
+      }
+      finish_execution_job: {
+        Args: {
+          _job_id: string;
+          _worker_token: string;
+          _status: string;
+          _error?: string | null;
+          _retry_at?: string | null;
+        };
+        Returns: boolean;
+      }
     }
     Enums: {
       automation_status: "draft" | "live" | "paused"

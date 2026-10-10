@@ -28,6 +28,7 @@ export async function saveConnectionKeyForUser(userId: string, connectorId: stri
       connector_id: connectorId,
       connection_key_ciphertext: encryptConnectionKey(connectionAPIKey),
       account_email: accountEmail ?? null,
+      verified_at: null,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "user_id,connector_id" },
@@ -39,12 +40,12 @@ export async function getConnectionForUser(userId: string, connectorId: string) 
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data, error } = await supabaseAdmin
     .from("app_user_connections")
-    .select("connection_key_ciphertext, account_email")
+    .select("connection_key_ciphertext, account_email, verified_at")
     .eq("user_id", userId)
     .eq("connector_id", connectorId)
     .maybeSingle();
   if (error) throw error;
-  return data ? { key: decryptConnectionKey(data.connection_key_ciphertext), email: data.account_email } : null;
+  return data ? { key: decryptConnectionKey(data.connection_key_ciphertext), email: data.account_email, verifiedAt: data.verified_at } : null;
 }
 
 export async function setAccountEmail(userId: string, connectorId: string, email: string) {
@@ -55,5 +56,24 @@ export async function setAccountEmail(userId: string, connectorId: string, email
 export async function deleteConnectionForUser(userId: string, connectorId: string) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { error } = await supabaseAdmin.from("app_user_connections").delete().eq("user_id", userId).eq("connector_id", connectorId);
+  if (error) throw error;
+}
+
+
+export async function markConnectionVerified(userId: string, connectorId: string) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { error } = await supabaseAdmin.from("app_user_connections")
+    .update({ verified_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq("user_id", userId)
+    .eq("connector_id", connectorId);
+  if (error) throw error;
+}
+
+export async function markConnectionUnverified(userId: string, connectorId: string) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { error } = await supabaseAdmin.from("app_user_connections")
+    .update({ verified_at: null, updated_at: new Date().toISOString() })
+    .eq("user_id", userId)
+    .eq("connector_id", connectorId);
   if (error) throw error;
 }

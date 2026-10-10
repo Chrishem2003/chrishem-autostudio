@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { callWeb } from "./web-steps.server";
 
 const Input = z.object({
   method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]).default("POST"),
@@ -13,6 +12,10 @@ const Input = z.object({
 export const runWebStep = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => Input.parse(d))
-  .handler(async ({ data }) => {
-    return callWeb(data);
-  });
+  .handler(async () => ({
+    ok: false,
+    status: 0,
+    ms: 0,
+    attempts: 0,
+    detail: "Direct HTTP execution is disabled. Save the flow and run it through the guarded automation executor.",
+  }));

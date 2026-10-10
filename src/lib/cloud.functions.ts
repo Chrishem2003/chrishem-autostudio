@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { validate, type Workflow } from "@/lib/workflow";
+import { livePreflightError } from "@/lib/execute-step.server";
 
 /**
  * Cloud persistence for the studio. Every save writes an immutable version row
@@ -90,7 +92,7 @@ export const saveAutomation = createServerFn({ method: "POST" })
         automationId: z.string().uuid().optional(),
         flow: workflowSchema,
         description: z.string().max(500).optional(),
-        status: z.enum(["draft", "live", "paused"]).optional(),
+        status: z.enum(["draft", "paused"]).optional(),
         changeSummary: z.string().max(300).optional(),
       })
       .parse(input),
@@ -103,8 +105,9 @@ export const saveAutomation = createServerFn({ method: "POST" })
     if (automationId) {
       const { data: existing, error: readErr } = await context.supabase
         .from("automations")
-        .select("version")
+        .select("version, status")
         .eq("id", automationId)
+        .eq("user_id", context.userId)
         .maybeSingle();
       if (readErr) throw new Error(readErr.message);
       if (!existing) throw new Error("That flow no longer exists.");
@@ -115,11 +118,12 @@ export const saveAutomation = createServerFn({ method: "POST" })
           name: data.flow.name,
           vertical: data.flow.vertical,
           ...(data.description !== undefined ? { description: data.description } : {}),
-          ...(data.status ? { status: data.status } : {}),
+          status: data.status ?? (existing.status === "live" ? "paused" : existing.status),
           version,
           flow_json: flow,
         })
-        .eq("id", automationId);
+        .eq("id", automationId)
+        .eq("user_id", context.userId);
       if (error) throw new Error(error.message);
     } else {
       const { data: created, error } = await context.supabase
@@ -155,7 +159,7 @@ export const deleteAutomation = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ automationId: z.string().uuid() }).parse(input))
   .handler(async ({ context, data }) => {
-    const { error } = await context.supabase.from("automations").delete().eq("id", data.automationId);
+    const { error } = await context.supabase.from("automations").delete().eq("id", data.automationId).eq("user_id", context.userId);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -168,12 +172,51 @@ export const setAutomationStatus = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ context, data }) => {
+    const { data: automation, error: readError } = await context.supabase
+      .from("automations")
+      .select("id, user_id, status, flow_json, updated_at")
+      .eq("id", data.automationId)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (readError) throw new Error("Could not load the saved automation.");
+    if (!automation) throw new Error("Automation not found.");
+
+    if (data.status === "live") {
+      const parsed = workflowSchema.safeParse(automation.flow_json);
+      if (!parsed.success) throw new Error("The saved flow is invalid. Fix and save it before enabling live execution.");
+      const flow = parsed.data as unknown as Workflow;
+      const issues = validate(flow);
+      const blocking = issues.filter((issue) => issue.level === "error" || issue.level === "warn");
+      if (blocking.length) throw new Error(`Fix the flow before going live: ${blocking[0]!.message}`);
+
+      for (const node of flow.nodes) {
+        const reason = await livePreflightError(node, context.userId);
+        if (reason) throw new Error(reason);
+      }
+
+      // A dry preflight must have passed against this saved version before enabling scheduling.
+      const { data: preflight, error: preflightError } = await context.supabase
+        .from("run_logs")
+        .select("id")
+        .eq("automation_id", data.automationId)
+        .eq("is_dry_run", true)
+        .eq("status", "dry_run")
+        .gte("started_at", automation.updated_at)
+        .order("started_at", { ascending: false })
+        .limit(1);
+      if (preflightError) throw new Error("Could not verify the latest preflight run.");
+      if (!preflight?.length) {
+        throw new Error("Run a successful Preview after your last save before enabling this flow. Preview does not send messages or call external APIs.");
+      }
+    }
+
     const { error } = await context.supabase
       .from("automations")
       .update({ status: data.status })
-      .eq("id", data.automationId);
+      .eq("id", data.automationId)
+      .eq("user_id", context.userId);
     if (error) throw new Error(error.message);
-    return { ok: true };
+    return { ok: true, status: data.status };
   });
 
 export interface CloudVersion {
@@ -227,14 +270,16 @@ export const restoreVersion = createServerFn({ method: "POST" })
       .from("automations")
       .select("version")
       .eq("id", data.automationId)
+      .eq("user_id", context.userId)
       .maybeSingle();
     if (curErr) throw new Error(curErr.message);
     const nextVersion = (current?.version ?? 1) + 1;
 
     const { error: upErr } = await context.supabase
       .from("automations")
-      .update({ flow_json: snapshot.flow_json, version: nextVersion })
-      .eq("id", data.automationId);
+      .update({ flow_json: snapshot.flow_json, version: nextVersion, status: "paused" })
+      .eq("id", data.automationId)
+      .eq("user_id", context.userId);
     if (upErr) throw new Error(upErr.message);
 
     const { error: insErr } = await context.supabase.from("automation_versions").insert({
@@ -262,6 +307,7 @@ export interface CloudRun {
     id: string;
     label: string | null;
     status: string;
+    outcomeState: "confirmed" | "uncertain" | "not_attempted";
     durationMs: number | null;
     errorDetail: string | null;
     output: import("@/integrations/supabase/types").Json | null;
@@ -274,7 +320,7 @@ export const listRuns = createServerFn({ method: "GET" })
     const { data, error } = await context.supabase
       .from("run_logs")
       .select(
-        "id, automation_id, status, trigger_type, is_dry_run, started_at, duration_ms, error_summary, run_step_logs(id, node_label, status, duration_ms, error_detail, output_snapshot, step_index)",
+        "id, automation_id, status, trigger_type, is_dry_run, started_at, duration_ms, error_summary, run_step_logs(id, node_label, status, outcome_state, duration_ms, error_detail, output_snapshot, step_index)",
       )
       .order("started_at", { ascending: false })
       .limit(60);
@@ -294,6 +340,9 @@ export const listRuns = createServerFn({ method: "GET" })
           id: s.id,
           label: s.node_label,
           status: s.status,
+          outcomeState: s.outcome_state === "confirmed" || s.outcome_state === "uncertain"
+            ? s.outcome_state
+            : "not_attempted",
           durationMs: s.duration_ms,
           errorDetail: s.error_detail,
           output: s.output_snapshot,
@@ -301,90 +350,11 @@ export const listRuns = createServerFn({ method: "GET" })
     }));
   });
 
-const SECRETISH = /(secret|token|key|password|authorization|bearer|credential)/i;
-
-/** Never persist anything that looks like a credential. */
-function redact(value: Record<string, unknown> | undefined) {
-  if (!value) return null;
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(value)) out[k] = SECRETISH.test(k) ? "[redacted]" : v;
-  return out;
-}
-
-export const recordRun = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) =>
-    z
-      .object({
-        automationId: z.string().uuid(),
-        triggerType: z.string().max(80).optional(),
-        isDryRun: z.boolean().default(false),
-        steps: z
-          .array(
-            z.object({
-              label: z.string().max(160),
-              status: z.enum(["success", "failed", "halted", "dry_run"]),
-              durationMs: z.number().int().nonnegative(),
-              detail: z.string().max(500).optional(),
-              output: z.record(z.string(), z.unknown()).optional(),
-            }),
-          )
-          .max(200),
-      })
-      .parse(input),
-  )
-  .handler(async ({ context, data }) => {
-    const failed = data.steps.find((s) => s.status === "failed" || s.status === "halted");
-    const duration = data.steps.reduce((sum, s) => sum + s.durationMs, 0);
-
-    const { data: run, error } = await context.supabase
-      .from("run_logs")
-      .insert({
-        automation_id: data.automationId,
-        status: failed ? "failed" : data.isDryRun ? "dry_run" : "success",
-        trigger_type: data.triggerType ?? "manual",
-        is_dry_run: data.isDryRun,
-        finished_at: new Date().toISOString(),
-        duration_ms: duration,
-        error_summary: failed ? `${failed.label}: ${failed.detail ?? "step failed"}` : null,
-      })
-      .select("id")
-      .single();
-    if (error) throw new Error(error.message);
-
-    if (data.steps.length) {
-      const { error: stepErr } = await context.supabase.from("run_step_logs").insert(
-        data.steps.map((s, i) => ({
-          run_id: run.id,
-          step_index: i,
-          node_label: s.label,
-          status: s.status,
-          duration_ms: s.durationMs,
-          error_detail: s.detail ?? null,
-          output_snapshot: redact(s.output) as never,
-        })),
-      );
-      if (stepErr) throw new Error(stepErr.message);
-    }
-
-    // Health score: recent success rate over the last 20 runs.
-    const { data: recent } = await context.supabase
-      .from("run_logs")
-      .select("status")
-      .eq("automation_id", data.automationId)
-      .order("started_at", { ascending: false })
-      .limit(20);
-    const rows = recent ?? [];
-    const ok = rows.filter((r) => r.status === "success" || r.status === "dry_run").length;
-    const health = rows.length ? Math.round((ok / rows.length) * 100) : 100;
-
-    await context.supabase
-      .from("automations")
-      .update({ last_run_at: new Date().toISOString(), health_score: health })
-      .eq("id", data.automationId);
-
-    return { runId: run.id, health };
-  });
+/**
+ * Run history is written only by the server-side executor and scheduler.
+ * The former client-submitted recordRun endpoint was removed because a browser
+ * could fabricate successful runs and previews without executing the saved flow.
+ */
 
 export interface CloudIntegration {
   id: string;
@@ -402,6 +372,7 @@ export const listIntegrations = createServerFn({ method: "GET" })
     const { data, error } = await context.supabase
       .from("integrations")
       .select("id, provider, account_label, auth_kind, status, scopes, last_verified_at")
+      .eq("user_id", context.userId)
       .order("provider");
     if (error) throw new Error(error.message);
     return (data ?? []).map((r) => ({
@@ -409,52 +380,52 @@ export const listIntegrations = createServerFn({ method: "GET" })
       provider: r.provider,
       accountLabel: r.account_label,
       authKind: r.auth_kind,
-      status: r.status,
+      // No generic connector manifest exists yet, so legacy metadata cannot be represented as verified.
+      status: r.status === "connected" ? "error" : r.status,
       scopes: r.scopes ?? [],
-      lastVerifiedAt: r.last_verified_at,
+      lastVerifiedAt: r.status === "connected" ? null : r.last_verified_at,
     }));
   });
 
+/**
+ * Generic metadata-only connection records are not proof of provider access.
+ * Until a reviewed manifest exists, fail closed rather than mark an app connected.
+ */
 export const connectIntegration = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
-    z
-      .object({
-        provider: z.string().min(1).max(80),
-        accountLabel: z.string().max(160).optional(),
-        authKind: z.enum(["oauth2", "apiKey", "basic", "none"]).default("oauth2"),
-        scopes: z.array(z.string().max(80)).max(30).default([]),
-      })
-      .parse(input),
+    z.object({
+      provider: z.string().min(1).max(80),
+      accountLabel: z.string().max(160).optional(),
+      authKind: z.enum(["oauth2", "apiKey", "basic", "none"]).default("oauth2"),
+      scopes: z.array(z.string().max(80)).max(30).default([]),
+    }).parse(input),
   )
-  .handler(async ({ context, data }) => {
-    const { error } = await context.supabase.from("integrations").upsert(
-      {
-        user_id: context.userId,
-        provider: data.provider,
-        display_name: data.provider,
-        account_label: data.accountLabel ?? null,
-        auth_kind: data.authKind,
-        status: "connected",
-        scopes: data.scopes,
-        last_verified_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id,provider" },
-    );
-    if (error) throw new Error(error.message);
-    return { ok: true };
-  });
+  .handler(async ({ data }) => ({
+    ok: false as const,
+    status: "error" as const,
+    provider: data.provider,
+    message: "This catalog entry has no reviewed connector manifest and successful provider verification yet. It remains Test only and was not marked connected.",
+  }));
 
 export const verifyIntegration = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ integrationId: z.string().uuid() }).parse(input))
   .handler(async ({ context, data }) => {
-    const { error } = await context.supabase
+    const { data: integration, error } = await context.supabase
       .from("integrations")
-      .update({ status: "connected", last_verified_at: new Date().toISOString() })
-      .eq("id", data.integrationId);
-    if (error) throw new Error(error.message);
-    return { ok: true, verifiedAt: new Date().toISOString() };
+      .select("provider")
+      .eq("id", data.integrationId)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (error) throw new Error("Could not load the integration.");
+    if (!integration) throw new Error("Integration not found.");
+    return {
+      ok: false as const,
+      status: "error" as const,
+      provider: integration.provider,
+      message: "No real verify() adapter is registered for this provider yet. The connection remains unverified.",
+    };
   });
 
 export const disconnectIntegration = createServerFn({ method: "POST" })
@@ -462,8 +433,8 @@ export const disconnectIntegration = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => z.object({ integrationId: z.string().uuid() }).parse(input))
   .handler(async ({ context, data }) => {
     const { data: integ } = await context.supabase
-      .from("integrations").select("provider").eq("id", data.integrationId).maybeSingle();
-    const { error } = await context.supabase.from("integrations").delete().eq("id", data.integrationId);
+      .from("integrations").select("provider").eq("id", data.integrationId).eq("user_id", context.userId).maybeSingle();
+    const { error } = await context.supabase.from("integrations").delete().eq("id", data.integrationId).eq("user_id", context.userId);
     if (error) throw new Error(error.message);
     // Scoped revocation: pause only the live flows that use this app.
     let paused: string[] = [];

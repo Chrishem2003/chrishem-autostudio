@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { KIND_LABEL, KIND_ORDER, NODES, VERTICALS } from "@/lib/automation-catalog";
+import { getConnectorCapabilityLabel } from "@/lib/connector-manifests";
 import { KIND_STYLE } from "./kind-styles";
 import { cn } from "@/lib/utils";
 
@@ -67,6 +68,11 @@ export function Palette({ vertical, onAdd }: Props) {
                     <span className="ml-auto text-[10px] text-muted-foreground">{d.tool}</span>
                   </div>
                   <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{d.summary}</p>
+                  {getConnectorCapabilityLabel(d.id, d.tool) ? (
+                    <p className="mt-1 text-[10px] font-medium text-amber-700 dark:text-amber-300">
+                      Capability: {getConnectorCapabilityLabel(d.id, d.tool)}
+                    </p>
+                  ) : null}
                 </button>
               ))}
             </div>
