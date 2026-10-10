@@ -86,3 +86,32 @@ This section records actual changes on the branch; it does not imply they are me
 5. Add a complete server-side `executeFlow` endpoint so manual, scheduled, and webhook runs share flow traversal, branch handling, run creation, event logs, and idempotency rather than sharing only the per-step executor.
 6. Reconcile the credential vault with the plan's future `credentials` table and key-version rotation; current storage intentionally matches the existing `app_user_connections` contract.
 7. Run a non-production Supabase migration rehearsal and end-to-end test with a dedicated Gmail account before any production migration or live schedule is enabled.
+
+## Follow-up review — current branch state
+
+The initial baseline section above records what was true before P0 implementation. This follow-up supersedes those baseline statuses where noted.
+
+### P0 improvements now present in the branch
+
+- AI flow planning requires authentication, validates input and model output, uses a 20-second timeout, applies a database-backed limit of 20 planning attempts per user per hour, and records token usage when the provider reports it.
+- Outbound HTTP resolves all DNS answers, rejects unsafe/mixed private-public answers, pins the selected validated IP for the request, disables redirects, limits request/response sizes, and fails closed unless the deployed runtime is explicitly verified.
+- Scheduled runs use a service-role-only lease to prevent overlapping cron invocations from claiming the same automation.
+- Manual and scheduled execution share the server-side `executeStep` capability gate; unsupported live steps fail closed. A full shared `executeFlow` engine is still outstanding.
+- Gmail remains pending until the user sends a real test email to a recipient they control; the test-send quota and 30-day verification expiry are enforced in server-side code/database.
+- CI is present and has passed on commit `bd5d464fabc68770315b6420b1352a85650780a8` (frozen dependency install, typecheck, 33 unit tests, production build). Later commits must have their own green run before merge.
+- A follow-up source review found and corrected an invalid SQL function grant signature in the AI quota migration before it is released. The connection schema now includes `verified_at` and cascades when its auth user is deleted.
+
+### Additional correctness improvement
+
+Automatic retries are now restricted to HTTP methods treated as idempotent by HTTP semantics (GET, PUT, DELETE). POST and PATCH are not retried automatically, because a timeout or 5xx response does not prove a side effect did not happen. This avoids duplicate webhook/chat deliveries from blind retries. The policy has a unit regression test. A future executor may retry non-idempotent actions only when the connector supplies a verified provider idempotency key or an operator-approved deduplication contract.
+
+### Still-open release gates
+
+1. Run CI on the current branch head and retain its exact result; the earlier green run does not cover later commits.
+2. Apply migrations in a disposable/non-production Supabase project and verify the full migration chain, table grants, RLS behavior, function privileges, quota concurrency, and scheduler lease concurrency.
+3. Confirm the deployed runtime is compatible with Node HTTP(S) request APIs. Keep `AUTOSTUDIO_OUTBOUND_TRANSPORT_READY` unset/false until a deployed smoke test proves DNS pinning, TLS hostname verification, timeout handling, and no redirect following.
+4. Perform a dedicated-mailbox Gmail test and scheduled-run end-to-end test, including expired/revoked credentials and run/step-log persistence.
+5. Add a true connector manifest registry with provider verification adapters; metadata-only integrations must remain Test only/Coming soon.
+6. Replace the current ordered-node loops with a single durable `executeFlow(flow, trigger, mode)` engine supporting graph/branch semantics, step input/output schemas, shared event logs, idempotency, retries/backoff, circuit breakers, queue workers, and dead-letter notifications.
+7. Add versioned credential encryption keys and a rotation/re-encryption procedure before storing more provider credentials.
+8. Do not merge or deploy this draft until the above release gates pass. CI green alone is not proof of production safety.
