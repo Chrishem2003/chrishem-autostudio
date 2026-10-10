@@ -111,7 +111,7 @@ Automatic retries are now restricted to HTTP methods treated as idempotent by HT
 2. Apply migrations in a disposable/non-production Supabase project and verify the full migration chain, table grants, RLS behavior, function privileges, quota concurrency, and scheduler lease concurrency.
 3. Confirm the deployed runtime is compatible with Node HTTP(S) request APIs. Keep `AUTOSTUDIO_OUTBOUND_TRANSPORT_READY` unset/false until a deployed smoke test proves DNS pinning, TLS hostname verification, timeout handling, and no redirect following.
 4. Perform a dedicated-mailbox Gmail test and scheduled-run end-to-end test, including expired/revoked credentials and run/step-log persistence.
-5. Add a true connector manifest registry with provider verification adapters; metadata-only integrations must remain Test only/Coming soon.
+5. Extend the new starter connector manifest registry provider-by-provider and implement real verification adapters; metadata-only integrations must remain Test only/Coming soon.
 6. Replace the current ordered-node loops with a single durable `executeFlow(flow, trigger, mode)` engine supporting graph/branch semantics, step input/output schemas, shared event logs, idempotency, retries/backoff, circuit breakers, queue workers, and dead-letter notifications.
 7. Add versioned credential encryption keys and a rotation/re-encryption procedure before storing more provider credentials.
 8. Do not merge or deploy this draft until the above release gates pass. CI green alone is not proof of production safety.
@@ -142,5 +142,12 @@ Still required before merging/deploying:
 1. Apply the complete migration chain to a disposable Supabase project; verify the SQL runs end-to-end and test RLS/grants and lease/quota concurrency.
 2. Prove the deployed runtime is compatible with the Node HTTP(S) pinned-address transport. Keep live outbound HTTP/chat disabled until this smoke test passes.
 3. Run end-to-end Gmail and scheduled-flow tests using a dedicated test mailbox and non-production environment.
-4. Implement actual connector manifests and real verification/test-send workflows for chat webhooks and generic HTTP endpoints.
+4. The starter connector manifest registry is implemented. Remaining: add provider-specific manifests as adapters mature and real verification/test-send workflows for chat webhooks and generic HTTP endpoints.
 5. Add runtime tests for server-side complete-flow execution and duplicate concurrent run attempts.
+
+
+## Product UX and connector-manifest follow-up — 2026-10-10
+
+The branch now includes responsive Workspace navigation, Studio links to primary product areas, saved-automation search/status filters, and `docs/product-north-star.md`. A starter registry in `src/lib/connector-manifests.ts` documents the current Gmail, chat-webhook, and generic HTTP execution paths, including verification levels, runtime gates, and retry policies. The live capability gate rejects action nodes without a reviewed manifest. Tests specifically ensure that a configured chat webhook is not described as provider-verified.
+
+CI passed on commit `c3cf62968358b58d85d857282f633d993803a23f`: frozen dependency install, TypeScript typecheck, 39 unit tests across 6 files, and production build. Later commits must pass their own CI. These checks do not substitute for the outstanding non-production migration rehearsal and deployed provider/runtime smoke tests.
