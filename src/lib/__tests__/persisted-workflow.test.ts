@@ -76,10 +76,8 @@ describe("persisted workflow runtime validation", () => {
       edges: [],
     };
     const parsedDuplicate = parsePersistedWorkflow(duplicateNodes);
-    expect(parsedDuplicate.success).toBe(true);
-    if (parsedDuplicate.success) {
-      expect(planLinearExecution(parsedDuplicate.data).error).toMatch(/duplicate step ID/i);
-    }
+    // Duplicate identifiers are rejected at the earliest runtime boundary.
+    expect(parsedDuplicate.success).toBe(false);
 
     const dangling = {
       ...valid,
