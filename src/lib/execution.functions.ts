@@ -4,6 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { executeStep, type ExecutionMode } from "@/lib/execute-step.server";
 import type { WorkflowNode } from "@/lib/workflow";
 import { planLinearExecution } from "@/lib/execution-plan";
+import { classifyExecutionOutcome } from "@/lib/execution-outcome";
 
 const MAX_FLOW_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -193,7 +194,7 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
             label: node.name,
             status: "failed" as const,
             ms: 0,
-            detail: error instanceof Error ? error.message.slice(0, 500) : "The step failed unexpectedly.",
+            detail: "The step stopped unexpectedly. Its external outcome may be uncertain; verify the destination before retrying.",
           };
         }
       }
@@ -205,6 +206,7 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
         node_id: node.id,
         node_label: step.label.slice(0, 160),
         status: step.status,
+        outcome_state: classifyExecutionOutcome(step.status, step.detail),
         duration_ms: Math.max(0, Math.round(step.ms)),
         error_detail: step.status === "failed" ? step.detail.slice(0, 500) : null,
         output_snapshot: { detail: step.detail.slice(0, 500) },
