@@ -113,6 +113,9 @@ export function Inspector({ workflow, node, onRename, onConfig, onDisconnect }: 
             {incoming.map((e) => `{{${nameOf(e.from).toLowerCase().replace(/\s+/g, "_")}.output}}`).join("\n") ||
               "{{previous.output}}"}
           </p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Mapping tokens are design hints for now. Live runs stop safely when unresolved tokens remain; runtime data mapping is not implemented yet.
+          </p>
         </div>
       </div>
     </div>
