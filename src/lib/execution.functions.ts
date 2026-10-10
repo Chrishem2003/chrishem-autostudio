@@ -80,7 +80,7 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
     if (error) throw new Error("Could not load the saved automation.");
     if (!row) throw new Error("Automation not found.");
 
-    const parsed = flowShape.safeParse(row.flow_json);
+    const parsed = parsePersistedWorkflow(row.flow_json);
     if (!parsed.success) throw new Error("The saved automation is invalid. Open it in the builder and save a corrected version.");
 
     const flow = {
