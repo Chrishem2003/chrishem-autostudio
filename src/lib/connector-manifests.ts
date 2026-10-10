@@ -185,11 +185,11 @@ export function validateConnectorActionConfig(
   // Validate values that influence transport behavior before they reach the
   // executor. Do not silently coerce malformed workflow settings.
   if (resolved.action.id === "http.request") {
-    const method = config["method"]?.trim().toUpperCase();
+    const method = (config["method"] as string | undefined)?.trim().toUpperCase();
     if (method && !["GET", "POST", "PUT", "PATCH", "DELETE"].includes(method)) {
       return "HTTP method must be GET, POST, PUT, PATCH, or DELETE.";
     }
-    const timeout = config["timeout"]?.trim();
+    const timeout = (config["timeout"] as string | undefined)?.trim();
     if (timeout && (!/^\\d+(?:\\.\\d+)?$/.test(timeout) || Number(timeout) < 1 || Number(timeout) > 30)) {
       return "HTTP timeout must be a number between 1 and 30 seconds.";
     }
