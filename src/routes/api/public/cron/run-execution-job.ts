@@ -7,7 +7,7 @@ import { createSupabaseExecutionJobDependencies } from "@/lib/execution-job-queu
 import { processOneExecutionJob } from "@/lib/execution-job-worker";
 import { planLinearExecution } from "@/lib/execution-plan";
 import { buildRunFinalization } from "@/lib/run-finalization";
-import { executeStep } from "@/lib/execute-step.server";
+import { executeStep, livePreflightError } from "@/lib/execute-step.server";
 import type { Workflow } from "@/lib/workflow";
 
 const MAX_JOB_RUNTIME_MS = 4 * 60 * 1000;
@@ -64,6 +64,20 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
               sideEffectCertainty: "not_attempted" as const,
               error: "Saved workflow failed execution-plan validation; no steps were executed.",
             };
+          }
+
+          // Re-run live capability checks in the worker. The workflow or its
+          // credentials may have changed after enqueue, so producer-side preflight
+          // alone is not a sufficient authorization/safety boundary.
+          for (const node of plan.nodes) {
+            const preflightError = await livePreflightError(node, automation.user_id);
+            if (preflightError) {
+              return {
+                status: "failed" as const,
+                sideEffectCertainty: "not_attempted" as const,
+                error: preflightError,
+              };
+            }
           }
 
           // Serialize queue jobs per automation with the same lease used by
