@@ -202,3 +202,20 @@ GitHub CI is evidence for code/build/unit-test and disposable PostgreSQL behavio
 1. Add API-route regression tests for invalid saved workflow payloads and confirm rejection happens before enqueue/intent creation.
 2. Review outbound HTTP SSRF protections and deployment-gate behavior against the actual transport implementation.
 3. Verify the latest exact-head CI run and keep the durable queue disabled until a staging rehearsal is signed off.
+
+
+## Audit-data minimization and manual-run parity — 2026-10-10
+
+**Implemented on commit `062305cad656504cd0a169e6518dc9cc7c5a7ed8`; both CI jobs passed on that exact code head.**
+
+- The HTTP transport no longer buffers response-body previews for run details. It enforces the 1 MB response-size limit while consuming the response stream, but persisted execution summaries contain only the status and destination hostname, never remote payload content.
+- Added regression tests for generic success/error summaries that must not include response bodies.
+- The authenticated manual flow executor now persists sanitized, connector-allowlisted step outputs in its audit snapshot, matching the queue-worker and scheduled execution paths.
+- The planner validates mapping contracts before the manual queue/enqueue branch, and the shared execution engine repeats validation and sanitizes outputs before audit persistence and downstream use.
+- Verification: typecheck, unit tests, production build, and durable queue migration smoke test all passed on the exact code head. The latest run is [GitHub Actions](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38084834085).
+
+### Remaining launch gates
+
+- Run a controlled staging rehearsal with outbound transport and durable queue still disabled first.
+- Verify deployment-specific DNS/network behavior and operator-controlled enablement before activating external requests.
+- Keep uncertain external side effects in manual review rather than automatic replay.
