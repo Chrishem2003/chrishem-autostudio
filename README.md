@@ -67,7 +67,7 @@ Only automations saved with cloud status `live` and a `trigger.schedule` node ar
 
 - Live status changes require a saved flow, a clean validation pass, supported live steps, and a successful Preview after the latest save.
 - Preview mode does not send messages or call external services.
-- The current Gmail integration still depends on the Lovable connector gateway; migration to a directly managed Google OAuth application is a later roadmap item.
+- Gmail uses the least-privilege `gmail.send` scope. Authorization remains pending until the user explicitly sends a test email to a recipient they control; test sends are limited to three per user per hour. The integration still depends on the Lovable connector gateway; migration to a directly managed Google OAuth application is a later roadmap item.
 - DNS checks reduce SSRF risk by rejecting unsafe answers and pinning the chosen IP for the request. Network egress controls at the deployment layer are still recommended as defense in depth.
 - **Deployment runtime gate:** the pinned transport uses Node HTTP(S) request APIs, while the current build configuration defaults to a Cloudflare target. A green build is not proof of runtime compatibility. Do not enable live HTTP/chat-webhook steps on a Cloudflare Worker until a deployed smoke test proves the transport works; otherwise use a Node.js runtime or a dedicated SSRF-safe egress service.
 - Do not deploy database migrations until they have been reviewed and tested against a non-production Supabase project.
