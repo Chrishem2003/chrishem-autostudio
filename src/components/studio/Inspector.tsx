@@ -1,4 +1,5 @@
 import { NODES } from "@/lib/automation-catalog";
+import { getConnectorCapabilityLabel } from "@/lib/connector-manifests";
 import type { Workflow, WorkflowNode } from "@/lib/workflow";
 import { KIND_STYLE } from "./kind-styles";
 import { cn } from "@/lib/utils";
@@ -43,6 +44,11 @@ export function Inspector({ workflow, node, onRename, onConfig, onDisconnect }: 
           className="mt-3 w-full rounded-lg border border-input bg-surface-raised px-3 py-2 font-display text-sm outline-none focus:border-primary"
         />
         <p className="mt-2 text-xs text-muted-foreground">{def.summary}</p>
+        {getConnectorCapabilityLabel(def.id, def.tool) ? (
+          <p className="mt-2 text-xs font-medium text-amber-700 dark:text-amber-300">
+            Capability: {getConnectorCapabilityLabel(def.id, def.tool)}
+          </p>
+        ) : null}
       </div>
 
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
@@ -106,6 +112,9 @@ export function Inspector({ workflow, node, onRename, onConfig, onDisconnect }: 
             <br />
             {incoming.map((e) => `{{${nameOf(e.from).toLowerCase().replace(/\s+/g, "_")}.output}}`).join("\n") ||
               "{{previous.output}}"}
+          </p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Mapping tokens are design hints for now. Live runs stop safely when unresolved tokens remain; runtime data mapping is not implemented yet.
           </p>
         </div>
       </div>

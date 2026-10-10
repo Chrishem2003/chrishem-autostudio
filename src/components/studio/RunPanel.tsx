@@ -5,12 +5,13 @@ interface Props {
   issues: Issue[];
   steps: RunStep[];
   running: boolean;
+  live: boolean;
   onRun: () => void;
   onExport: () => void;
   onSelectNode: (id: string) => void;
 }
 
-export function RunPanel({ issues, steps, running, onRun, onExport, onSelectNode }: Props) {
+export function RunPanel({ issues, steps, running, live, onRun, onExport, onSelectNode }: Props) {
   const total = steps.reduce((sum, s) => sum + s.ms, 0);
   return (
     <div className="flex h-full flex-col">
@@ -20,7 +21,7 @@ export function RunPanel({ issues, steps, running, onRun, onExport, onSelectNode
           disabled={running}
           className="rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
         >
-          {running ? "Running…" : "Test run"}
+          {running ? "Running…" : live ? "Run live flow" : "Preview flow"}
         </button>
         <button
           onClick={onExport}
@@ -54,13 +55,13 @@ export function RunPanel({ issues, steps, running, onRun, onExport, onSelectNode
           </div>
         ) : (
           <p className="mb-3 rounded-md border border-action/40 bg-action/10 px-2.5 py-1.5 text-xs text-action">
-            All checks passed — this flow is ready to go live.
+            No structural issues found. Live readiness is checked again before execution.
           </p>
         )}
 
         <p className="mono-label mb-2">Run log</p>
         {steps.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No runs yet. Hit “Test run” to walk the flow step by step.</p>
+          <p className="text-xs text-muted-foreground">No runs yet. Preview runs have no external side effects; live runs can send messages or call real services.</p>
         ) : (
           <ol className="space-y-1.5">
             {steps.map((s, i) => (

@@ -1,10 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { authenticateCronRequest } from "@/integrations/supabase/cron-auth";
 import { isDue } from "@/lib/schedule";
-import { callWeb } from "@/lib/web-steps.server";
-import { orderedNodes, type Workflow } from "@/lib/workflow";
-import { NODES } from "@/lib/automation-catalog";
-import { buildChatRequest, isChatMessageStep } from "@/lib/chat-steps";
+import type { Workflow } from "@/lib/workflow";
+import { planLinearExecution } from "@/lib/execution-plan";
+import { executeFlowSteps } from "@/lib/execute-flow-steps.server";
+import { buildRunFinalization } from "@/lib/run-finalization";
+import { enqueueExecutionJob } from "@/lib/execution-job-queue.server";
+import { parsePersistedWorkflow } from "@/lib/persisted-workflow";
+import { isDurableQueueEnabled } from "@/lib/runtime-feature-gates";
+
+const MAX_SCHEDULED_FLOW_RUNTIME_MS = 4 * 60 * 1000;
 
 export const Route = createFileRoute("/api/public/cron/run-scheduled")({
   server: {
@@ -12,94 +17,329 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
       POST: async ({ request }) => {
         const denied = await authenticateCronRequest(request);
         if (denied) return denied;
+
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+        // Recover abandoned scheduled runs only after the maximum lease plus
+        // runtime window. Their in-flight steps are uncertain, never replayed here.
+        const staleBefore = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+        const { data: staleRuns, error: staleQueryError } = await supabaseAdmin
+          .from("run_logs")
+          .select("id, started_at")
+          .eq("status", "running")
+          .eq("trigger_type", "schedule")
+          .lt("started_at", staleBefore)
+          .limit(100);
+        if (staleQueryError) {
+          console.error("[AutoStudio scheduler] Could not inspect stale runs; refusing to schedule new work.", { errorCode: staleQueryError.code });
+          return new Response("stale-run reconciliation failed", { status: 500 });
+        }
+        for (const stale of staleRuns ?? []) {
+          const { error: stepRecoveryError } = await supabaseAdmin
+            .from("run_step_logs")
+            .update({
+              status: "failed",
+              outcome_state: "uncertain",
+              error_detail: "The worker stopped before confirming this step. Verify external effects before retrying.",
+              output_snapshot: { recoveryHint: "Stale in-flight step; external outcome is uncertain. Verify before retry." },
+            })
+            .eq("run_id", stale.id)
+            .eq("status", "running");
+          if (stepRecoveryError) {
+            console.error("[AutoStudio scheduler] Could not recover stale step logs; refusing to schedule new work.", {
+              runId: stale.id, errorCode: stepRecoveryError.code,
+            });
+            return new Response("stale-step reconciliation failed", { status: 500 });
+          }
+          const { error: runRecoveryError } = await supabaseAdmin
+            .from("run_logs")
+            .update({
+              status: "failed",
+              finished_at: new Date().toISOString(),
+              error_summary: "The scheduled worker stopped before finalizing this run. Inspect uncertain step outcomes before retrying.",
+            })
+            .eq("id", stale.id)
+            .eq("status", "running");
+          if (runRecoveryError) {
+            console.error("[AutoStudio scheduler] Could not finalize stale run; refusing to schedule new work.", {
+              runId: stale.id, errorCode: runRecoveryError.code,
+            });
+            return new Response("stale-run finalization failed", { status: 500 });
+          }
+        }
         const { data: rows, error } = await supabaseAdmin
           .from("automations")
-          .select("id, flow_json, last_run_at, workspace_id")
+          .select("id, user_id, name, flow_json, last_run_at, workspace_id")
           .eq("status", "live")
           .limit(500);
         if (error) return new Response("query failed", { status: 500 });
+
         const now = new Date();
         let ran = 0;
+        let failed = 0;
         for (const row of rows ?? []) {
-          const wf = row.flow_json as unknown as Workflow | null;
-          if (!wf?.nodes) continue;
-          const trig = wf.nodes.find((n) => n.defId === "trigger.schedule");
-          if (!trig) continue;
-          const cadence = trig.config?.["cadence"] || "Hourly";
-          if (!isDue(cadence, row.last_run_at ? new Date(row.last_run_at) : null, now, trig.config?.["timezone"])) continue;
-          ran++;
-          const started = Date.now();
-          const steps: { label: string; status: "success" | "failed" | "dry_run"; ms: number; detail: string; nodeId: string }[] = [];
-          let halted = false;
-          for (const n of orderedNodes(wf)) {
-            if (halted) break;
-            const tool = NODES[n.defId]?.tool;
-            const chat = isChatMessageStep(n.defId, tool) ? buildChatRequest(tool!, n.config ?? {}, wf.name) : null;
-            if (chat && "error" in chat) {
-              steps.push({ nodeId: n.id, label: n.name, status: "failed", ms: 0, detail: chat.error });
-              halted = true;
-              continue;
-            }
-            if (chat) {
-              const r = await callWeb({ method: "POST", url: chat.url, body: chat.body, timeoutSec: 30 });
-              steps.push({ nodeId: n.id, label: n.name, status: r.ok ? "success" : "failed", ms: r.ms, detail: r.detail });
-              if (!r.ok) halted = true;
-              continue;
-            }
-            const url = n.config?.["url"]?.trim();
-            if ((n.defId === "action.http" || n.defId === "output.webhook") && url) {
-              let r;
-              try {
-                r = await callWeb({
-                  method: (n.defId === "output.webhook" ? "POST" : n.config["method"] || "GET") as "GET",
-                  url,
-                  body: n.config["body"] || (n.defId === "output.webhook" ? JSON.stringify({ flow: wf.name, sentAt: now.toISOString() }) : undefined),
-                  timeoutSec: Math.min(60, Math.max(1, Number(n.config["timeout"]) || 30)),
-                });
-              } catch {
-                r = { ok: false, ms: 0, detail: "That address isn't valid." };
-              }
-              steps.push({ nodeId: n.id, label: n.name, status: r.ok ? "success" : "failed", ms: r.ms, detail: r.detail });
-              if (!r.ok) halted = true;
-            } else {
-              steps.push({ nodeId: n.id, label: n.name, status: n.defId === "trigger.schedule" ? "success" : "dry_run", ms: 0, detail: n.defId === "trigger.schedule" ? `Started on schedule (${cadence}).` : "Practice step — this app isn't connected for real yet." });
-            }
+          const parsedWorkflow = parsePersistedWorkflow(row.flow_json);
+          if (!parsedWorkflow.success) {
+            console.warn("[AutoStudio scheduler] Skipping malformed saved workflow.", { automationId: row.id });
+            continue;
           }
-          const failed = steps.some((s) => s.status === "failed");
-          const { data: run } = await supabaseAdmin
+          const wf = parsedWorkflow.data as unknown as Workflow;
+          const executionPlan = planLinearExecution(wf);
+          if (executionPlan.error) {
+            console.warn("[AutoStudio scheduler] Flow rejected by execution planner.", {
+              automationId: row.id,
+              reason: executionPlan.error,
+            });
+            continue;
+          }
+          const trigger = wf.nodes.find((node) => node.defId === "trigger.schedule");
+          if (!trigger) continue;
+          const cadence = trigger.config?.["cadence"] || "Hourly";
+          if (!isDue(cadence, row.last_run_at ? new Date(row.last_run_at) : null, now, trigger.config?.["timezone"])) continue;
+
+          // Roll out durable queue consumption explicitly. Until the worker cron is
+          // configured and runtime-validated, the legacy direct path remains the
+          // default. With the flag enabled, this branch only enqueues and never
+          // executes workflow steps in the scheduler request.
+          if (isDurableQueueEnabled()) {
+            const { data: queueLock, error: queueLockError } = await supabaseAdmin.rpc("claim_scheduled_automation", {
+              _automation_id: row.id,
+              _lease_seconds: 900,
+            });
+            if (queueLockError || !queueLock) continue;
+
+            const enqueuedAt = new Date().toISOString();
+            const idempotencyKey = "schedule:" + row.id + ":" + (row.last_run_at ? Date.parse(row.last_run_at) : 0) + ":" + String(cadence).slice(0, 32);
+            let enqueueSucceeded = false;
+            try {
+              await enqueueExecutionJob({
+                automationId: row.id,
+                triggerType: "scheduled",
+                idempotencyKey,
+                requestedBy: row.user_id,
+                payload: { triggerType: "schedule", scheduledAt: enqueuedAt },
+              });
+              enqueueSucceeded = true;
+              ran++;
+            } catch (queueError) {
+              failed++;
+              console.error("[AutoStudio scheduler] Durable job enqueue failed.", {
+                automationId: row.id,
+                errorName: queueError instanceof Error ? queueError.name : "UnknownError",
+              });
+            }
+
+            const { error: queueReleaseError } = await supabaseAdmin.rpc("release_scheduled_automation", {
+              _automation_id: row.id,
+              _lock_token: queueLock,
+              _last_run_at: enqueueSucceeded ? enqueuedAt : (row.last_run_at ?? "1970-01-01T00:00:00.000Z"),
+            });
+            if (queueReleaseError) {
+              console.error("[AutoStudio scheduler] Could not release queue-enqueue lease.", {
+                automationId: row.id,
+                errorCode: queueReleaseError.code,
+              });
+              failed++;
+            }
+            continue;
+          }
+
+          const { data: lockToken, error: claimError } = await supabaseAdmin.rpc("claim_scheduled_automation", {
+            _automation_id: row.id,
+            _lease_seconds: 900,
+          });
+          if (claimError) {
+            console.error("[AutoStudio scheduler] Could not claim scheduled flow.", {
+              automationId: row.id,
+              errorCode: claimError.code,
+            });
+            continue;
+          }
+          if (!lockToken) continue; // Another scheduler already owns this run or the lease is still active.
+
+          const started = Date.now();
+          const startedAt = new Date(started).toISOString();
+          // Keep lease cleanup around every post-claim operation, including unexpected
+          // database/runtime exceptions and early continues.
+          let leaseCursor = startedAt;
+          let activeRunId: string | null = null;
+          try {
+          // Persist the run before any external side effects. If audit persistence
+          // is unavailable, fail closed and release the lease without executing.
+          const { data: run, error: runError } = await supabaseAdmin
             .from("run_logs")
             .insert({
               automation_id: row.id,
               workspace_id: row.workspace_id,
               trigger_type: "schedule",
-              is_dry_run: !steps.some((s) => s.status === "success" && s.nodeId !== trig.id),
-              status: failed ? "failed" : "success",
-              started_at: new Date(started).toISOString(),
-              finished_at: new Date().toISOString(),
-              duration_ms: Date.now() - started,
-              error_summary: failed ? steps.find((s) => s.status === "failed")!.detail.slice(0, 500) : null,
+              is_dry_run: false,
+              status: "running",
+              started_at: startedAt,
             })
             .select("id")
             .single();
-          if (run) {
-            await supabaseAdmin.from("run_step_logs").insert(
-              steps.map((s, i) => ({
-                run_id: run.id,
-                workspace_id: row.workspace_id,
-                step_index: i,
-                node_id: s.nodeId,
-                node_label: s.label.slice(0, 160),
-                status: s.status,
-                duration_ms: s.ms,
-                error_detail: s.status === "failed" ? s.detail.slice(0, 500) : null,
-                output_snapshot: s.status !== "failed" ? { detail: s.detail.slice(0, 500) } : null,
-              })),
-            );
+
+          if (runError || !run) {
+            console.error("[AutoStudio scheduler] Could not persist run start; flow was not executed.", {
+              automationId: row.id,
+              errorCode: runError?.code ?? "NO_RUN_RECORD",
+            });
+            leaseCursor = new Date().toISOString();
+            failed++;
+            continue;
           }
-          await supabaseAdmin.from("automations").update({ last_run_at: now.toISOString() }).eq("id", row.id);
+
+          activeRunId = run.id;
+          ran++;
+          const execution = await executeFlowSteps({
+            nodes: executionPlan.nodes,
+            flowName: wf.name || row.name,
+            userId: row.user_id,
+            mode: "live",
+            startedAtMs: started,
+            maxRuntimeMs: MAX_SCHEDULED_FLOW_RUNTIME_MS,
+            persistIntent: async (node, index) => {
+              const { data: attempt, error: intentError } = await supabaseAdmin
+                .from("run_step_logs")
+                .insert({
+                  run_id: run.id,
+                  workspace_id: row.workspace_id,
+                  step_index: index,
+                  node_id: node.id,
+                  node_label: node.name.slice(0, 160),
+                  status: "running",
+                  outcome_state: "uncertain",
+                  output_snapshot: { recoveryHint: "Execution intent recorded; final outcome not yet confirmed." },
+                })
+                .select("id")
+                .single();
+              if (intentError || !attempt) return null;
+              return { id: attempt.id };
+            },
+            persistOutcome: async (intentId, step, outcomeState) => {
+              const { error: stepError } = await supabaseAdmin.from("run_step_logs").update({
+                status: step.status,
+                outcome_state: outcomeState,
+                duration_ms: Math.max(0, Math.round(step.ms)),
+                error_detail: step.status === "failed" ? step.detail.slice(0, 500) : null,
+                output_snapshot: { detail: step.detail.slice(0, 500), outcomeState, ...(step.outputs ? { outputs: step.outputs } : {}) },
+              }).eq("id", intentId);
+              return !stepError;
+            },
+            onUnexpectedError: (node, error) => {
+              console.error("[AutoStudio scheduler] Step failed unexpectedly.", {
+                automationId: row.id,
+                nodeId: node.id,
+                errorName: error instanceof Error ? error.name : "UnknownError",
+              });
+            },
+            onPersistenceError: (stage, node) => {
+              console.error("[AutoStudio scheduler] Step audit persistence failed; halting flow.", {
+                automationId: row.id,
+                runId: run.id,
+                nodeId: node.id,
+                stage,
+              });
+            },
+          });
+          const steps = execution.steps;
+
+          const finalization = buildRunFinalization({ steps, mode: "live", startedAtMs: started });
+          if (finalization.status === "failed") failed++;
+          const finishedAt = finalization.finishedAt;
+          leaseCursor = finishedAt;
+          const { error: finishError } = await supabaseAdmin
+            .from("run_logs")
+            .update({
+              status: finalization.status,
+              finished_at: finalization.finishedAt,
+              duration_ms: finalization.durationMs,
+              error_summary: finalization.errorSummary,
+            })
+            .eq("id", run.id);
+
+          if (finishError) {
+            console.error("[AutoStudio scheduler] Could not persist run summary; attempting a failed-state fallback.", {
+              automationId: row.id,
+              runId: run.id,
+              errorCode: finishError.code,
+            });
+            const { error: fallbackError } = await supabaseAdmin
+              .from("run_logs")
+              .update({
+                status: "failed",
+                finished_at: finishedAt,
+                duration_ms: Date.now() - started,
+                error_summary: "The final run summary could not be safely persisted. Verify recorded step outcomes before retrying.",
+              })
+              .eq("id", run.id);
+            if (fallbackError) {
+              console.error("[AutoStudio scheduler] Failed-state fallback also failed.", {
+                automationId: row.id,
+                runId: run.id,
+                errorCode: fallbackError.code,
+              });
+            }
+          }
+          activeRunId = null;
+
+          } catch (error) {
+            console.error("[AutoStudio scheduler] Unexpected run-level failure.", {
+              automationId: row.id,
+              errorName: error instanceof Error ? error.name : "UnknownError",
+            });
+            if (activeRunId) {
+              try {
+                const failedAt = new Date().toISOString();
+                const { error: auditError } = await supabaseAdmin
+                  .from("run_logs")
+                  .update({
+                    status: "failed",
+                    finished_at: failedAt,
+                    duration_ms: Date.now() - started,
+                    error_summary: "The scheduled run stopped unexpectedly. Verify external effects before retrying.",
+                  })
+                  .eq("id", activeRunId);
+                if (auditError) {
+                  console.error("[AutoStudio scheduler] Could not mark interrupted run failed.", {
+                    automationId: row.id,
+                    runId: activeRunId,
+                    errorCode: auditError.code,
+                  });
+                }
+              } catch {
+                console.error("[AutoStudio scheduler] Failed to record unexpected run failure.", {
+                  automationId: row.id,
+                  runId: activeRunId,
+                });
+              }
+            }
+            failed++;
+          } finally {
+            // Token-checked release cannot clear another worker's lease. Keep the
+            // cadence cursor even when an unexpected exception interrupts this run.
+            try {
+              const { data: released, error: releaseError } = await supabaseAdmin.rpc("release_scheduled_automation", {
+                _automation_id: row.id,
+                _lock_token: lockToken,
+                _last_run_at: leaseCursor,
+              });
+              if (releaseError || !released) {
+                console.error("[AutoStudio scheduler] Could not release scheduled-flow lease.", {
+                  automationId: row.id,
+                  errorCode: releaseError?.code ?? "LEASE_NOT_OWNED",
+                });
+              }
+            } catch {
+              // Lease expiry is the fallback if the database itself is unavailable.
+              console.error("[AutoStudio scheduler] Lease cleanup threw unexpectedly.", {
+                automationId: row.id,
+              });
+            }
+          }
         }
-        return Response.json({ checked: rows?.length ?? 0, ran });
+
+        return Response.json({ checked: rows?.length ?? 0, ran, failed, finishedAt: now.toISOString() });
       },
     },
   },

@@ -1,5 +1,5 @@
 // @ts-nocheck -- vitest types are resolved at test time
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { buildChatRequest, isChatMessageStep } from "../chat-steps";
 
 describe("chat message steps", () => {

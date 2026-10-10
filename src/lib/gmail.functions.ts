@@ -1,15 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
+import { toRawEmail } from "./gmail-steps";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { buildGmailMessage, toRawEmail } from "./gmail-steps";
 
 const GATEWAY = "https://connector-gateway.lovable.dev";
 const CONNECTOR = "google_mail";
-const SCOPES = [
-  "https://www.googleapis.com/auth/userinfo.email",
-  "https://www.googleapis.com/auth/gmail.send",
-];
+const SCOPES = ["https://www.googleapis.com/auth/gmail.send"];
 
 export const startGmailConnect = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -18,10 +14,18 @@ export const startGmailConnect = createServerFn({ method: "POST" })
     if (!clientKey) throw new Error("Gmail isn't set up for this app yet.");
     const { authorizeAppUserOAuth } = await import("@/integrations/lovable/appUserConnector");
     const { getConnectionForUser } = await import("./app-user-connections.server");
-    const request = getRequest();
-    const url = new URL(request.url);
-    const sandboxHost = url.hostname === "localhost" ? request.headers.get("x-forwarded-host") : null;
-    const returnUrl = new URL("/oauth/gmail/return", sandboxHost ? `https://${sandboxHost}` : url.origin).toString();
+    const configuredBase = process.env["APP_BASE_URL"];
+    if (!configuredBase) throw new Error("APP_BASE_URL must be configured before Gmail OAuth can start.");
+    let appOrigin: URL;
+    try {
+      appOrigin = new URL(configuredBase);
+    } catch {
+      throw new Error("APP_BASE_URL must be a valid absolute URL.");
+    }
+    if (appOrigin.protocol !== "https:" && appOrigin.hostname !== "localhost") {
+      throw new Error("APP_BASE_URL must use HTTPS outside local development.");
+    }
+    const returnUrl = new URL("/oauth/gmail/return", appOrigin.origin).toString();
     const existing = await getConnectionForUser(context.userId, CONNECTOR);
     const { authorizationUrl } = await authorizeAppUserOAuth({
       gatewayBaseUrl: GATEWAY,
@@ -35,14 +39,6 @@ export const startGmailConnect = createServerFn({ method: "POST" })
     return { authorizationUrl };
   });
 
-async function lookupEmail(key: string): Promise<string | null> {
-  const { callAsAppUser } = await import("@/integrations/lovable/appUserConnector");
-  const res = await callAsAppUser({ gatewayBaseUrl: GATEWAY, connectionAPIKey: key, connectorId: CONNECTOR, path: "/gmail/v1/users/me/profile", requiredScopes: SCOPES });
-  if (!res.ok) return null;
-  const j = (await res.json()) as { emailAddress?: string };
-  return j.emailAddress ?? null;
-}
-
 export const completeGmailConnect = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ code: z.string().min(1).max(4000) }).parse(d))
@@ -51,9 +47,10 @@ export const completeGmailConnect = createServerFn({ method: "POST" })
     const { saveConnectionKeyForUser } = await import("./app-user-connections.server");
     const { connectionAPIKey, connectorId } = await exchangeAppUserOAuthCode(GATEWAY, data.code);
     if (connectorId !== CONNECTOR) throw new Error("Connection returned for the wrong app.");
-    const email = await lookupEmail(connectionAPIKey).catch(() => null);
-    await saveConnectionKeyForUser(context.userId, CONNECTOR, connectionAPIKey, email);
-    return { ok: true, email };
+    // gmail.send deliberately cannot call users.getProfile. Store it as pending until
+    // the user explicitly sends a test email to a recipient they choose.
+    await saveConnectionKeyForUser(context.userId, CONNECTOR, connectionAPIKey, null);
+    return { ok: true, verified: false };
   });
 
 export const getGmailStatus = createServerFn({ method: "GET" })
@@ -61,7 +58,14 @@ export const getGmailStatus = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { getConnectionForUser } = await import("./app-user-connections.server");
     const conn = await getConnectionForUser(context.userId, CONNECTOR);
-    return { connected: !!conn, email: conn?.email ?? null };
+    if (!conn) return { connected: false, pendingVerification: false, email: null };
+    const verifiedAt = conn.verifiedAt ? Date.parse(conn.verifiedAt) : 0;
+    const verified = verifiedAt > 0 && Date.now() - verifiedAt < 30 * 24 * 60 * 60 * 1000;
+    return {
+      connected: verified,
+      pendingVerification: !verified,
+      email: conn.email ?? null,
+    };
   });
 
 export const disconnectGmail = createServerFn({ method: "POST" })
@@ -77,34 +81,77 @@ export const disconnectGmail = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-export const sendGmailStep = createServerFn({ method: "POST" })
+/**
+ * Sends a real, clearly identified test email to the recipient the user entered.
+ * This is the verification action for the least-privilege gmail.send scope.
+ */
+export const sendGmailTest = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) =>
-    z.object({ config: z.record(z.string(), z.string()), flowName: z.string().max(200) }).parse(d),
-  )
+  .inputValidator((input: unknown) => z.object({
+    recipient: z.string().trim().email().max(254),
+  }).parse(input))
   .handler(async ({ data, context }) => {
     const { callAsAppUser, appUserReconnectRequired } = await import("@/integrations/lovable/appUserConnector");
-    const { getConnectionForUser } = await import("./app-user-connections.server");
-    const msg = buildGmailMessage(data.config, data.flowName);
-    if (!msg) return { ok: false, detail: "Add who to send to in “To”." };
-    if ("error" in msg) return { ok: false, detail: msg.error };
-    const conn = await getConnectionForUser(context.userId, CONNECTOR);
-    if (!conn) return { ok: false, detail: "Connect your Gmail first (Accounts tab → Connect Gmail)." };
-    const started = Date.now();
-    const res = await callAsAppUser({
-      gatewayBaseUrl: GATEWAY,
-      connectionAPIKey: conn.key,
-      connectorId: CONNECTOR,
-      path: "/gmail/v1/users/me/messages/send",
-      requiredScopes: SCOPES,
-      init: { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ raw: toRawEmail(msg) }) },
-    });
-    const ms = Date.now() - started;
-    if (await appUserReconnectRequired(res)) return { ok: false, ms, detail: "Your Gmail access needs renewing — press Reconnect Gmail in the Accounts tab." };
-    if (!res.ok) {
-      const text = (await res.text()).slice(0, 300);
-      console.error(`Gmail send failed [${res.status}]: ${text}`);
-      return { ok: false, ms, detail: `Gmail refused the email (${res.status}). ${text}` };
+    const { getConnectionForUser, markConnectionVerified, markConnectionUnverified } = await import("./app-user-connections.server");
+    const connection = await getConnectionForUser(context.userId, CONNECTOR);
+    if (!connection) return { ok: false as const, detail: "Connect Gmail first." };
+
+    const { data: quotaAllowed, error: quotaError } = await context.supabase.rpc("consume_gmail_test_quota", {});
+    if (quotaError) {
+      return { ok: false as const, detail: "Gmail test verification is temporarily unavailable. Try again later." };
     }
-    return { ok: true, ms, detail: `Email sent from ${conn.email ?? "your Gmail"} to ${msg.to.join(", ")}.` };
+    if (!quotaAllowed) {
+      return { ok: false as const, detail: "Test-email limit reached: three Gmail verification emails per hour." };
+    }
+
+    const raw = toRawEmail({
+      to: [data.recipient],
+      subject: "Chrishem AutoStudio — Gmail connection test",
+      body: "This is a test email requested from Chrishem AutoStudio to verify your send-only Gmail connection. No automation was run.",
+    });
+    try {
+      const response = await callAsAppUser({
+        gatewayBaseUrl: GATEWAY,
+        connectionAPIKey: connection.key,
+        connectorId: CONNECTOR,
+        path: "/gmail/v1/users/me/messages/send",
+        requiredScopes: SCOPES,
+        init: {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ raw }),
+          signal: AbortSignal.timeout(30_000),
+        },
+      });
+      if (await appUserReconnectRequired(response) || response.status === 401 || response.status === 403) {
+        await response.arrayBuffer().catch(() => undefined);
+        await markConnectionUnverified(context.userId, CONNECTOR);
+        return { ok: false as const, detail: "Gmail authorization needs renewing. Reconnect Gmail and send a new test email." };
+      }
+      if (!response.ok) {
+        await response.arrayBuffer().catch(() => undefined);
+        return { ok: false as const, detail: `Gmail test email failed (HTTP ${response.status}). Check the address and try again.` };
+      }
+      await response.arrayBuffer().catch(() => undefined);
+      await markConnectionVerified(context.userId, CONNECTOR);
+      return { ok: true as const, detail: `Test email sent to ${data.recipient}. Gmail is verified for live sends.` };
+    } catch {
+      return { ok: false as const, detail: "Gmail test email could not be completed. Check your connection and try again." };
+    }
   });
+
+/**
+ * Direct client-requested sends are disabled. Live sends must pass through
+ * executeAutomationStep, which verifies saved-flow ownership and live status.
+ */
+export const sendGmailStep = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({
+    config: z.record(z.string(), z.string()),
+    flowName: z.string().max(200),
+  }).parse(input))
+  .handler(async () => ({
+    ok: false as const,
+    ms: 0,
+    detail: "Direct Gmail sends are disabled. Save the flow, preview it, and enable live execution to send through the guarded executor.",
+  }));
