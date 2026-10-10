@@ -2,7 +2,7 @@ import { callAsAppUser, appUserReconnectRequired } from "@/integrations/lovable/
 import { getConnectionForUser } from "@/lib/app-user-connections.server";
 import { buildChatRequest, isChatMessageStep } from "@/lib/chat-steps";
 import { buildGmailMessage, isGmailSendStep, toRawEmail } from "@/lib/gmail-steps";
-import { callWeb, type WebInput } from "@/lib/web-steps.server";
+import { callWeb, resolvePublicTarget, type WebInput } from "@/lib/web-steps.server";
 import { NODES } from "@/lib/automation-catalog";
 import type { WorkflowNode } from "@/lib/workflow";
 
@@ -127,7 +127,11 @@ export async function executeStep(args: {
     if (!chat) return result("failed", "Chat webhook is not configured; no message was sent.", 0);
     if ("error" in chat) return result("failed", chat.error, 0);
     const response = await callWeb({ method: "POST", url: chat.url, body: chat.body, timeoutSec: 30 });
-    return result(response.ok ? "success" : "failed", response.ok ? `Message delivered to ${tool}.` : response.detail, response.ms);
+    return result(
+      response.ok ? "success" : "failed",
+      response.ok ? `Webhook accepted the message for ${tool}.` : `Webhook delivery failed (HTTP ${response.status || "network error"}). Check the provider URL and permissions.`,
+      response.ms,
+    );
   }
 
   if (node.defId === "action.http" || node.defId === "output.webhook") {
@@ -143,8 +147,59 @@ export async function executeStep(args: {
       timeoutSec: Math.min(120, Math.max(1, Number(node.config["timeout"]) || 30)),
     };
     const response = await callWeb(input);
-    return result(response.ok ? "success" : "failed", response.detail, response.ms);
+    return result(
+      response.ok ? "success" : "failed",
+      response.ok
+        ? `HTTP ${response.status} response from ${new URL(input.url).hostname}.`
+        : `HTTP request failed (status ${response.status || "network error"}). Check the destination and request settings.`,
+      response.ms,
+    );
   }
 
   return result("failed", `"${node.name}" does not have a live executor. No external action was taken.`, 0);
+}
+
+
+/**
+ * Preflight checks for enabling a saved flow. Gmail is verified with a harmless
+ * read-only profile request; HTTP/webhook destinations are DNS-checked so a
+ * private target cannot be enabled and later reached through a DNS rebinding.
+ */
+export async function livePreflightError(node: WorkflowNode, userId: string): Promise<string | null> {
+  const capabilityError = liveCapabilityError(node);
+  if (capabilityError) return capabilityError;
+
+  const definition = NODES[node.defId];
+  if (isGmailSendStep(node.defId)) {
+    const connection = await getConnectionForUser(userId, GMAIL_CONNECTOR);
+    if (!connection) return "Connect Gmail before enabling this flow.";
+    try {
+      const response = await callAsAppUser({
+        gatewayBaseUrl: GMAIL_GATEWAY,
+        connectionAPIKey: connection.key,
+        connectorId: GMAIL_CONNECTOR,
+        path: "/gmail/v1/users/me/profile",
+        requiredScopes: GMAIL_SCOPES,
+      });
+      if (await appUserReconnectRequired(response) || !response.ok) {
+        return "Gmail could not be verified. Reconnect Gmail before enabling this flow.";
+      }
+    } catch {
+      return "Gmail verification failed. Try reconnecting Gmail before enabling this flow.";
+    }
+    return null;
+  }
+
+  const tool = definition?.tool;
+  const chat = isChatMessageStep(node.defId, tool) ? buildChatRequest(tool!, node.config, "AutoStudio") : null;
+  const rawUrl = chat && !("error" in chat) ? chat.url : node.config["url"];
+  if (rawUrl) {
+    try {
+      const url = new URL(rawUrl);
+      await resolvePublicTarget(url.hostname);
+    } catch {
+      return "The destination could not pass the public-address safety check. Check its URL and DNS configuration.";
+    }
+  }
+  return null;
 }
