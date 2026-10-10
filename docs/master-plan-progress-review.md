@@ -79,3 +79,20 @@ These fixes are covered by the branch's typecheck, unit tests, production build 
 ## Evidence boundary
 
 GitHub CI is evidence for code/build/unit-test and disposable PostgreSQL behavior only. It is not evidence that a real Supabase project, deployment secret, scheduler service, provider account or customer workflow has been configured successfully.
+
+## Connector capability labels — 2026-10-10
+
+**Implemented in the audit branch; CI verification pending for this commit series.**
+
+- Added a shared capability-label resolver backed by the reviewed connector manifest registry.
+- The Step Library and Inspector now distinguish 'User test required', 'Runtime gated', 'Preflight only', and 'Catalog only' for connector-facing steps.
+- Labels are based on explicit runtime/verification contracts, not on a provider name or a successful configuration form.
+- Added regression coverage for Gmail, chat webhooks, generic HTTP, unsupported catalog-only HubSpot actions, and a core schedule trigger that should not receive a connector badge.
+- This is a UI truthfulness improvement, not proof of live provider execution. Catalog-only steps remain unsupported for live execution unless a reviewed manifest and executor path are added.
+
+### Acceptance evidence required
+
+1. CI must pass on the exact head commit (typecheck, unit tests, production build and PostgreSQL queue smoke test).
+2. Confirm the Step Library and Inspector render matching labels for the same node.
+3. Confirm unsupported app.* and action.* nodes stay visibly marked 'Catalog only'.
+4. Continue to keep deployment-gated HTTP and webhook transports disabled for production until staging security checks pass.
