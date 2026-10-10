@@ -403,3 +403,14 @@ The build remains aligned with the plan's reliability-first sequence: execution 
 - These checks provide defense in depth alongside Supabase row-level security. This is not a substitute for reviewing the database RLS policies themselves.
 - CI must pass at the exact latest `main` SHA before this batch is considered verified.
 
+
+
+## Queue replay and expired-worker regression coverage — 2026-10-11
+
+The PostgreSQL smoke test now checks additional adversarial delivery cases:
+
+- Reusing an idempotency key with a different payload, trigger type, or retry budget must fail rather than return the original job as if the request matched.
+- Once an expired lease is recovered into `needs_review`, the old worker token cannot renew the lease or finalize the job.
+- Existing checks continue to cover duplicate same-intent enqueue, forged requester attribution, stale tokens, retry exhaustion, and restricted worker RPC grants.
+
+These are database-level regression checks, not a substitute for staging rehearsal. The next acceptance gate is the exact-head CI run, followed by a deployed staging test of worker interruption and provider-side effects. The durable queue must remain disabled for production until that rehearsal passes.
