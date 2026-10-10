@@ -170,3 +170,12 @@ New source changes:
 - The execution-budget failure detail explicitly states that the action was not attempted, so its outcome classifier can distinguish it from an uncertain provider failure.
 
 This reduces orchestration drift but does **not** yet deliver the full planned `executeFlow(flow, trigger, mode)` system. Graph/branch semantics, schema-validated step inputs/outputs, a durable queue/worker, provider idempotency, controlled retries/backoff, circuit breakers, and dead-letter handling remain open. Migration rehearsal and deployed runtime/provider tests remain release gates. The pull request remains a draft and has not been merged.
+
+
+## Trigger correctness and fail-stop regression pass — 2026-10-10
+
+At commit `402cb35c0e2f6225aaf90795422360f7f23ac376`, GitHub Actions passed typecheck, unit tests, and production build. The suite reports **65 passed, 0 failed**.
+
+This pass caught and fixed an important trigger-path inconsistency: the manual flow endpoint includes its manual trigger in the ordered execution plan, but live capability checks previously rejected that trigger as unsupported. The manual trigger is now treated as an invocation boundary (like the already-supported scheduled trigger), while other unimplemented trigger types remain blocked. Regression tests cover both live preflight and successful trigger acceptance.
+
+The shared flow-step tests now additionally cover stop-after-first-failure, execution-budget exhaustion classified as not attempted, and thrown outcome-persistence callbacks. These checks protect the no-blind-replay rule. CI does not exercise live Supabase state or real provider sends; those release gates remain open.
