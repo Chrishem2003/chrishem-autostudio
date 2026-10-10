@@ -235,3 +235,11 @@ GitHub CI is evidence for code/build/unit-test and disposable PostgreSQL behavio
 1. Finish the API-entrypoint and persisted-workflow negative-path review.
 2. Add staging checklist assertions for output redaction, queue disabled-by-default, and outbound transport disabled-by-default.
 3. Only after those checks, plan the controlled staging rehearsal; do not enable live transport merely because CI is green.
+
+## Persisted-workflow boundary and SSRF range review — 2026-10-10
+
+A shared runtime schema now validates saved workflow JSON at the authenticated manual execution entry point, the scheduled producer, and the durable queue worker. It bounds node/edge counts, IDs, labels, configuration keys and values, and rejects malformed node coordinates before planning. The queue worker now fails malformed persisted workflows as not-attempted rather than trusting a database JSON cast. Graph semantics still pass through the separate linear execution planner.
+
+The outbound IP policy now also rejects additional IPv4 special-use ranges (192.31.196.0/24, 192.52.193.0/24, and 192.175.48.0/24) and the IPv6 documentation prefix 3fff::/20, with regression tests. The request transport remains pinned to a previously validated DNS result and does not automatically follow redirects; remote response bodies are bounded and never stored in run details.
+
+**Acceptance boundary:** these changes need exact-head CI confirmation. They do not constitute a staging deployment, a real provider-side delivery test, or permission to enable queue/outbound feature flags. Keep `AUTOSTUDIO_DURABLE_QUEUE_ENABLED=false` and `AUTOSTUDIO_OUTBOUND_TRANSPORT_READY` unset/false until the staging runbook's gates pass.
