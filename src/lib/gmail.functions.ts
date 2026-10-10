@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { assertDirectProviderExecutionDisabled } from "@/lib/direct-execution-policy";
 import { buildGmailMessage, toRawEmail } from "./gmail-steps";
 
 const GATEWAY = "https://connector-gateway.lovable.dev";
@@ -83,6 +84,7 @@ export const sendGmailStep = createServerFn({ method: "POST" })
     z.object({ config: z.record(z.string(), z.string()), flowName: z.string().max(200) }).parse(d),
   )
   .handler(async ({ data, context }) => {
+    assertDirectProviderExecutionDisabled();
     const { callAsAppUser, appUserReconnectRequired } = await import("@/integrations/lovable/appUserConnector");
     const { getConnectionForUser } = await import("./app-user-connections.server");
     const msg = buildGmailMessage(data.config, data.flowName);
