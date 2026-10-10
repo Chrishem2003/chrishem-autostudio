@@ -11,6 +11,7 @@ describe("connector manifests", () => {
   });
   it("does not call webhook configuration provider verification", () => {
     expect(getConnectorManifestForNode("app.slack.create.message", "Slack")?.verification).toBe("configuration-preflight-only");
+    expect(getConnectorActionForNode("app.slack.create.message", "Slack")?.action.id).toBe("chat.post_message");
   });
   it("keeps generic HTTP behind the runtime gate", () => {
     expect(getConnectorManifestForNode("action.http", "HTTP")?.runtime).toBe("deployment-gated");
