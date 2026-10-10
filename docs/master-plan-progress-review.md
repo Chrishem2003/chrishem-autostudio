@@ -351,3 +351,21 @@ The build remains aligned with the plan's reliability-first sequence: execution 
 2. Add explicit team membership/role authorization before allowing shared-workspace users to enqueue jobs on another owner's automation.
 3. Add route-level authorization tests and verify authenticated/manual, scheduled, and webhook producers supply the intended requester and trigger metadata.
 4. Keep queue and outbound transport disabled until controlled staging validates worker authentication, provider effects, lease recovery, and rollback.
+
+
+## Scheduled execution queue boundary — 2026-10-11
+
+**Implemented on `main`; exact-head CI is running for this batch.**
+
+- Replaced the scheduled cron endpoint's inline step/provider execution with a producer-only flow: authenticate cron, fail closed while the durable queue flag is disabled, validate the persisted workflow and mapping plan, and enqueue a `scheduled` job.
+- The scheduled producer no longer calls the outbound HTTP/chat adapters or writes run/step logs itself. The protected queue worker is the only path that executes queued scheduled work and repeats persisted-workflow and live-capability checks.
+- Added a matching durable-queue feature-gate check to the worker endpoint itself. Directly calling the worker while rollout is disabled returns HTTP 503 instead of claiming jobs.
+- Added stable schedule-generation idempotency keys based on automation ID, cadence, and the previous `last_run_at` marker. Concurrent/repeated cron invocations for the same generation reuse the key; advancing the marker opens the next generation without incorrectly collapsing two valid hourly occurrences into one UTC hour.
+- Made the scheduled payload deterministic across retries by omitting invocation-specific timestamps. If enqueue fails, the scheduler does not advance `last_run_at`; if marker persistence fails after enqueue, the same generation key allows a safe replay.
+- Added unit coverage for same-generation stability, new-generation boundaries, identity/cadence separation, and invalid inputs.
+
+### Acceptance boundary
+
+- CI must pass on the exact latest `main` SHA, including typecheck, tests, production build, and database queue smoke tests.
+- This does not authorize rollout: `AUTOSTUDIO_DURABLE_QUEUE_ENABLED` and `AUTOSTUDIO_OUTBOUND_TRANSPORT_READY` must remain disabled until staging verifies cron auth, migrations, worker fencing/recovery, and provider-side effects.
+- Team/workspace roles, authenticated manual-entry route integration tests, and a real staging rehearsal remain open.
