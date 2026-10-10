@@ -179,3 +179,17 @@ At commit `402cb35c0e2f6225aaf90795422360f7f23ac376`, GitHub Actions passed type
 This pass caught and fixed an important trigger-path inconsistency: the manual flow endpoint includes its manual trigger in the ordered execution plan, but live capability checks previously rejected that trigger as unsupported. The manual trigger is now treated as an invocation boundary (like the already-supported scheduled trigger), while other unimplemented trigger types remain blocked. Regression tests cover both live preflight and successful trigger acceptance.
 
 The shared flow-step tests now additionally cover stop-after-first-failure, execution-budget exhaustion classified as not attempted, and thrown outcome-persistence callbacks. These checks protect the no-blind-replay rule. CI does not exercise live Supabase state or real provider sends; those release gates remain open.
+
+
+## Durable execution queue foundation — 2026-10-10
+
+Added migration `supabase/migrations/20261010170000_durable_execution_jobs.sql` to introduce the database contract for durable background execution.
+
+- `execution_jobs` stores trigger type, bounded JSON payload, a stable per-automation idempotency key, attempt limits, availability time, status, and worker lease metadata.
+- `enqueue_execution_job` deduplicates repeat deliveries using the unique automation/idempotency-key pair and rejects non-live automations, unsupported triggers, invalid attempt counts, and payloads over 64 KiB.
+- `claim_execution_job` uses a row lock with `SKIP LOCKED` to claim one ready job atomically.
+- Worker heartbeats and finalization are fenced by the current worker token, so an expired or replaced worker cannot finalize a job using a stale lease.
+- Expired running jobs transition to `needs_review`; they are **not automatically replayed**, because a worker may have performed an external side effect before crashing.
+- The table and RPC functions are service-role-only; normal browser roles have no queue access.
+
+**Important boundary:** this is the database queue foundation, not yet a deployed worker and not yet connected to manual/scheduled execution entry points. The migration has not been applied to a live or disposable Supabase project in this environment. Before wiring producers, validate the complete migration chain, concurrent enqueue/claim behavior, lease fencing, role grants, and expired-job recovery in a non-production database. Retry only when the caller can establish that repeating the operation is safe; otherwise use `needs_review`.
