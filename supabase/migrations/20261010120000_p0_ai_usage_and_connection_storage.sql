@@ -3,10 +3,11 @@
 
 create table if not exists public.app_user_connections (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null,
+  user_id uuid not null references auth.users(id) on delete cascade,
   connector_id text not null,
   connection_key_ciphertext text not null,
   account_email text,
+  verified_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (user_id, connector_id)
@@ -77,5 +78,5 @@ begin
 end;
 $$;
 
-revoke all on function public.consume_ai_plan_quota(text, integer) from public, anon;
-grant execute on function public.consume_ai_plan_quota(text, integer) to authenticated;
+revoke all on function public.consume_ai_plan_quota(text) from public, anon;
+grant execute on function public.consume_ai_plan_quota(text) to authenticated;
