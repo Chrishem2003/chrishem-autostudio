@@ -51,6 +51,28 @@ describe("shared flow-step engine", () => {
     expect(receivedConfigs[2].config.subject).toBe("Result: 201");
   });
 
+  it("strips undeclared provider fields before persisting or mapping outputs", async () => {
+    const persisted = [];
+    const receivedConfigs = [];
+    const source = { ...nodes[1], defId: "action.http", config: {} };
+    const target = { ...nodes[2], defId: "action.gmail", config: { subject: "Status {{steps.step-1.httpStatus}}" } };
+    const result = await executeFlowSteps(baseInput({
+      nodes: [nodes[0], source, target],
+      execute: async ({ node }) => {
+        receivedConfigs.push({ id: node.id, config: node.config });
+        return node.id === "step-1"
+          ? { nodeId: node.id, label: node.name, status: "success", ms: 1, detail: "ok", outputs: { httpStatus: 201, responseBody: "private payload", access_token: "secret-token" } }
+          : { nodeId: node.id, label: node.name, status: "success", ms: 1, detail: "ok" };
+      },
+      persistOutcome: async (_id, step) => { persisted.push(step); return true; },
+    }));
+    expect(result.failed).toBe(false);
+    expect(persisted[1].outputs).toEqual({ httpStatus: 201 });
+    expect(JSON.stringify(persisted)).not.toContain("private payload");
+    expect(JSON.stringify(persisted)).not.toContain("secret-token");
+    expect(receivedConfigs[2].config.subject).toBe("Status 201");
+  });
+
   it("blocks the entire flow before any executor when a later mapping is invalid", async () => {
     let executions = 0;
     const persisted = [];
