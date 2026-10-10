@@ -148,7 +148,10 @@ export function getConnectorActionForNode(
 ): { manifest: ConnectorManifest; action: ConnectorActionContract } | undefined {
   const manifest = getConnectorManifestForNode(defId, tool);
   if (!manifest) return undefined;
-  const action = manifest.actions.find((candidate) => candidate.nodeIds.includes(defId));
+  const action = manifest.actions.find((candidate) => candidate.nodeIds.includes(defId))
+    ?? (tool && manifest.generatedMessageToolNames?.includes(tool) && /^app\\.[^.]+\\.create\\.message$/.test(defId)
+      ? manifest.actions.find((candidate) => candidate.id === "chat.post_message")
+      : undefined);
   return action ? { manifest, action } : undefined;
 }
 
