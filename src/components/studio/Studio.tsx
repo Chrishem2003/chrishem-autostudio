@@ -351,34 +351,43 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
     }
 
     result.forEach((step, index) => {
-      window.setTimeout(() => {
+      window.setTimeout(async () => {
         setRunningId(step.nodeId);
         setSteps((prev) => [...prev, step]);
         if (index === result.length - 1) {
+          const failed = result.filter((item) => item.status === "failed").length;
+
+          if (isCloudRun && active.cloudId) {
+            try {
+              await recordRunFn({
+                data: {
+                  automationId: active.cloudId,
+                  triggerType: "manual",
+                  isDryRun: !isLiveRun,
+                  steps: result.map((item) => ({
+                    label: item.label.slice(0, 160),
+                    status: item.status === "failed"
+                      ? "failed"
+                      : item.status === "skipped"
+                        ? "halted"
+                        : isLiveRun
+                          ? "success"
+                          : "dry_run",
+                    durationMs: Math.max(0, Math.round(item.ms)),
+                    detail: item.detail.slice(0, 500),
+                  })),
+                },
+              });
+            } catch {
+              toast.error("The run finished, but its history could not be saved.");
+            }
+          }
+
           setRunning(false);
           setRunningId(null);
-          const failed = result.filter((item) => item.status === "failed").length;
           if (failed) toast.error(`Run finished with ${failed} failed step${failed > 1 ? "s" : ""}.`);
           else if (isLiveRun) toast.success("Live execution completed.");
           else toast.success("Preview completed — no external side effects were performed.");
-
-          if (isCloudRun && active.cloudId) {
-            recordRunFn({
-              data: {
-                automationId: active.cloudId,
-                triggerType: "manual",
-                isDryRun: !isLiveRun,
-                steps: result.map((item) => ({
-                  label: item.label.slice(0, 160),
-                  status: item.status === "failed" ? "failed" : isLiveRun ? "success" : "dry_run",
-                  durationMs: Math.max(0, Math.round(item.ms)),
-                  detail: item.detail.slice(0, 500),
-                })),
-              },
-            }).catch(() => {
-              toast.error("The run finished, but its history could not be saved.");
-            });
-          }
         }
       }, 220 * (index + 1));
     });
