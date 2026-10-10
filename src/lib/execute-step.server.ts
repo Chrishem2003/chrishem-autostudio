@@ -26,6 +26,11 @@ export function liveCapabilityError(node: WorkflowNode): string | null {
   const tool = NODES[node.defId]?.tool;
   if (node.defId === "trigger.schedule" || node.defId === "trigger.manual") return null;
   if (NODES[node.defId]?.kind === "trigger") return `Trigger "${node.name}" has no live trigger adapter yet.`;
+  if (Object.values(node.config).some((value) =>
+    typeof value === "string" && /\{\{\s*[^{}]+\s*\}\}/.test(value)
+  )) {
+    return "Dynamic data tokens are not resolved by the live executor yet. Replace them with literal values; no external action will be taken.";
+  }
   const manifest = getConnectorManifestForNode(node.defId, tool);
   if (!manifest) {
     return `"${node.name}" has no verified live executor or reviewed connector manifest. It must remain Test only until both are implemented.`;
