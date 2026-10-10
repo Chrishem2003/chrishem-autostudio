@@ -5,6 +5,7 @@ import { parseClaimedExecutionJob } from "../execution-job-claim";
 const validRow = () => ({
   id: "job-1",
   automation_id: "automation-1",
+  trigger_type: "webhook",
   payload: { greeting: "hello" },
   attempts: 1,
   max_attempts: 3,
@@ -17,6 +18,7 @@ describe("parseClaimedExecutionJob", () => {
     expect(parseClaimedExecutionJob(validRow())).toEqual({
       id: "job-1",
       automationId: "automation-1",
+      triggerType: "webhook",
       payload: { greeting: "hello" },
       attempts: 1,
       maxAttempts: 3,
