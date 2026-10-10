@@ -1,11 +1,18 @@
 -- Prevent overlapping cron invocations from sending the same scheduled flow twice.
-alter table public.automations
-  add column if not exists schedule_lock_token uuid,
-  add column if not exists schedule_lock_until timestamptz;
+-- This lock table is service-role-only; normal authenticated clients cannot claim or extend leases.
+create table if not exists public.scheduled_run_locks (
+  automation_id uuid primary key references public.automations(id) on delete cascade,
+  lock_token uuid not null,
+  locked_until timestamptz not null,
+  updated_at timestamptz not null default now()
+);
 
-create index if not exists automations_live_schedule_lock_idx
-  on public.automations (status, schedule_lock_until)
-  where status = 'live';
+alter table public.scheduled_run_locks enable row level security;
+revoke all on table public.scheduled_run_locks from public, anon, authenticated;
+grant all on table public.scheduled_run_locks to service_role;
+
+create index if not exists scheduled_run_locks_expiry_idx
+  on public.scheduled_run_locks (locked_until);
 
 create or replace function public.claim_scheduled_automation(
   _automation_id uuid,
@@ -17,21 +24,33 @@ security definer
 set search_path = public
 as $$
 declare
-  _token uuid;
+  _token uuid := gen_random_uuid();
+  _status text;
+  _claimed uuid;
 begin
   if _lease_seconds < 60 or _lease_seconds > 3600 then
     raise exception 'Invalid scheduler lease duration';
   end if;
 
-  update public.automations
-     set schedule_lock_token = gen_random_uuid(),
-         schedule_lock_until = now() + make_interval(secs => _lease_seconds)
+  select status::text into _status
+    from public.automations
    where id = _automation_id
-     and status = 'live'
-     and (schedule_lock_until is null or schedule_lock_until <= now())
-  returning schedule_lock_token into _token;
+   for update;
 
-  return _token;
+  if not found or _status <> 'live' then
+    return null;
+  end if;
+
+  insert into public.scheduled_run_locks (automation_id, lock_token, locked_until, updated_at)
+  values (_automation_id, _token, now() + make_interval(secs => _lease_seconds), now())
+  on conflict (automation_id) do update
+    set lock_token = excluded.lock_token,
+        locked_until = excluded.locked_until,
+        updated_at = now()
+    where public.scheduled_run_locks.locked_until <= now()
+  returning lock_token into _claimed;
+
+  return _claimed;
 end;
 $$;
 
@@ -46,12 +65,17 @@ security definer
 set search_path = public
 as $$
 begin
+  delete from public.scheduled_run_locks
+   where automation_id = _automation_id
+     and lock_token = _lock_token;
+
+  if not found then
+    return false;
+  end if;
+
   update public.automations
-     set schedule_lock_token = null,
-         schedule_lock_until = null,
-         last_run_at = _last_run_at
-   where id = _automation_id
-     and schedule_lock_token = _lock_token;
+     set last_run_at = _last_run_at
+   where id = _automation_id;
 
   return found;
 end;
