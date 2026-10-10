@@ -103,7 +103,7 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
             if (queueLockError || !queueLock) continue;
 
             const enqueuedAt = new Date().toISOString();
-            const idempotencyKey = "schedule:" + row.id + ":" + Math.floor(now.getTime() / 60_000);
+            const idempotencyKey = "schedule:" + row.id + ":" + (row.last_run_at ? Date.parse(row.last_run_at) : 0) + ":" + String(cadence).slice(0, 32);
             let enqueueSucceeded = false;
             try {
               await enqueueExecutionJob({
