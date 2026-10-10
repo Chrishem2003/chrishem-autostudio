@@ -69,6 +69,8 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
   const [past, setPast] = useState<Workflow[][]>([]);
   const [future, setFuture] = useState<Workflow[][]>([]);
   const undoRef = useRef<() => void>(() => {});
+  const runInFlightRef = useRef(false);
+  const runRequestIdRef = useRef<string | null>(null);
   const redoRef = useRef<() => void>(() => {});
   const [cmdOpen, setCmdOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -269,7 +271,7 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
   };
 
   const runFlow = async () => {
-    if (!active) return;
+    if (!active || runInFlightRef.current) return;
     const isCloudRun = signedIn && !!active.cloudId;
     const isLiveRun = isCloudRun && active.live;
     if (isLiveRun && !window.confirm(
@@ -284,12 +286,16 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
       return;
     }
 
+    runInFlightRef.current = true;
+    runRequestIdRef.current = isLiveRun ? crypto.randomUUID() : null;
     setSteps([]);
     setRunning(true);
     setTab("run");
     if (isCloudRun && savedAt[active.id] !== active.updatedAt) {
       toast.error("Save your latest changes before running a cloud Preview or live execution.");
       setRunning(false);
+      runInFlightRef.current = false;
+      runRequestIdRef.current = null;
       return;
     }
 
@@ -303,7 +309,7 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
           data: {
             automationId: active.cloudId,
             mode: isLiveRun ? "live" : "dry",
-            ...(isLiveRun ? { requestId: crypto.randomUUID() } : {}),
+            ...(isLiveRun && runRequestIdRef.current ? { requestId: runRequestIdRef.current } : {}),
           },
         });
         if ("queued" in executed && executed.queued) {
@@ -312,6 +318,8 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
           });
           setRunning(false);
           setRunningId(null);
+          runInFlightRef.current = false;
+          runRequestIdRef.current = null;
           return;
         }
         result = executed.steps.map((step) => ({
@@ -325,6 +333,8 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
         toast.error(error instanceof Error ? error.message : "The flow could not be executed.");
         setRunning(false);
         setRunningId(null);
+        runInFlightRef.current = false;
+        runRequestIdRef.current = null;
         return;
       }
     } else {
@@ -340,6 +350,8 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
     setSteps(result);
     setRunning(false);
     setRunningId(null);
+    runInFlightRef.current = false;
+    runRequestIdRef.current = null;
     const failed = result.filter((item) => item.status === "failed").length;
     if (failed) toast.error(`Run finished with ${failed} failed step${failed > 1 ? "s" : ""}.`);
     else if (isLiveRun) toast.success("Live execution completed and its run history was recorded by the server.");
