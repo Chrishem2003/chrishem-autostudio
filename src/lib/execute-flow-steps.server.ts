@@ -25,7 +25,7 @@ export interface ExecuteFlowStepsResult { steps: ExecutedStep[]; failed: boolean
 /** Shared ordered traversal with full-flow mapping validation before any executor is called. */
 export async function executeFlowSteps(input: ExecuteFlowStepsInput): Promise<ExecuteFlowStepsResult> {
   const steps: ExecutedStep[] = [];
-  const priorOutputs: Record<string, SafeStepOutput> = {};
+  const priorOutputs: Record<string, SafeStepOutput> = Object.create(null) as Record<string, SafeStepOutput>;
 
   const mappingError = validateStepMappings(input.nodes);
   if (mappingError) {
