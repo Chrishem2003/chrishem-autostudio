@@ -62,6 +62,42 @@ begin
     end if;
   end;
 
+  -- Reusing the key with a different trigger must also be rejected.
+  begin
+    perform * from public.enqueue_execution_job(
+      '00000000-0000-4000-8000-000000000002',
+      'scheduled',
+      'smoke-idempotency-key',
+      '{"source":"ci"}'::jsonb,
+      '00000000-0000-4000-8000-000000000001',
+      3,
+      now()
+    );
+    raise exception 'Conflicting trigger replay unexpectedly succeeded';
+  exception when others then
+    if sqlerrm not like 'Idempotency key was reused with a different request%' then
+      raise;
+    end if;
+  end;
+
+  -- Reusing the key with a different retry budget must not mutate the first job.
+  begin
+    perform * from public.enqueue_execution_job(
+      '00000000-0000-4000-8000-000000000002',
+      'manual',
+      'smoke-idempotency-key',
+      '{"source":"ci"}'::jsonb,
+      '00000000-0000-4000-8000-000000000001',
+      4,
+      now()
+    );
+    raise exception 'Conflicting retry budget replay unexpectedly succeeded';
+  exception when others then
+    if sqlerrm not like 'Idempotency key was reused with a different request%' then
+      raise;
+    end if;
+  end;
+
   -- A duplicate key may replay the same logical request, not smuggle in
   -- different work while receiving the original job's ID.
   begin
@@ -127,6 +163,14 @@ begin
   select * into expired_job from public.execution_jobs where id = expired_job.id;
   if expired_job.status <> 'needs_review' or expired_job.worker_token is not null then
     raise exception 'Expired lease was not safely moved to needs_review';
+  end if;
+
+  -- A worker whose lease expired cannot renew or finalize after recovery.
+  if public.heartbeat_execution_job(claimed.id, claimed.worker_token, 300) then
+    raise exception 'Expired worker renewed a recovered lease';
+  end if;
+  if public.finish_execution_job(claimed.id, claimed.worker_token, 'succeeded', null, null) then
+    raise exception 'Expired worker finalized a recovered job';
   end if;
 
   select * into dead_job
