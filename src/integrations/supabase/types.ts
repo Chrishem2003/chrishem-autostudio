@@ -108,7 +108,7 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
+      },
       scheduled_run_locks: {
         Row: {
           automation_id: string
