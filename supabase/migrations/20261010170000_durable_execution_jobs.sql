@@ -86,10 +86,21 @@ begin
       _requested_by, _max_attempts, coalesce(_available_at, now())
     )
     on conflict (automation_id, idempotency_key) do update
+      -- A replay is idempotent only when it represents the same logical request.
+      -- Reusing a key with different intent must fail instead of silently returning
+      -- a job whose payload does not match the caller's request.
       set idempotency_key = excluded.idempotency_key
+      where execution_jobs.trigger_type = excluded.trigger_type
+        and execution_jobs.payload = excluded.payload
+        and execution_jobs.requested_by is not distinct from excluded.requested_by
+        and execution_jobs.max_attempts = excluded.max_attempts
     returning *;
+
+  if not found then
+    raise exception 'Idempotency key was reused with a different request';
+  end if;
 end;
-$$;
+$;
 
 -- A single worker atomically claims one ready job using SKIP LOCKED.
 -- Expired running jobs are sent to needs_review, not re-executed automatically.
