@@ -8,7 +8,7 @@ import { processOneExecutionJob } from "@/lib/execution-job-worker";
 import { planLinearExecution } from "@/lib/execution-plan";
 import { buildRunFinalization } from "@/lib/run-finalization";
 import { executeStep } from "@/lib/execute-step.server";
-import { workflowSchema } from "@/lib/workflow";
+import type { Workflow } from "@/lib/workflow";
 
 const MAX_JOB_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -43,16 +43,21 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
             };
           }
 
-          const parsed = workflowSchema.safeParse(automation.flow_json);
-          if (!parsed.success) {
+          const workflow = automation.flow_json as unknown as Workflow | null;
+          if (
+            !workflow ||
+            typeof workflow.name !== "string" ||
+            !Array.isArray(workflow.nodes) ||
+            !Array.isArray(workflow.edges)
+          ) {
             return {
               status: "failed" as const,
               sideEffectCertainty: "not_attempted" as const,
-              error: "Saved workflow failed schema validation; no steps were executed.",
+              error: "Saved workflow is malformed; no steps were executed.",
             };
           }
 
-          const plan = planLinearExecution(parsed.data);
+          const plan = planLinearExecution(workflow);
           if (plan.error) {
             return {
               status: "failed" as const,
@@ -87,17 +92,17 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
 
           const execution = await executeFlowSteps({
             nodes: plan.nodes,
-            flowName: parsed.data.name || automation.name,
+            flowName: workflow.name || automation.name,
             userId: automation.user_id,
             mode: "live",
             startedAtMs: started,
             maxRuntimeMs: MAX_JOB_RUNTIME_MS,
-            execute: async (...args) => {
+            execute: async (args) => {
               const alive = await context.heartbeat();
               if (!alive) {
                 throw new Error("Execution lease was lost; stop before starting another external action.");
               }
-              return executeStep(...args);
+              return executeStep(args);
             },
             persistIntent: async (node, index) => {
               const alive = await context.heartbeat();
