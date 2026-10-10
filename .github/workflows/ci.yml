@@ -80,3 +80,5 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261010170000_durable_execution_jobs.sql
       - name: Verify idempotency, lease fencing and RPC permissions
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/execution_jobs_smoke.sql
+      - name: Verify concurrent workers claim distinct jobs
+        run: bash supabase/tests/execution_jobs_concurrency.sh
