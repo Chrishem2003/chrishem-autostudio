@@ -263,6 +263,14 @@ The scheduler idempotency key is stable across a failed lease release until the 
 
 **Not yet complete:** manual live-run requests are not yet routed through the queue; the legacy direct scheduler path remains active unless the rollout flag is enabled; the new worker has only CI build/typecheck coverage so far, not a live Supabase or provider end-to-end test. Do not enable the flag in production until the migration and worker cron are deployed and smoke-tested in a non-production environment.
  
+## Queue consumer failure recovery — 2026-10-10
+
+The worker now repeats live connector/provider preflight checks at consumption time, because workflow configuration or credentials can change after a job is enqueued. It also reconciles any still-running step intents to an explicitly uncertain failure and attempts to mark the associated run record failed if an unexpected exception occurs after the run row was created. If recovery writes themselves fail, the worker logs a bounded diagnostic and the queue policy still treats the external outcome conservatively.
+
+A non-production deployment procedure is documented in `docs/durable-queue-staging-runbook.md`. It covers migration review/application, cron authentication checks, controlled manual and scheduled end-to-end runs, provider-side evidence, acceptance gates, and a safe rollback order.
+
+These are code and process safeguards, not proof of live deployment. The actual Supabase project, cron provider, and provider sandbox still need to be exercised in staging.
+
 ## Manual live-run queue integration — 2026-10-10
 
 When `AUTOSTUDIO_DURABLE_QUEUE_ENABLED=true`, the authenticated `executeAutomationFlow` server function now enqueues live manual runs after owner-scoped automation lookup, saved-workflow validation, live preflight checks, and execution-plan validation. It accepts an optional caller request UUID and uses it to form a stable manual idempotency key. The Studio UI supplies a request UUID and displays a queued confirmation instead of pretending the workflow has already completed. Dry previews remain synchronous.
