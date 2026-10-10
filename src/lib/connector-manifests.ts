@@ -190,3 +190,13 @@ export function getConnectorManifestForNode(
     return /^app\.[^.]+\.create\.message$/.test(defId);
   });
 }
+/** Human-readable execution capability for connector-facing UI surfaces. */
+export function getConnectorCapabilityLabel(defId: string, tool?: string): string | null {
+  const manifest = getConnectorManifestForNode(defId, tool);
+  if (!manifest) {
+    return defId.startsWith("app.") || defId.startsWith("action.") ? "Catalog only" : null;
+  }
+  if (manifest.runtime === "deployment-gated") return "Runtime gated";
+  if (manifest.verification === "user-initiated-test-send") return "User test required";
+  return "Preflight only";
+}
