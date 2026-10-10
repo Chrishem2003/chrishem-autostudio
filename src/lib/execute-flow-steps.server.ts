@@ -1,6 +1,6 @@
 import { executeStepSafely } from "@/lib/execute-step-safely.server";
 import { classifyExecutionOutcome } from "@/lib/execution-outcome";
-import type { ExecutionMode, ExecutedStep } from "@/lib/execute-step.server";
+import { executeStep, type ExecutionMode, type ExecutedStep } from "@/lib/execute-step.server";
 import type { WorkflowNode } from "@/lib/workflow";
 
 export interface StepIntent {
@@ -14,6 +14,7 @@ export interface ExecuteFlowStepsInput {
   mode: ExecutionMode;
   startedAtMs: number;
   maxRuntimeMs: number;
+  execute?: typeof executeStep;
   persistIntent: (node: WorkflowNode, index: number) => Promise<StepIntent | null>;
   persistOutcome: (intentId: string, step: ExecutedStep, outcomeState: ReturnType<typeof classifyExecutionOutcome>) => Promise<boolean>;
   onUnexpectedError?: (node: WorkflowNode, error: unknown) => void;
@@ -71,6 +72,7 @@ export async function executeFlowSteps(input: ExecuteFlowStepsInput): Promise<Ex
         flowName: input.flowName,
         userId: input.userId,
         mode: input.mode,
+        execute: input.execute,
         onUnexpectedError: (error) => input.onUnexpectedError?.(node, error),
       });
     }
