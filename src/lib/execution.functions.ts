@@ -2,10 +2,9 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { executeStep, type ExecutionMode } from "@/lib/execute-step.server";
-import { executeStepSafely } from "@/lib/execute-step-safely.server";
+import { executeFlowSteps } from "@/lib/execute-flow-steps.server";
 import type { WorkflowNode } from "@/lib/workflow";
 import { planLinearExecution } from "@/lib/execution-plan";
-import { classifyExecutionOutcome } from "@/lib/execution-outcome";
 
 const MAX_FLOW_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -218,72 +217,57 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
     if (runError || !run) throw new Error("Could not start the run log. No external action was taken.");
     activeRunId = run.id;
 
-    const steps: Array<{
-      nodeId: string;
-      label: string;
-      status: "success" | "failed" | "dry_run";
-      ms: number;
-      detail: string;
-    }> = [];
-
-    for (let index = 0; index < connectedOrder.length; index++) {
-      const node = connectedOrder[index]!;
-      if (steps.some((step) => step.status === "failed")) break;
-
-      // Persist intent before a side effect. A stale running/uncertain row is a
-      // recovery signal if the process dies or completion persistence fails.
-      const { data: attempt, error: intentError } = await context.supabase
-        .from("run_step_logs")
-        .insert({
-          run_id: run.id,
-          workspace_id: row.workspace_id,
-          step_index: index,
-          node_id: node.id,
-          node_label: node.name.slice(0, 160),
-          status: "running",
-          outcome_state: "uncertain",
-          output_snapshot: { recoveryHint: "Execution intent recorded; final outcome not yet confirmed." },
-        })
-        .select("id")
-        .single();
-      if (intentError || !attempt) {
-        steps.push({ nodeId: node.id, label: node.name.slice(0, 160), status: "failed", ms: 0, detail: "Could not persist the step intent. No action was attempted; remaining steps were halted." });
-        break;
-      }
-
-      let step;
-      if (Date.now() - startedMs >= MAX_FLOW_RUNTIME_MS) {
-        step = { nodeId: node.id, label: node.name, status: "failed" as const, ms: 0, detail: "The flow exceeded its four-minute execution budget. Remaining steps were halted." };
-      } else {
-        step = await executeStepSafely({
-          node,
-          flowName: flow.name,
-          userId: context.userId,
-          mode: data.mode,
-          onUnexpectedError: (error) => {
-            console.error("[AutoStudio executor] Step failed unexpectedly.", {
-              automationId: row.id,
-              nodeId: node.id,
-              errorName: error instanceof Error ? error.name : "UnknownError",
-            });
-          },
+    const execution = await executeFlowSteps({
+      nodes: connectedOrder,
+      flowName: flow.name,
+      userId: context.userId,
+      mode: data.mode,
+      startedAtMs: startedMs,
+      maxRuntimeMs: MAX_FLOW_RUNTIME_MS,
+      persistIntent: async (node, index) => {
+        const { data: attempt, error: intentError } = await context.supabase
+          .from("run_step_logs")
+          .insert({
+            run_id: run.id,
+            workspace_id: row.workspace_id,
+            step_index: index,
+            node_id: node.id,
+            node_label: node.name.slice(0, 160),
+            status: "running",
+            outcome_state: "uncertain",
+            output_snapshot: { recoveryHint: "Execution intent recorded; final outcome not yet confirmed." },
+          })
+          .select("id")
+          .single();
+        if (intentError || !attempt) return null;
+        return { id: attempt.id };
+      },
+      persistOutcome: async (intentId, step, outcomeState) => {
+        const { error: stepLogError } = await context.supabase.from("run_step_logs").update({
+          status: step.status,
+          outcome_state: outcomeState,
+          duration_ms: Math.max(0, Math.round(step.ms)),
+          error_detail: step.status === "failed" ? step.detail.slice(0, 500) : null,
+          output_snapshot: { detail: step.detail.slice(0, 500), outcomeState },
+        }).eq("id", intentId);
+        return !stepLogError;
+      },
+      onUnexpectedError: (node, error) => {
+        console.error("[AutoStudio executor] Step failed unexpectedly.", {
+          automationId: row.id,
+          nodeId: node.id,
+          errorName: error instanceof Error ? error.name : "UnknownError",
         });
-      }
-      steps.push(step);
-      const outcomeState = classifyExecutionOutcome(step.status, step.detail);
-      const { error: stepLogError } = await context.supabase.from("run_step_logs").update({
-        status: step.status,
-        outcome_state: outcomeState,
-        duration_ms: Math.max(0, Math.round(step.ms)),
-        error_detail: step.status === "failed" ? step.detail.slice(0, 500) : null,
-        output_snapshot: { detail: step.detail.slice(0, 500), outcomeState },
-      }).eq("id", attempt.id);
-      if (stepLogError) {
-        steps[steps.length - 1] = { ...step, status: "failed", detail: "The step result could not be safely recorded. Stop and verify external effects before retrying." };
-        break;
-      }
-    }
-
+      },
+      onPersistenceError: (stage, node) => {
+        console.error("[AutoStudio executor] Step audit persistence failed; halting flow.", {
+          automationId: row.id,
+          nodeId: node.id,
+          stage,
+        });
+      },
+    });
+    const steps = execution.steps;
     const hasFailure = steps.some((step) => step.status === "failed");
     const finalStatus = hasFailure ? "failed" : data.mode === "dry" ? "dry_run" : "success";
     const finishedAt = new Date().toISOString();
