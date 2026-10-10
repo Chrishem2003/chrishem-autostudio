@@ -72,6 +72,10 @@ describe("connector manifests", () => {
     expect(validateConnectorActionConfig("action.http", { url: "https://example.com", timeout: "0" })).toContain("timeout");
     expect(validateConnectorActionConfig("action.http", { url: "https://example.com", timeout: "31" })).toContain("timeout");
     expect(validateConnectorActionConfig("action.http", { url: "https://example.com", method: "POST", timeout: "10" })).toBeNull();
+    expect(validateConnectorActionConfig("action.http", { url: "https://example.com", method: " get ", timeout: "1" })).toBeNull();
+    expect(validateConnectorActionConfig("action.http", { url: "https://example.com", method: "DELETE", timeout: "30" })).toBeNull();
+    expect(validateConnectorActionConfig("action.http", { url: "https://example.com", timeout: "1.5" })).toBeNull();
+    expect(validateConnectorActionConfig("action.http", { url: "https://example.com", timeout: "1e1" })).toContain("timeout");
   });
 
   it("preserves the documented legacy chat message fallback field", () => {
