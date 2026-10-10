@@ -305,3 +305,18 @@ These are pure unit tests; they do not claim to simulate authenticated server-fu
 ## Main-branch promotion policy
 
 Keep the hardening work isolated on `audit/p0-hardening` while it is being evaluated. Promote to `main` only after the exact final commit has green application CI and queue migration smoke tests, the PR diff has been reviewed for accidental secret exposure and unsafe execution paths, duplicate/idempotency and interruption behavior have evidence, and staging confirms the queue/transport gates remain disabled by default and can be enabled safely with rollback documented. No production-ready claim is made until those checks are complete.
+
+
+## Durable queue idempotency integrity — 2026-10-11
+
+Reviewed the durable enqueue function and strengthened its duplicate-delivery contract. Replaying the same automation/idempotency key now returns the existing job only when the logical request matches: trigger type, JSON payload, requester, and retry limit must agree. Reusing a key for different intent raises an explicit database error rather than silently returning an unrelated queued job.
+
+The PostgreSQL smoke test now distinguishes a valid same-request replay from a conflicting payload replay. The staging runbook includes the same-key/different-request rejection as an acceptance check. This preserves safe retries while making request-ID collisions and accidental key reuse observable.
+
+The workflow boundary CI failure on the previous head was also traced to a test expectation that contradicted the parser's existing behavior: duplicate node IDs are rejected by the structural parser before reaching the planner. The test now asserts rejection at that earliest boundary, while dangling-edge validation remains covered at the planner boundary.
+
+**Exact-head verification at commit `63e29069ece37178bd1f4c591ad8629cb4da09ca`:** application typecheck, unit tests, production build, and the PostgreSQL migration/idempotency/lease/concurrency smoke test all passed. The subsequent documentation-only commit will receive its own CI run before promotion.
+
+### Remaining rollout boundary
+
+This verifies the SQL migration against the disposable PostgreSQL CI schema, not the user's live Supabase project. Keep the durable queue and outbound transport flags disabled until the staging runbook verifies real worker authentication, manual/scheduled queue flows, audit recovery, and provider-side effect evidence. Do not merge to `main` solely on the basis of CI.
