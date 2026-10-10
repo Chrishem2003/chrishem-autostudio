@@ -39,18 +39,28 @@ export function planLinearExecution(flow: Pick<Workflow, "nodes" | "edges">): Ex
         !node.config || typeof node.config !== "object" || Array.isArray(node.config)) {
       return { nodes: [], error: "A flow step is malformed. Reopen the builder and save the flow again." };
     }
+    if (Object.entries(node.config).some(([key, value]) =>
+      typeof key !== "string" || !key.trim() || typeof value !== "string"
+    )) {
+      return { nodes: [], error: "A flow step contains invalid configuration values. Reopen the builder and save the flow again." };
+    }
     byId.set(node.id, node);
   }
 
   const outgoing = new Map(nodes.map((node) => [node.id, [] as string[]]));
   const incoming = new Map(nodes.map((node) => [node.id, 0]));
   const edgeKeys = new Set<string>();
+  const edgeIds = new Set<string>();
   for (const edge of edges) {
     if (!edge || typeof edge.from !== "string" || typeof edge.to !== "string" ||
         typeof edge.id !== "string" || !edge.id.trim() ||
         !byId.has(edge.from) || !byId.has(edge.to) || edge.from === edge.to) {
       return { nodes: [], error: "The flow contains an invalid connection. Fix the canvas links before running." };
     }
+    if (edgeIds.has(edge.id)) {
+      return { nodes: [], error: "The flow contains duplicate connection IDs. Reopen the builder and save the flow again." };
+    }
+    edgeIds.add(edge.id);
     const key = `${edge.from}\u0000${edge.to}`;
     if (edgeKeys.has(key)) {
       return { nodes: [], error: "The flow contains a duplicate connection. Remove the duplicate link before running." };
