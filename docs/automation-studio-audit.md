@@ -115,3 +115,32 @@ Automatic retries are now restricted to HTTP methods treated as idempotent by HT
 6. Replace the current ordered-node loops with a single durable `executeFlow(flow, trigger, mode)` engine supporting graph/branch semantics, step input/output schemas, shared event logs, idempotency, retries/backoff, circuit breakers, queue workers, and dead-letter notifications.
 7. Add versioned credential encryption keys and a rotation/re-encryption procedure before storing more provider credentials.
 8. Do not merge or deploy this draft until the above release gates pass. CI green alone is not proof of production safety.
+
+## Second implementation pass — current verified branch head
+
+The current branch has moved beyond the earlier `bd5d464` checkpoint. At commit `584b5159df8bbab69a7b0068eae40dc470eb782f`, GitHub Actions passed:
+- Typecheck: passed
+- Unit tests: **34 passed, 0 failed**
+- Production build: passed
+
+This CI result validates the source and build only. It does not run PostgreSQL migrations or call real provider accounts.
+
+Additional implementation in this pass:
+- Manual cloud runs now execute as one authenticated server-side flow request, using the saved server-side definition. The browser no longer orchestrates live side effects step-by-step.
+- Removed the client-submitted run-history endpoint, which could accept fabricated success/preview records.
+- Individual-step execution now rejects live mode; it remains available only for dry/test behavior. Live side effects must pass through the full-flow endpoint.
+- Manual live runs and scheduled runs share the same per-automation lease table. Manual lease release does not advance the schedule cadence cursor; a four-minute manual execution budget fits inside its ten-minute lease.
+- The Run panel distinguishes Preview from live execution, asks for confirmation before a live run, and no longer claims structural validation alone proves live readiness.
+- Automatic HTTP retries now apply only to GET, PUT, and DELETE. POST/PATCH are not retried without a provider-supported idempotency contract, avoiding duplicate messages or writes.
+- The AI usage migration's function grant/revoke signatures were corrected before release.
+
+### Current honest status
+
+**P0 source/build work is substantially hardened, but not release-approved.** The full shared `executeFlow` engine is not yet shared with the scheduler: manual and scheduled entry points still have separate graph traversal code, though both use the same server-side per-step executor and lease table. Branch/condition semantics, durable queue workers, dead-letter handling, provider circuit breakers, and consistent event-stream logging remain future P2 work.
+
+Still required before merging/deploying:
+1. Apply the complete migration chain to a disposable Supabase project; verify the SQL runs end-to-end and test RLS/grants and lease/quota concurrency.
+2. Prove the deployed runtime is compatible with the Node HTTP(S) pinned-address transport. Keep live outbound HTTP/chat disabled until this smoke test passes.
+3. Run end-to-end Gmail and scheduled-flow tests using a dedicated test mailbox and non-production environment.
+4. Implement actual connector manifests and real verification/test-send workflows for chat webhooks and generic HTTP endpoints.
+5. Add runtime tests for server-side complete-flow execution and duplicate concurrent run attempts.
