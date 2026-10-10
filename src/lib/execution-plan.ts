@@ -1,4 +1,5 @@
 import type { Workflow, WorkflowNode } from "@/lib/workflow";
+import { validateStepMappings } from "@/lib/validate-step-mappings";
 
 export interface ExecutionPlan {
   nodes: WorkflowNode[];
@@ -104,6 +105,9 @@ export function planLinearExecution(flow: Pick<Workflow, "nodes" | "edges">): Ex
   if (ordered.length !== nodes.length) {
     return { nodes: [], error: "Some steps are disconnected or the flow contains a cycle. Connect every step in one chain." };
   }
+
+  const mappingError = validateStepMappings(ordered);
+  if (mappingError) return { nodes: [], error: mappingError.error };
 
   return { nodes: ordered, error: null };
 }
