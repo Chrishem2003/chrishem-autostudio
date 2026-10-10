@@ -79,7 +79,6 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
               payload: {
                 source: "scheduler",
                 cadence,
-                scheduledAt: now.toISOString(),
               },
               requestedBy: null,
             });
