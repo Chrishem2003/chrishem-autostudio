@@ -165,3 +165,22 @@ GitHub CI is evidence for code/build/unit-test and disposable PostgreSQL behavio
 2. Confirm route persistence serializes only the output fields from reviewed executors.
 3. Add provider-adapter integration tests and a deployment staging rehearsal before enabling the durable queue or outbound HTTP transport.
 4. Validate that mapping tokens in all supported config fields are resolved before any external request; unsupported token syntax must fail closed.
+
+
+## Whole-flow mapping contract preflight — 2026-10-10
+
+**Implemented and verified on commit `cc96736240b10cbc1d237f25a04efeaa3f0e1134`.** CI passed for both jobs: typecheck, unit tests, production build, and PostgreSQL queue migration smoke test.
+
+- Every mapping is validated across the full planned linear chain before any executor can run. A broken reference in a later step therefore cannot be discovered only after an earlier step has already caused an external side effect.
+- Mapping sources must be earlier nodes and fields must exist in the reviewed connector action's declared output contract.
+- Dynamic values are allowed only in reviewed content fields: Gmail subject/body, HTTP request body, and supported chat message content. Recipient addresses, destination URLs, webhook URLs, and other unsupported fields fail closed.
+- Malformed tokens, references to trigger/non-output fields, unknown output fields, and non-text configuration values are rejected. The failing node's preflight result is audited as `not_attempted`; no executor is called.
+- Added tests for successful declared-field mapping, invalid later-step references, malformed tokens, unknown output fields, and sensitive-field restrictions. CI recorded 108 passing tests after the assertion correction.
+- Runtime resolution still checks actual values from successful prior steps and retains the 8,000-character bound. The output contract remains allowlisted; generic HTTP response bodies are never exposed to mappings.
+- This is not a production launch approval. Durable queue and outbound HTTP remain gated pending a deployment staging rehearsal, transport/SSRF checks in the target environment, and provider-adapter integration verification.
+
+### Next engineering gate
+
+1. Add explicit regression coverage for output redaction and persistence snapshots, including ensuring provider credentials or arbitrary response bodies can never enter mapped outputs.
+2. Test malformed persisted workflows through the actual API entry points, not only the shared engine.
+3. Run a staging rehearsal with queue flag and outbound transport disabled first; enable only after reviewed operator-controlled acceptance checks.
