@@ -414,3 +414,11 @@ The PostgreSQL smoke test now checks additional adversarial delivery cases:
 - Existing checks continue to cover duplicate same-intent enqueue, forged requester attribution, stale tokens, retry exhaustion, and restricted worker RPC grants.
 
 These are database-level regression checks, not a substitute for staging rehearsal. The next acceptance gate is the exact-head CI run, followed by a deployed staging test of worker interruption and provider-side effects. The durable queue must remain disabled for production until that rehearsal passes.
+
+## Client-owned live audit closure — 2026-10-11
+
+- Closed a legacy audit-integrity gap in the authenticated `recordRun` server function: client-submitted records are now restricted to dry-run previews. A client can no longer submit an arbitrary `isDryRun: false` payload and manufacture a successful live-run history entry or influence the automation health score through that endpoint.
+- Live run/step audit records remain owned by the durable server-side queue worker. The restriction is enforced through a small tested policy helper, and regression tests cover both permitted dry-run records and rejected client-submitted live records.
+- Hardened ownership lookup error handling for version reads/restores, run recording, and integration disconnection. Integration-triggered automation pauses now explicitly retain the authenticated owner predicate and report persistence failure rather than silently returning a successful disconnect response when pausing fails.
+
+**Acceptance boundary:** exact-head CI must pass. This is server-side policy and unit-test coverage; it does not replace RLS review or authenticated integration tests against staging. Keep durable queue and outbound transport flags disabled until the staging acceptance gates pass.
