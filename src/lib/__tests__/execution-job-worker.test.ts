@@ -147,6 +147,25 @@ describe("processOneExecutionJob", () => {
     expect(calls.finished[0].error).toContain("network timeout");
   });
 
+  test("redacts provider secrets before durable job finalization", async () => {
+    const { deps, calls } = dependencies({
+      execute: async () => ({
+        status: "failed",
+        sideEffectCertainty: "uncertain",
+        error: "Provider timeout for https://provider.test/send?token=secret Bearer abc.def.ghi api_key=sk_live_123",
+      }),
+    });
+    await processOneExecutionJob(deps);
+    const persistedError = calls.finished[0].error;
+    expect(persistedError).not.toContain("provider.test");
+    expect(persistedError).not.toContain("token=secret");
+    expect(persistedError).not.toContain("abc.def.ghi");
+    expect(persistedError).not.toContain("sk_live_123");
+    expect(persistedError).toContain("[REDACTED_URL]");
+    expect(persistedError).toContain("[REDACTED_AUTH]");
+    expect(persistedError).toContain("[REDACTED_SECRET]");
+  });
+
   test("reports rejected finalization instead of claiming success", async () => {
     const { deps } = dependencies({ finish: async () => false });
     expect(await processOneExecutionJob(deps)).toEqual({
