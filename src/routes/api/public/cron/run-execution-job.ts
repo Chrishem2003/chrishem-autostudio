@@ -8,7 +8,6 @@ import { processOneExecutionJob } from "@/lib/execution-job-worker";
 import { buildRunFinalization } from "@/lib/run-finalization";
 import { preparePersistedExecutionPlan } from "@/lib/prepare-execution-plan";
 import { executeStep, livePreflightError } from "@/lib/execute-step.server";
-import { parsePersistedWorkflow } from "@/lib/persisted-workflow";
 import type { Workflow } from "@/lib/workflow";
 
 const MAX_JOB_RUNTIME_MS = 4 * 60 * 1000;
