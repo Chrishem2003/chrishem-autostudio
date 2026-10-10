@@ -252,3 +252,7 @@ Added a separate CI job that starts PostgreSQL 16, creates a minimal Supabase-li
 CI run `38074752864` passed the PostgreSQL migration smoke test and the application typecheck, unit tests, and production build. This is a disposable PostgreSQL contract test, not a connection to the real Supabase project; deployment-specific policies, existing schema compatibility, and full concurrent-worker tests remain to be validated.
 
 The PostgreSQL smoke suite was expanded to cover expired-lease recovery and retry exhaustion: expired running jobs must become `needs_review` with their lease cleared, and a retry at the attempt limit must become `dead_letter`. These expanded SQL assertions passed in CI run `38074882912` against PostgreSQL 16.
+
+## Concurrent claim test — 2026-10-10
+
+Added a PostgreSQL CI concurrency check that seeds eight ready jobs, starts eight independent `psql` sessions concurrently, and asserts that all eight sessions receive a job and every claimed ID is unique. This tests the actual `FOR UPDATE SKIP LOCKED` claim RPC under competing database sessions rather than simulating concurrency in a unit test.
