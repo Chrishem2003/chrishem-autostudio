@@ -105,7 +105,7 @@ export const saveAutomation = createServerFn({ method: "POST" })
     if (automationId) {
       const { data: existing, error: readErr } = await context.supabase
         .from("automations")
-        .select("version")
+        .select("version, status")
         .eq("id", automationId)
         .maybeSingle();
       if (readErr) throw new Error(readErr.message);
@@ -117,7 +117,7 @@ export const saveAutomation = createServerFn({ method: "POST" })
           name: data.flow.name,
           vertical: data.flow.vertical,
           ...(data.description !== undefined ? { description: data.description } : {}),
-          ...(data.status ? { status: data.status } : {}),
+          status: data.status ?? (existing.status === "live" ? "paused" : existing.status),
           version,
           flow_json: flow,
         })
