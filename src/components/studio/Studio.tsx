@@ -72,6 +72,7 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
   const redoRef = useRef<() => void>(() => {});
   const [cmdOpen, setCmdOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState<Record<string, number>>({});
   const { user } = useAuth();
   const signedIn = !!user;
   const navigate = useNavigate();
@@ -154,6 +155,7 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
         },
       });
       setWorkflows((prev) => prev.map((w) => (w.id === active.id ? { ...w, cloudId: res.automationId, live: false } : w)));
+      setSavedAt((prev) => ({ ...prev, [active.id]: active.updatedAt }));
       toast.success(active.live
         ? `Saved as version ${res.version}. Live execution was paused; Preview again before re-enabling.`
         : `Saved as version ${res.version}.`);
@@ -281,6 +283,11 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
     setRunning(true);
     setTab("run");
     const isCloudRun = signedIn && !!active.cloudId;
+    if (isCloudRun && savedAt[active.id] !== active.updatedAt) {
+      toast.error("Save your latest changes before running a cloud Preview or live execution.");
+      setRunning(false);
+      return;
+    }
     const isLiveRun = isCloudRun && active.live;
     let result: RunStep[] = [];
 
@@ -562,6 +569,10 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
                   }
                   if (!active.cloudId) {
                     toast.error("Save this flow to the cloud before enabling live execution.");
+                    return;
+                  }
+                  if (savedAt[active.id] !== active.updatedAt) {
+                    toast.error("Save your latest changes before enabling live execution.");
                     return;
                   }
                   const nextStatus = active.live ? "paused" : "live";
