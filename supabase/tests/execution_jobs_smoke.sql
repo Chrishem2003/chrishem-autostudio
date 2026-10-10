@@ -13,6 +13,8 @@ declare
   first_job public.execution_jobs%rowtype;
   duplicate_job public.execution_jobs%rowtype;
   claimed public.execution_jobs%rowtype;
+  expired_job public.execution_jobs%rowtype;
+  dead_job public.execution_jobs%rowtype;
 begin
   select * into first_job
     from public.enqueue_execution_job(
@@ -63,6 +65,51 @@ begin
   if has_function_privilege('anon', 'public.claim_execution_job(integer)', 'EXECUTE')
      or has_function_privilege('authenticated', 'public.claim_execution_job(integer)', 'EXECUTE') then
     raise exception 'Untrusted roles can execute the worker claim RPC';
+  end if;
+
+  select * into expired_job
+    from public.enqueue_execution_job(
+      '00000000-0000-4000-8000-000000000002',
+      'scheduled',
+      'smoke-expired-lease',
+      '{}'::jsonb,
+      null,
+      3,
+      now()
+    );
+  select * into claimed from public.claim_execution_job(300);
+  if claimed.id is distinct from expired_job.id then
+    raise exception 'Could not claim the expired-lease fixture';
+  end if;
+  update public.execution_jobs
+     set locked_until = now() - interval '1 second'
+   where id = expired_job.id;
+  perform * from public.claim_execution_job(300);
+  select * into expired_job from public.execution_jobs where id = expired_job.id;
+  if expired_job.status <> 'needs_review' or expired_job.worker_token is not null then
+    raise exception 'Expired lease was not safely moved to needs_review';
+  end if;
+
+  select * into dead_job
+    from public.enqueue_execution_job(
+      '00000000-0000-4000-8000-000000000002',
+      'manual',
+      'smoke-dead-letter',
+      '{}'::jsonb,
+      null,
+      1,
+      now()
+    );
+  select * into claimed from public.claim_execution_job(300);
+  if claimed.id is distinct from dead_job.id then
+    raise exception 'Could not claim dead-letter fixture';
+  end if;
+  if not public.finish_execution_job(claimed.id, claimed.worker_token, 'queued', 'retry exhausted', now()) then
+    raise exception 'Could not finalize retry-exhausted fixture';
+  end if;
+  select * into dead_job from public.execution_jobs where id = dead_job.id;
+  if dead_job.status <> 'dead_letter' then
+    raise exception 'Retry-exhausted job was not moved to dead_letter';
   end if;
 end
 $$;
