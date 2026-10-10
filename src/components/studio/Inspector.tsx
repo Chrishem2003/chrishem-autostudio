@@ -1,4 +1,5 @@
 import { NODES } from "@/lib/automation-catalog";
+import { getConnectorManifestForNode } from "@/lib/connector-manifests";
 import type { Workflow, WorkflowNode } from "@/lib/workflow";
 import { KIND_STYLE } from "./kind-styles";
 import { cn } from "@/lib/utils";
@@ -43,6 +44,24 @@ export function Inspector({ workflow, node, onRename, onConfig, onDisconnect }: 
           className="mt-3 w-full rounded-lg border border-input bg-surface-raised px-3 py-2 font-display text-sm outline-none focus:border-primary"
         />
         <p className="mt-2 text-xs text-muted-foreground">{def.summary}</p>
+        {(() => {
+          const manifest = getConnectorManifestForNode(def.id, def.tool);
+          const capability = manifest
+            ? manifest.runtime === "deployment-gated"
+              ? "Runtime gated"
+              : manifest.verification === "user-initiated-test-send"
+                ? "User test required"
+                : "Preflight only"
+            : def.id.startsWith("app.") || def.id.startsWith("action.")
+              ? "Catalog only"
+              : null;
+          if (!capability) return null;
+          return (
+            <p className="mt-2 text-xs font-medium text-amber-700 dark:text-amber-300">
+              Capability: {capability}
+            </p>
+          );
+        })()}
       </div>
 
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
