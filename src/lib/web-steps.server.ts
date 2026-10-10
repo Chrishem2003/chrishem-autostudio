@@ -1,5 +1,4 @@
 import { lookup as dnsLookup } from "node:dns/promises";
-import type { LookupFunction, LookupAddress } from "node:dns";
 import { isIP } from "node:net";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
@@ -105,7 +104,8 @@ export function isBlockedHost(host: string): boolean {
 }
 
 export type PinnedAddress = { address: string; family: 4 | 6 };
-type Resolver = (hostname: string, options: { all: true; verbatim: true }) => Promise<LookupAddress[]>;
+type LookupAddressLike = { address: string; family: number };
+type Resolver = (hostname: string, options: { all: true; verbatim: true }) => Promise<LookupAddressLike[]>;
 
 /**
  * Resolves once, rejects the entire answer if any returned address is unsafe,
@@ -134,11 +134,17 @@ export async function resolvePublicTarget(
   return { address: selected.address, family: selectedFamily };
 }
 
-function pinnedLookup(target: PinnedAddress): LookupFunction {
-  return (( _hostname: string, options: { all?: boolean }, callback: (error: NodeJS.ErrnoException | null, address: string | LookupAddress[], family?: number) => void) => {
+function pinnedLookup(target: PinnedAddress): NonNullable<import("node:http").RequestOptions["lookup"]> {
+  type Options = { all?: boolean };
+  type Callback = (
+    error: NodeJS.ErrnoException | null,
+    address: string | LookupAddressLike[],
+    family?: number,
+  ) => void;
+  return (( _hostname: string, options: Options, callback: Callback) => {
     if (options?.all) callback(null, [{ address: target.address, family: target.family }]);
     else callback(null, target.address, target.family);
-  }) as LookupFunction;
+  }) as NonNullable<import("node:http").RequestOptions["lookup"]>;
 }
 
 function requestOnce(url: URL, data: WebInput, target: PinnedAddress): Promise<{ status: number; body: string }> {
