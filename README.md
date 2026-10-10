@@ -11,13 +11,15 @@ The current stack is React, TypeScript, TanStack Start, Supabase, and the Lovabl
 - **Server-side secrets.** Credentials must never be returned to the browser or written to logs.
 - **Validated inputs.** Persisted workflows and AI responses must pass schemas before execution.
 - **Safe outbound HTTP.** Only HTTP(S) is accepted; private/special-use IPs are rejected, DNS answers are checked, and connections are pinned to a validated address.
-- **One execution path.** Manual and scheduled steps use the same server-side step executor.
+- **Server-owned execution.** Manual cloud runs execute the saved flow in one authenticated server request; scheduled runs use the same guarded per-step executor and share per-automation leases. A single shared graph traversal engine is still planned.
 
 ## Current implementation status
 
 The builder, templates, cloud persistence/version history, run logs, Gmail connection flow, HTTP/webhook actions, and chat-webhook steps are present. The connector catalog is larger than the set of live adapters; catalog presence alone does not mean a provider is implemented.
 
-The shared executor currently supports scheduled triggers, Gmail sends, configured chat webhooks, HTTP requests, and outgoing webhooks. Other trigger/action nodes fail closed in live mode until their adapters are implemented. The job queue, full connector manifest registry, provider verification lifecycle, workspace roles, and all roadmap differentiators remain in progress.
+Manual cloud runs are executed and logged by the server; the browser cannot submit its own success records, and the legacy per-step endpoint rejects live execution. Manual live runs require confirmation and share a database lease with scheduled runs. Automatic HTTP retries are limited to GET, PUT, and DELETE; POST/PATCH are not retried without a provider idempotency contract.
+
+The guarded step executor currently supports scheduled triggers, Gmail sends, configured chat webhooks, HTTP requests, and outgoing webhooks. Other trigger/action nodes fail closed in live mode until their adapters are implemented. The durable job queue, one shared graph traversal engine, full connector manifest registry, provider verification lifecycle, workspace roles, and roadmap differentiators remain in progress.
 
 ## Development
 
