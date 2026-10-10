@@ -85,7 +85,9 @@ export async function processOneExecutionJob(
       sideEffectCertainty: result.sideEffectCertainty,
       attempts: job.attempts,
       maxAttempts: job.maxAttempts,
-      providerSupportsIdempotency: result.providerSupportsIdempotency,
+      ...(result.providerSupportsIdempotency === undefined
+        ? {}
+        : { providerSupportsIdempotency: result.providerSupportsIdempotency }),
       stableIdempotencyKey: job.idempotencyKey,
     });
     finalStatus = decision.status;
