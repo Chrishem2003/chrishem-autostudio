@@ -50,6 +50,16 @@ describe("linear live execution planner", () => {
     expect(dangling.error).toMatch(/invalid connection/i);
   });
 
+  it("rejects malformed persisted nodes without throwing", () => {
+    const malformed = {
+      nodes: [
+        { ...node("trigger", "trigger.webhook"), defId: null },
+      ],
+      edges: [],
+    };
+    expect(planLinearExecution(malformed).error).toMatch(/malformed/i);
+  });
+
   it("requires exactly one trigger", () => {
     const result = planLinearExecution(flow(
       [node("trigger-a", "trigger.webhook"), node("trigger-b", "trigger.schedule")],
