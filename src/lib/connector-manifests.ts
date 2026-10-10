@@ -61,8 +61,8 @@ export const CONNECTOR_MANIFESTS: readonly ConnectorManifest[] = [
     actions: [{
       id: "gmail.send_email",
       nodeIds: ["action.gmail"],
-      requiredConfig: ["to", "subject", "body"],
-      optionalConfig: [],
+      requiredConfig: ["to"],
+      optionalConfig: ["subject", "body"],
       sideEffect: "external-message",
       idempotency: "provider-managed",
       timeoutSeconds: 30,
@@ -89,8 +89,8 @@ export const CONNECTOR_MANIFESTS: readonly ConnectorManifest[] = [
     actions: [{
       id: "chat.post_message",
       nodeIds: ["action.slack"],
-      requiredConfig: ["webhook", "message"],
-      optionalConfig: ["channel"],
+      requiredConfig: ["webhook"],
+      optionalConfig: ["channel", "message"],
       sideEffect: "external-message",
       idempotency: "not-guaranteed",
       timeoutSeconds: 30,
