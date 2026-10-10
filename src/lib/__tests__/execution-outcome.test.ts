@@ -14,6 +14,7 @@ describe("external step outcome certainty", () => {
   it("marks transport failures as uncertain", () => {
     expect(classifyExecutionOutcome("failed", "Couldn't reach example.com. Tried 1 times")).toBe("uncertain");
     expect(classifyExecutionOutcome("failed", "No reply within 30s.")).toBe("uncertain");
+    expect(classifyExecutionOutcome("failed", "Request failed for an unknown reason.")).toBe("uncertain");
   });
 
   it("marks provider 5xx failures as uncertain", () => {
@@ -22,9 +23,11 @@ describe("external step outcome certainty", () => {
     expect(classifyExecutionOutcome("failed", "HTTP request failed (status 503).")).toBe("uncertain");
   });
 
-  it("marks preflight/configuration failures as not attempted", () => {
+  it("marks explicit preflight/configuration failures as not attempted", () => {
     expect(classifyExecutionOutcome("failed", "Gmail is not connected.")).toBe("not_attempted");
     expect(classifyExecutionOutcome("failed", "Unsupported HTTP method.")).toBe("not_attempted");
+    expect(classifyExecutionOutcome("failed", "Preflight failed: credentials missing.")).toBe("not_attempted");
+    expect(classifyExecutionOutcome("failed", "Could not persist intent. No action was attempted.")).toBe("not_attempted");
   });
 
   it("treats thrown executor errors and missing audit writes conservatively", () => {
