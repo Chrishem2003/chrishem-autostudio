@@ -173,3 +173,120 @@ describe("outbound HTTP preflight rejects unsafe requests before DNS or network 
     });
   });
 });
+
+
+describe("outbound HTTP resilience with injected transport", () => {
+  async function withReadyTransport<T>(run: () => Promise<T>): Promise<T> {
+    const previous = process.env["AUTOSTUDIO_OUTBOUND_TRANSPORT_READY"];
+    process.env["AUTOSTUDIO_OUTBOUND_TRANSPORT_READY"] = "true";
+    try {
+      return await run();
+    } finally {
+      if (previous === undefined) delete process.env["AUTOSTUDIO_OUTBOUND_TRANSPORT_READY"];
+      else process.env["AUTOSTUDIO_OUTBOUND_TRANSPORT_READY"] = previous;
+    }
+  }
+
+  const safeTarget = async () => ({ address: "93.184.216.34", family: 4 as const });
+  const noWait = async () => {};
+
+  it("does not follow redirect responses automatically", async () => {
+    await withReadyTransport(async () => {
+      const { callWeb } = await import("../web-steps.server");
+      let requests = 0;
+      const result = await callWeb(
+        { method: "GET", url: "https://example.com/start", timeoutSec: 2 },
+        {
+          resolveTarget: safeTarget,
+          requestOnce: async () => { requests++; return { status: 302 }; },
+          wait: noWait,
+        },
+      );
+      expect(result.ok).toBe(false);
+      expect(result.status).toBe(302);
+      expect(result.attempts).toBe(1);
+      expect(requests).toBe(1);
+    });
+  });
+
+  it("bounds retry attempts after timeout failures for safe methods", async () => {
+    await withReadyTransport(async () => {
+      const { callWeb } = await import("../web-steps.server");
+      let requests = 0;
+      const timeout = Object.assign(new Error("simulated timeout"), { name: "TimeoutError" });
+      const result = await callWeb(
+        { method: "GET", url: "https://example.com/slow", timeoutSec: 1 },
+        {
+          resolveTarget: safeTarget,
+          requestOnce: async () => { requests++; throw timeout; },
+          wait: noWait,
+        },
+      );
+      expect(result.ok).toBe(false);
+      expect(result.attempts).toBe(3);
+      expect(requests).toBe(3);
+      expect(result.detail).toContain("Tried 3 times");
+    });
+  });
+
+  it("does not retry timeout failures for side-effecting POST requests", async () => {
+    await withReadyTransport(async () => {
+      const { callWeb } = await import("../web-steps.server");
+      let requests = 0;
+      const timeout = Object.assign(new Error("simulated timeout"), { name: "TimeoutError" });
+      const result = await callWeb(
+        { method: "POST", url: "https://example.com/submit", body: "{}", timeoutSec: 1 },
+        {
+          resolveTarget: safeTarget,
+          requestOnce: async () => { requests++; throw timeout; },
+          wait: noWait,
+        },
+      );
+      expect(result.ok).toBe(false);
+      expect(result.attempts).toBe(1);
+      expect(requests).toBe(1);
+    });
+  });
+
+  it("stops immediately when the response-size guard is triggered", async () => {
+    await withReadyTransport(async () => {
+      const { callWeb } = await import("../web-steps.server");
+      let requests = 0;
+      const result = await callWeb(
+        { method: "GET", url: "https://example.com/large", timeoutSec: 2 },
+        {
+          resolveTarget: safeTarget,
+          requestOnce: async () => {
+            requests++;
+            throw new Error("The remote response exceeded the 1 MB safety limit.");
+          },
+          wait: noWait,
+        },
+      );
+      expect(result.ok).toBe(false);
+      expect(result.attempts).toBe(1);
+      expect(requests).toBe(1);
+      expect(result.detail).toContain("1 MB safety limit");
+    });
+  });
+
+  it("retries transient server errors only for safe methods and returns the final status", async () => {
+    await withReadyTransport(async () => {
+      const { callWeb } = await import("../web-steps.server");
+      let requests = 0;
+      const result = await callWeb(
+        { method: "GET", url: "https://example.com/recover", timeoutSec: 2 },
+        {
+          resolveTarget: safeTarget,
+          requestOnce: async () => ({ status: ++requests < 3 ? 503 : 200 }),
+          wait: noWait,
+        },
+      );
+      expect(result.ok).toBe(true);
+      expect(result.status).toBe(200);
+      expect(result.attempts).toBe(3);
+      expect(requests).toBe(3);
+      expect(result.detail).toContain("succeeded after retry");
+    });
+  });
+});
