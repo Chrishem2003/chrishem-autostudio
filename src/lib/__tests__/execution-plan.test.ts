@@ -50,6 +50,31 @@ describe("linear live execution planner", () => {
     expect(dangling.error).toMatch(/invalid connection/i);
   });
 
+  it("rejects invalid mapping references during planning before any API entry point can enqueue execution", () => {
+    const invalid = flow(
+      [
+        node("trigger", "trigger.manual"),
+        { ...node("email", "action.gmail"), config: { subject: "{{steps.trigger.accepted}}" } },
+      ],
+      [["trigger", "email"]],
+    );
+    expect(planLinearExecution(invalid).error).toMatch(/not a declared output|not an earlier step/i);
+  });
+
+  it("accepts declared mapping references from an earlier HTTP step", () => {
+    const valid = flow(
+      [
+        node("trigger", "trigger.manual"),
+        { ...node("request", "action.http"), config: { url: "https://example.com" } },
+        { ...node("email", "action.gmail"), config: { subject: "HTTP {{steps.request.httpStatus}}" } },
+      ],
+      [["trigger", "request"], ["request", "email"]],
+    );
+    const result = planLinearExecution(valid);
+    expect(result.error).toBeNull();
+    expect(result.nodes.map((entry) => entry.id)).toEqual(["trigger", "request", "email"]);
+  });
+
   it("rejects malformed persisted nodes without throwing", () => {
     const malformed = {
       nodes: [
