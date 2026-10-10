@@ -61,7 +61,7 @@ curl --fail --silent --show-error --max-time 60 \
 
 A successful response reports the number of automations checked, runs started, and runs that failed. The endpoint itself does not create a schedule; the external timer must call it. Keep the scheduler secret separate from all user connector credentials. If the secret is missing, the endpoint returns a server configuration error; an incorrect secret returns 401.
 
-Only automations saved with cloud status `live` and a `trigger.schedule` node are considered. The runner records each step, stops a flow after a failed step, and advances its cadence cursor after a failed run to avoid hot-looping.
+Only automations saved with cloud status `live` and a `trigger.schedule` node are considered. The runner claims each flow through an atomic, service-role-only database lease so overlapping cron calls do not send the same flow twice. It records each step, stops after a failed step, enforces a four-minute execution budget, and advances its cadence cursor after a failed run to avoid hot-looping.
 
 ## Security and execution notes
 
