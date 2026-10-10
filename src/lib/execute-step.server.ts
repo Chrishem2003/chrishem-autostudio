@@ -2,7 +2,7 @@ import { callAsAppUser, appUserReconnectRequired } from "@/integrations/lovable/
 import { getConnectionForUser } from "@/lib/app-user-connections.server";
 import { buildChatRequest, isChatMessageStep } from "@/lib/chat-steps";
 import { buildGmailMessage, isGmailSendStep, toRawEmail } from "@/lib/gmail-steps";
-import { callWeb, resolvePublicTarget, type WebInput } from "@/lib/web-steps.server";
+import { callWeb, isBlockedHost, resolvePublicTarget, type WebInput } from "@/lib/web-steps.server";
 import { NODES } from "@/lib/automation-catalog";
 import type { WorkflowNode } from "@/lib/workflow";
 
@@ -202,14 +202,22 @@ export async function livePreflightError(node: WorkflowNode, userId: string): Pr
   const chat = isChatMessageStep(node.defId, tool) ? buildChatRequest(tool!, node.config, "AutoStudio") : null;
   const rawUrl = chat && !("error" in chat) ? chat.url : node.config["url"];
   if (rawUrl) {
+    let url: URL;
     try {
-      const url = new URL(rawUrl);
-      await resolvePublicTarget(url.hostname);
+      url = new URL(rawUrl);
     } catch {
-      return "The destination could not pass the public-address safety check. Check its URL and DNS configuration.";
+      return "The destination URL is invalid.";
+    }
+    if (isBlockedHost(url.hostname)) {
+      return "The destination is private or local and cannot be used by a live flow.";
     }
     if (!outboundTransportReady()) {
       return "Outbound HTTP transport has not passed the deployment runtime smoke test. Keep this flow in Preview until an operator enables the verified transport.";
+    }
+    try {
+      await resolvePublicTarget(url.hostname);
+    } catch {
+      return "The destination could not pass the public-address safety check. Check its URL and DNS configuration.";
     }
   }
   return null;
