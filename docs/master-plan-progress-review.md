@@ -251,3 +251,18 @@ The durable queue and outbound HTTP transport now share a small fail-closed gate
 Regression tests cover absent defaults, invalid values, independent flags, and the outbound transport's no-request response when readiness is not explicitly enabled. Entry-point review confirms manual execution validates saved JSON and the execution plan before queue enqueue; scheduled execution validates persisted JSON and the plan before enqueue; the queue worker revalidates persisted JSON and the plan before creating a run record or step intent.
 
 **Not yet verified:** no real staging environment, deployed worker authentication, provider sandbox effect, or provider-side idempotency contract has been tested in this repository session. The rollout flags must remain disabled until the runbook's environment-specific checks are completed.
+
+
+## Latest hardening batch — outbound request preflight
+
+Added regression tests asserting that the server-side HTTP step refuses non-HTTP schemes, embedded URL credentials, unsupported methods, and request bodies larger than 64 KB before DNS resolution or any network attempt. These checks complement the existing default-off transport gate, DNS answer filtering and pinning, redirect avoidance, bounded timeout/response size, and conservative retry policy.
+
+The runbook formatting around acceptance criteria was corrected and its environment boundary now explicitly distinguishes CI preflight tests from staging verification.
+
+### Still required before rollout
+
+- Run the latest CI against the exact branch head and inspect all jobs.
+- Add/retain deterministic tests for request timeout, response-size overflow, redirect responses, and outbound transport behavior using a controlled local test server or injected transport seam; do not use public endpoints as a test fixture.
+- Add stronger route/entry-point integration tests proving malformed persisted workflows and invalid mappings cannot enqueue jobs, create run records, or invoke providers.
+- Verify migration/RPC permissions, worker authentication, duplicate delivery, lease loss, scheduled/manual execution, and one provider-side effect in dedicated staging.
+- Keep `AUTOSTUDIO_DURABLE_QUEUE_ENABLED=false` and `AUTOSTUDIO_OUTBOUND_TRANSPORT_READY` unset or false until the staging acceptance gates pass.
