@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { KIND_LABEL, KIND_ORDER, NODES, VERTICALS } from "@/lib/automation-catalog";
+import { getConnectorManifestForNode } from "@/lib/connector-manifests";
 import { KIND_STYLE } from "./kind-styles";
 import { cn } from "@/lib/utils";
 
