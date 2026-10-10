@@ -59,7 +59,7 @@ describe("server-side execution guardrails", () => {
       to: "{{trigger.email}}",
       subject: "Welcome {{trigger.name}}",
       body: "Your order is {{trigger.order_id}}",
-    }))).toMatch(/dynamic data tokens are not resolved/i);
+    }))).toMatch(/dynamic data mapping is not allowed for "to"/i);
     expect(liveCapabilityError(node("action.http", {
       url: "https://example.com",
       body: JSON.stringify({ customer: "{{steps.previous.output}}" }),
@@ -75,7 +75,7 @@ describe("server-side execution guardrails", () => {
     // HTTP is deployment-gated, so test the executor output contract at the shared runner boundary.
     const { executeFlowSteps } = await import("../execute-flow-steps.server");
     const result = await executeFlowSteps({
-      nodes: [node("trigger", "trigger.manual"), node("http", "action.http")],
+      nodes: [{ ...node("trigger", "trigger.manual"), id: "trigger" }, { ...node("http", "action.http"), id: "http" }],
       flowName: "outputs", userId: "user_1", mode: "live", startedAtMs: Date.now(), maxRuntimeMs: 10000,
       persistIntent: async (_node, i) => ({ id: String(i) }), persistOutcome: async () => true,
       execute: async ({ node: current }) => ({ nodeId: current.id, label: current.name, status: "success", ms: 1, detail: "ok", ...(current.id === "http" ? { outputs: { httpStatus: 201 } } : {}) }),
