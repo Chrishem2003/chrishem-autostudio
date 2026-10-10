@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { callWeb } from "./web-steps.server";
 
 const Input = z.object({
   method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]).default("POST"),
