@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { validate, type Workflow } from "@/lib/workflow";
+import { liveCapabilityError } from "@/lib/execute-step.server";
 
 /**
  * Cloud persistence for the studio. Every save writes an immutable version row
@@ -168,12 +170,49 @@ export const setAutomationStatus = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ context, data }) => {
+    const { data: automation, error: readError } = await context.supabase
+      .from("automations")
+      .select("id, user_id, status, flow_json, updated_at")
+      .eq("id", data.automationId)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (readError) throw new Error("Could not load the saved automation.");
+    if (!automation) throw new Error("Automation not found.");
+
+    if (data.status === "live") {
+      const parsed = workflowSchema.safeParse(automation.flow_json);
+      if (!parsed.success) throw new Error("The saved flow is invalid. Fix and save it before enabling live execution.");
+      const flow = parsed.data as unknown as Workflow;
+      const issues = validate(flow);
+      const blocking = issues.filter((issue) => issue.level === "error" || issue.level === "warn");
+      if (blocking.length) throw new Error(`Fix the flow before going live: ${blocking[0]!.message}`);
+
+      const unsupported = flow.nodes.map(liveCapabilityError).find((reason) => reason !== null);
+      if (unsupported) throw new Error(unsupported);
+
+      // A dry preflight must have passed against this saved version before enabling scheduling.
+      const { data: preflight, error: preflightError } = await context.supabase
+        .from("run_logs")
+        .select("id")
+        .eq("automation_id", data.automationId)
+        .eq("is_dry_run", true)
+        .eq("status", "dry_run")
+        .gte("started_at", automation.updated_at)
+        .order("started_at", { ascending: false })
+        .limit(1);
+      if (preflightError) throw new Error("Could not verify the latest preflight run.");
+      if (!preflight?.length) {
+        throw new Error("Run a successful Preview after your last save before enabling this flow. Preview does not send messages or call external APIs.");
+      }
+    }
+
     const { error } = await context.supabase
       .from("automations")
       .update({ status: data.status })
-      .eq("id", data.automationId);
+      .eq("id", data.automationId)
+      .eq("user_id", context.userId);
     if (error) throw new Error(error.message);
-    return { ok: true };
+    return { ok: true, status: data.status };
   });
 
 export interface CloudVersion {
