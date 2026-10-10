@@ -37,7 +37,7 @@ create policy "ai_usage_select_own"
   using (user_id = auth.uid());
 
 -- Serializes quota checks per user/task so parallel requests cannot bypass the limit.
-create or replace function public.consume_ai_plan_quota(_task text, _limit integer default 20)
+create or replace function public.consume_ai_plan_quota(_task text)
 returns uuid
 language plpgsql
 security definer
@@ -52,8 +52,8 @@ begin
     return null;
   end if;
 
-  if _limit < 1 or _limit > 1000 then
-    raise exception 'Invalid AI quota limit';
+  if _task <> 'compose_flow' then
+    raise exception 'Unsupported AI quota task';
   end if;
 
   perform pg_advisory_xact_lock(hashtextextended(_user_id::text || ':' || _task, 0));
@@ -65,7 +65,7 @@ begin
       and task = _task
       and created_at >= now() - interval '1 hour';
 
-  if _used >= _limit then
+  if _used >= 20 then
     return null;
   end if;
 
