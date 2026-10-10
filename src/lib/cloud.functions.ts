@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { validate, type Workflow } from "@/lib/workflow";
-import { liveCapabilityError } from "@/lib/execute-step.server";
+import { livePreflightError } from "@/lib/execute-step.server";
 
 /**
  * Cloud persistence for the studio. Every save writes an immutable version row
@@ -187,8 +187,10 @@ export const setAutomationStatus = createServerFn({ method: "POST" })
       const blocking = issues.filter((issue) => issue.level === "error" || issue.level === "warn");
       if (blocking.length) throw new Error(`Fix the flow before going live: ${blocking[0]!.message}`);
 
-      const unsupported = flow.nodes.map(liveCapabilityError).find((reason) => reason !== null);
-      if (unsupported) throw new Error(unsupported);
+      for (const node of flow.nodes) {
+        const reason = await livePreflightError(node, context.userId);
+        if (reason) throw new Error(reason);
+      }
 
       // A dry preflight must have passed against this saved version before enabling scheduling.
       const { data: preflight, error: preflightError } = await context.supabase
