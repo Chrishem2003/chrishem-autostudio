@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { executeStep, liveCapabilityError, type ExecutionMode } from "@/lib/execute-step.server";
+import { executeStep, type ExecutionMode } from "@/lib/execute-step.server";
 import type { WorkflowNode } from "@/lib/workflow";
 
 const flowShape = z.object({
@@ -43,12 +43,10 @@ export const executeAutomationStep = createServerFn({ method: "POST" })
     const node = parsed.data.nodes.find((candidate) => candidate.id === data.nodeId) as WorkflowNode | undefined;
     if (!node) throw new Error("That step is no longer part of the saved automation.");
 
-    const mode: ExecutionMode = data.mode;
-    if (mode === "live") {
-      if (row.status !== "live") throw new Error("This automation is not live in the cloud. No external action was taken.");
-      const reason = liveCapabilityError(node);
-      if (reason) throw new Error(reason);
+    if (data.mode === "live") {
+      throw new Error("Direct single-step live execution is disabled. Run the entire saved flow through the server-side flow executor.");
     }
+    const mode: ExecutionMode = data.mode;
 
     try {
       return await executeStep({ node, flowName: parsed.data.name || row.name, userId: context.userId, mode });
