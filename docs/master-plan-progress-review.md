@@ -266,3 +266,17 @@ The runbook formatting around acceptance criteria was corrected and its environm
 - Add stronger route/entry-point integration tests proving malformed persisted workflows and invalid mappings cannot enqueue jobs, create run records, or invoke providers.
 - Verify migration/RPC permissions, worker authentication, duplicate delivery, lease loss, scheduled/manual execution, and one provider-side effect in dedicated staging.
 - Keep `AUTOSTUDIO_DURABLE_QUEUE_ENABLED=false` and `AUTOSTUDIO_OUTBOUND_TRANSPORT_READY` unset or false until the staging acceptance gates pass.
+
+
+## Outbound resilience test batch — 2026-10-11
+
+The server-side HTTP client now has narrow injectable dependency seams for DNS resolution, a single request attempt, and retry waiting. Production behavior continues to use the existing validated-DNS/pinned-address transport; the seams exist so unit tests can deterministically verify policy without contacting public hosts.
+
+Added tests verify:
+- Redirect responses are not followed automatically.
+- GET timeout failures stop after the configured three-attempt bound.
+- POST timeout failures are not automatically retried.
+- A response-size guard failure stops immediately rather than retrying a potentially large payload.
+- Transient server errors on a safe method can recover and return the final successful status.
+
+These are unit-level policy tests, not proof of real socket-level timeout or streaming-response enforcement. Staging still needs a controlled transport smoke test, and route-level tests are still needed to prove invalid workflow data cannot create queue/run records or invoke a provider.
