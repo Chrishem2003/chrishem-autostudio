@@ -32,6 +32,12 @@ This is **not yet a production-ready or master-plan-complete automation platform
 | P7: reliability analytics and API | Partial foundation | Run logs, versions and a health score exist, but full run search/timeline, safe replay, usage/cost quotas, version diff/restore, scoped REST keys, provider status and retention controls need acceptance tests. |
 | P8: differentiators | Not complete | Autopilot, Watch Mode, 30-day rewind simulation, approve/undo, multilingual/voice input and connector drafting are future phases. |
 
+## Connector contract milestone — 2026-10-10
+
+The reviewed connector registry now defines explicit action contracts for the three supported families: Gmail send, chat webhook message, and HTTP request. Each action contract records accepted node IDs, required and optional string settings, side-effect class, idempotency posture, bounded timeout metadata, and truthful output semantics. A shared validator rejects missing required settings, non-string config values, and unreviewed actions; live preflight invokes it before the executor can perform a side effect. Generated chat message nodes resolve only for explicitly approved tool names.
+
+Automated contract tests now check unique action identifiers, valid manifest-to-action relationships, output descriptions, timeout bounds, missing settings, type-invalid settings, and rejection of catalog-only actions. This narrows the gap between the marketing catalog and runtime capabilities, but it does not yet generate every catalog badge from the registry or implement additional providers.
+
 ## Current architecture strengths
 
 - Server functions authenticate users and owner-scope automation lookups.
