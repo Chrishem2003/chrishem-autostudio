@@ -47,6 +47,7 @@ This is **not yet a production-ready or master-plan-complete automation platform
 
 1. **Failed scheduled enqueue could advance the cadence cursor.** The scheduler's failure release timestamp now falls back to the Unix epoch when no previous `last_run_at` exists, so a failed enqueue remains eligible on the next scheduler pass rather than being silently delayed for an entire cadence interval.
 2. **Rapid duplicate UI submissions could get distinct request IDs.** Studio now uses an in-flight guard and a shared request ID for the current run invocation, making repeated submissions in that invocation idempotent at the queue boundary.
+3. **Permanent worker preflight errors could consume the retry budget immediately.** The queue worker now distinguishes permanent configuration/validation failures from retryable lock contention. Missing verification, invalid saved workflows and unsupported live plans finish as failed without rapid requeue; a busy automation retains its 30-second retry time. Unit tests cover both paths.
 
 These fixes are covered by the branch's typecheck, unit tests, production build and PostgreSQL queue CI; the latest exact-commit run must remain green before merge.
 
