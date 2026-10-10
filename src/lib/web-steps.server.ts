@@ -216,7 +216,17 @@ export function summarizeWebResponse(status: number, hostname: string, retried =
   return `${hostname} refused the request (${status}). Check the address and request settings.`;
 }
 
-export async function callWeb(data: WebInput): Promise<WebResult> {
+type CallWebDependencies = {
+  resolveTarget?: typeof resolvePublicTarget;
+  requestOnce?: typeof requestOnce;
+  wait?: (milliseconds: number) => Promise<void>;
+};
+
+/**
+ * Dependency seams keep retry/redirect/error handling tests deterministic without
+ * sending requests to public endpoints. Production callers use the hardened defaults.
+ */
+export async function callWeb(data: WebInput, dependencies: CallWebDependencies = {}): Promise<WebResult> {
   const started = Date.now();
   if (!isOutboundTransportReady()) {
     return { ok: false, status: 0, ms: 0, attempts: 0, detail: "Outbound HTTP transport is not runtime-verified; no request was sent." };
@@ -242,7 +252,7 @@ export async function callWeb(data: WebInput): Promise<WebResult> {
 
   let target: PinnedAddress;
   try {
-    target = await resolvePublicTarget(url.hostname);
+    target = await (dependencies.resolveTarget ?? resolvePublicTarget)(url.hostname);
   } catch (error) {
     const detail = error instanceof Error && error.message.includes("private")
       ? error.message
@@ -256,7 +266,7 @@ export async function callWeb(data: WebInput): Promise<WebResult> {
   while (attempts < 3) {
     attempts++;
     try {
-      const response = await requestOnce(url, data, target);
+      const response = await (dependencies.requestOnce ?? requestOnce)(url, data, target);
       if (response.status === 429 || response.status >= 500) {
         last = `Got ${response.status} from ${url.hostname}.`;
         if (!retrySafe) {
@@ -276,7 +286,7 @@ export async function callWeb(data: WebInput): Promise<WebResult> {
           : `Couldn't reach ${url.hostname}.`;
       if (last.includes("1 MB") || !retrySafe) break;
     }
-    if (attempts < 3) await new Promise((resolve) => setTimeout(resolve, 250 * 2 ** (attempts - 1)));
+    if (attempts < 3) await (dependencies.wait ?? ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))))(250 * 2 ** (attempts - 1));
   }
   return { ok: false, status: 0, ms: Date.now() - started, attempts, detail: `${last} Tried ${attempts} times — try again shortly.` };
 }
