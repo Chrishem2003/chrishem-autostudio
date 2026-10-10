@@ -21,7 +21,10 @@ create table if not exists public.execution_jobs (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (automation_id, idempotency_key),
-  check ((status = 'running') = (worker_token is not null and locked_until is not null))
+  check (
+    (status = 'running' and worker_token is not null and locked_until is not null)
+    or (status <> 'running' and worker_token is null and locked_until is null)
+  )
 );
 
 create index if not exists execution_jobs_claim_idx
