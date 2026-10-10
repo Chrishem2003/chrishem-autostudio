@@ -246,12 +246,34 @@ function Runs() {
             <span className="mono-label">{new Date(r.startedAt).toLocaleString()} · {r.durationMs ?? 0}ms</span>
           </button>
           {r.errorSummary && <p className="mt-1 text-xs text-destructive">{r.errorSummary}</p>}
+          {r.steps.some((step) => step.outcomeState === "uncertain") && (
+            <p role="alert" className="mt-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-foreground">
+              One or more steps have an uncertain external outcome. Check the destination/provider activity before manually running this flow again. AutoStudio will not automatically replay these steps.
+            </p>
+          )}
           {(r.status === "failed" || r.status === "halted") && <ExplainFailure runId={r.id} />}
           {open === r.id && (
-            <ol className="mt-2 space-y-1 border-t border-border pt-2 text-xs">
+            <ol className="mt-2 space-y-2 border-t border-border pt-2 text-xs">
               {r.steps.map((s) => (
-                <li key={s.id}>
-                  <span className="font-medium">{s.label}</span> — {s.status} ({s.durationMs ?? 0}ms){s.errorDetail ? ` · ${s.errorDetail}` : ""}
+                <li key={s.id} className="rounded-md border border-border/70 p-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">{s.label ?? "Unnamed step"}</span>
+                    <span className="text-muted-foreground">— {s.status} ({s.durationMs ?? 0}ms)</span>
+                    <span className={cn(
+                      "rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                      s.outcomeState === "uncertain"
+                        ? "border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                        : s.outcomeState === "confirmed"
+                          ? "border-primary/40 bg-primary/10 text-primary"
+                          : "border-border text-muted-foreground",
+                    )}>
+                      {s.outcomeState === "uncertain" ? "Verify before retry" : s.outcomeState === "confirmed" ? "Confirmed" : "Not attempted"}
+                    </span>
+                  </div>
+                  {s.errorDetail && <p className="mt-1 text-muted-foreground">{s.errorDetail}</p>}
+                  {s.outcomeState === "uncertain" && (
+                    <p className="mt-1 text-amber-700 dark:text-amber-300">Operator action: inspect the external service's activity/logs and confirm whether the action happened. Only rerun after checking to avoid duplicate sends or writes.</p>
+                  )}
                 </li>
               ))}
             </ol>
