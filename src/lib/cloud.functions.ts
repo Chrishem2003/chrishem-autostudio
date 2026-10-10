@@ -307,6 +307,7 @@ export interface CloudRun {
     id: string;
     label: string | null;
     status: string;
+    outcomeState: "confirmed" | "uncertain" | "not_attempted";
     durationMs: number | null;
     errorDetail: string | null;
     output: import("@/integrations/supabase/types").Json | null;
@@ -319,7 +320,7 @@ export const listRuns = createServerFn({ method: "GET" })
     const { data, error } = await context.supabase
       .from("run_logs")
       .select(
-        "id, automation_id, status, trigger_type, is_dry_run, started_at, duration_ms, error_summary, run_step_logs(id, node_label, status, duration_ms, error_detail, output_snapshot, step_index)",
+        "id, automation_id, status, trigger_type, is_dry_run, started_at, duration_ms, error_summary, run_step_logs(id, node_label, status, outcome_state, duration_ms, error_detail, output_snapshot, step_index)",
       )
       .order("started_at", { ascending: false })
       .limit(60);
@@ -339,6 +340,7 @@ export const listRuns = createServerFn({ method: "GET" })
           id: s.id,
           label: s.node_label,
           status: s.status,
+          outcomeState: s.outcome_state,
           durationMs: s.duration_ms,
           errorDetail: s.error_detail,
           output: s.output_snapshot,
