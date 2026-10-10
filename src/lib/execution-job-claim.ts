@@ -32,9 +32,9 @@ export function parseClaimedExecutionJob(value: unknown): ClaimedExecutionJob {
   }
 
   if (
-    !Number.isInteger(row.max_attempts) || (row.max_attempts as number) < 1 ||
+    typeof row.max_attempts !== "number" || !Number.isInteger(row.max_attempts) || row.max_attempts < 1 ||
     (row.max_attempts as number) > 10 ||
-    !Number.isInteger(row.attempts) || (row.attempts as number) < 1 ||
+    typeof row.attempts !== "number" || !Number.isInteger(row.attempts) || row.attempts < 1 ||
     (row.attempts as number) > (row.max_attempts as number)
   ) {
     throw new Error("Queue claim row has invalid attempt counters.");
