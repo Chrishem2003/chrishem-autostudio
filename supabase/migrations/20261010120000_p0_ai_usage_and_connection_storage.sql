@@ -52,7 +52,7 @@ begin
     return null;
   end if;
 
-  if _task <> 'compose_flow' then
+  if _task is distinct from 'compose_flow' then
     raise exception 'Unsupported AI quota task';
   end if;
 
