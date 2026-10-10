@@ -243,3 +243,11 @@ A shared runtime schema now validates saved workflow JSON at the authenticated m
 The outbound IP policy now also rejects additional IPv4 special-use ranges (192.31.196.0/24, 192.52.193.0/24, and 192.175.48.0/24) and the IPv6 documentation prefix 3fff::/20, with regression tests. The request transport remains pinned to a previously validated DNS result and does not automatically follow redirects; remote response bodies are bounded and never stored in run details.
 
 **Acceptance boundary:** these changes need exact-head CI confirmation. They do not constitute a staging deployment, a real provider-side delivery test, or permission to enable queue/outbound feature flags. Keep `AUTOSTUDIO_DURABLE_QUEUE_ENABLED=false` and `AUTOSTUDIO_OUTBOUND_TRANSPORT_READY` unset/false until the staging runbook's gates pass.
+
+## Runtime rollout gates and staging acceptance — 2026-10-10
+
+The durable queue and outbound HTTP transport now share a small fail-closed gate module. Only the exact string `"true"` enables each capability; missing, misspelled, whitespace-padded, uppercase, or cross-wired flags remain disabled. Queue producer checks and the outbound transport call site use these helpers rather than duplicating raw environment comparisons.
+
+Regression tests cover absent defaults, invalid values, independent flags, and the outbound transport's no-request response when readiness is not explicitly enabled. Entry-point review confirms manual execution validates saved JSON and the execution plan before queue enqueue; scheduled execution validates persisted JSON and the plan before enqueue; the queue worker revalidates persisted JSON and the plan before creating a run record or step intent.
+
+**Not yet verified:** no real staging environment, deployed worker authentication, provider sandbox effect, or provider-side idempotency contract has been tested in this repository session. The rollout flags must remain disabled until the runbook's environment-specific checks are completed.
