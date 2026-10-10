@@ -92,7 +92,7 @@ export const saveAutomation = createServerFn({ method: "POST" })
         automationId: z.string().uuid().optional(),
         flow: workflowSchema,
         description: z.string().max(500).optional(),
-        status: z.enum(["draft", "live", "paused"]).optional(),
+        status: z.enum(["draft", "paused"]).optional(),
         changeSummary: z.string().max(300).optional(),
       })
       .parse(input),
