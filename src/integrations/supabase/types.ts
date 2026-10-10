@@ -158,6 +158,8 @@ export type Database = {
           id?: string
           is_published?: boolean
           last_run_at?: string | null
+          schedule_lock_token?: string | null
+          schedule_lock_until?: string | null
           name?: string
           published_at?: string | null
           remix_count?: number
