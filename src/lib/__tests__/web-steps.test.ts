@@ -1,6 +1,6 @@
 // @ts-nocheck -- Bun's test runner supplies test types at runtime
 import { describe, it, expect } from "bun:test";
-import { isBlockedHost, isRetrySafeMethod, resolvePublicTarget } from "../web-steps.server";
+import { isBlockedHost, isRetrySafeMethod, resolvePublicTarget, summarizeWebResponse } from "../web-steps.server";
 
 describe("web step address rules", () => {
   it("blocks localhost and local-only hostnames", () => {
@@ -66,5 +66,20 @@ describe("outbound retry safety", () => {
     expect(isRetrySafeMethod("DELETE")).toBe(true);
     expect(isRetrySafeMethod("POST")).toBe(false);
     expect(isRetrySafeMethod("PATCH")).toBe(false);
+  });
+});
+
+
+describe("remote response audit summaries", () => {
+  it("summarizes successful responses without including provider response bodies", () => {
+    expect(summarizeWebResponse(200, "api.example.com")).toBe("200 from api.example.com.");
+    expect(summarizeWebResponse(201, "api.example.com", true)).toBe("201 from api.example.com (succeeded after retry).");
+  });
+
+  it("summarizes error responses without including remote payloads", () => {
+    const detail = summarizeWebResponse(500, "api.example.com");
+    expect(detail).toContain("refused the request (500)");
+    expect(detail).not.toContain("access_token");
+    expect(detail).not.toContain("private customer payload");
   });
 });
