@@ -4,6 +4,8 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { executeStep, type ExecutionMode } from "@/lib/execute-step.server";
 import type { WorkflowNode } from "@/lib/workflow";
 
+const MAX_FLOW_RUNTIME_MS = 4 * 60 * 1000;
+
 const flowShape = z.object({
   name: z.string().min(1).max(200),
   nodes: z.array(z.object({
@@ -170,16 +172,26 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
       const node = connectedOrder[index]!;
       if (steps.some((step) => step.status === "failed")) break;
       let step;
-      try {
-        step = await executeStep({ node, flowName: flow.name, userId: context.userId, mode: data.mode });
-      } catch (error) {
+      if (Date.now() - startedMs >= MAX_FLOW_RUNTIME_MS) {
         step = {
           nodeId: node.id,
           label: node.name,
           status: "failed" as const,
           ms: 0,
-          detail: error instanceof Error ? error.message.slice(0, 500) : "The step failed unexpectedly.",
+          detail: "The flow exceeded its four-minute execution budget. Remaining steps were halted.",
         };
+      } else {
+        try {
+          step = await executeStep({ node, flowName: flow.name, userId: context.userId, mode: data.mode });
+        } catch (error) {
+          step = {
+            nodeId: node.id,
+            label: node.name,
+            status: "failed" as const,
+            ms: 0,
+            detail: error instanceof Error ? error.message.slice(0, 500) : "The step failed unexpectedly.",
+          };
+        }
       }
       steps.push(step);
       const { error: stepLogError } = await context.supabase.from("run_step_logs").insert({
