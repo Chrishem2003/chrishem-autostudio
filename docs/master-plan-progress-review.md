@@ -395,3 +395,11 @@ The build remains aligned with the plan's reliability-first sequence: execution 
 - CI previously found and exposed strict TypeScript narrowing errors in the now-blocked Gmail handler; that handler was simplified to retain the guard without unreachable provider code. The current exact-head CI result must be checked before this batch is marked verified.
 - Remaining deployment boundary: live run queueing will return a safe error while `AUTOSTUDIO_DURABLE_QUEUE_ENABLED` is disabled. Provider execution must not be enabled until queue worker, auth, lease/recovery, and staging side effects have been rehearsed.
 
+## Cloud owner-scope hardening — 2026-10-11
+
+- Audited authenticated cloud server functions and added explicit `user_id = context.userId` ownership predicates for automation updates/deletes/status changes, version restore and reads, run creation/history, and integration listing/verification/disconnection.
+- Run history is now restricted to automation IDs owned by the authenticated user; an account with no automations receives an empty history rather than an unfiltered query.
+- Version restore checks ownership before reading the snapshot and refuses to proceed if the owned automation no longer exists.
+- These checks provide defense in depth alongside Supabase row-level security. This is not a substitute for reviewing the database RLS policies themselves.
+- CI must pass at the exact latest `main` SHA before this batch is considered verified.
+
