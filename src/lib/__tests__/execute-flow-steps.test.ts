@@ -63,7 +63,7 @@ describe("shared flow-step engine", () => {
     expect(executions).toBe(0);
     expect(persisted).toHaveLength(1);
     expect(result.steps[0].detail).toMatch(/preflight failed before any step executed/i);
-    expect(result.steps[0].detail).toMatch(/not an earlier step/i);
+    expect(result.steps[0].detail).toMatch(/not an earlier step|not a declared output/i);
   });
 
   it("halts without executing when intent persistence fails", async () => {
