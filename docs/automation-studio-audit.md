@@ -253,6 +253,16 @@ CI run `38074752864` passed the PostgreSQL migration smoke test and the applicat
 
 The PostgreSQL smoke suite was expanded to cover expired-lease recovery and retry exhaustion: expired running jobs must become `needs_review` with their lease cleared, and a retry at the attempt limit must become `dead_letter`. These expanded SQL assertions passed in CI run `38074882912` against PostgreSQL 16.
 
+## Queue worker integration — 2026-10-10
+
+Added the protected `POST /api/public/cron/run-execution-job` endpoint. It authenticates with the existing cron bearer secret, claims at most one durable job, reloads the saved automation server-side, validates the workflow shape and linear execution plan, persists the run and step intent/outcome audit records, heartbeats the lease between steps, and uses the existing server-side step executor. Lease loss and uncertain side effects fail closed.
+
+The existing scheduler now has an explicit rollout gate: set `AUTOSTUDIO_DURABLE_QUEUE_ENABLED=true` only after the queue migration is applied to the target Supabase project and a separate cron invocation is configured for `/api/public/cron/run-execution-job`. With the flag enabled, due scheduled automations are enqueued under a token-checked scheduler lease and are not directly executed in that scheduler request. The flag remains disabled by default so an unconfigured worker cannot silently strand production scheduled runs.
+
+The scheduler idempotency key is stable across a failed lease release until the cadence cursor advances. This prevents a retry of the enqueue operation from creating a second queue job after a transient release failure.
+
+**Not yet complete:** manual live-run requests are not yet routed through the queue; the legacy direct scheduler path remains active unless the rollout flag is enabled; the new worker has only CI build/typecheck coverage so far, not a live Supabase or provider end-to-end test. Do not enable the flag in production until the migration and worker cron are deployed and smoke-tested in a non-production environment.
+ 
 ## Concurrent claim test — 2026-10-10
 
 Added a PostgreSQL CI concurrency check that seeds eight ready jobs, starts eight independent `psql` sessions concurrently, and asserts that all eight sessions receive a job and every claimed ID is unique. This tests the actual `FOR UPDATE SKIP LOCKED` claim RPC under competing database sessions rather than simulating concurrency in a unit test.
