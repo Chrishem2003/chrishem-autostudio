@@ -83,30 +83,7 @@ export const sendGmailStep = createServerFn({ method: "POST" })
   .inputValidator((d) =>
     z.object({ config: z.record(z.string(), z.string()), flowName: z.string().max(200) }).parse(d),
   )
-  .handler(async ({ data, context }) => {
+  .handler(async () => {
+    // Retain a clear server-side guard for any stale clients calling this legacy endpoint.
     assertDirectProviderExecutionDisabled();
-    const { callAsAppUser, appUserReconnectRequired } = await import("@/integrations/lovable/appUserConnector");
-    const { getConnectionForUser } = await import("./app-user-connections.server");
-    const msg = buildGmailMessage(data.config, data.flowName);
-    if (!msg) return { ok: false, detail: "Add who to send to in “To”." };
-    if ("error" in msg) return { ok: false, detail: msg.error };
-    const conn = await getConnectionForUser(context.userId, CONNECTOR);
-    if (!conn) return { ok: false, detail: "Connect your Gmail first (Accounts tab → Connect Gmail)." };
-    const started = Date.now();
-    const res = await callAsAppUser({
-      gatewayBaseUrl: GATEWAY,
-      connectionAPIKey: conn.key,
-      connectorId: CONNECTOR,
-      path: "/gmail/v1/users/me/messages/send",
-      requiredScopes: SCOPES,
-      init: { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ raw: toRawEmail(msg) }) },
-    });
-    const ms = Date.now() - started;
-    if (await appUserReconnectRequired(res)) return { ok: false, ms, detail: "Your Gmail access needs renewing — press Reconnect Gmail in the Accounts tab." };
-    if (!res.ok) {
-      const text = (await res.text()).slice(0, 300);
-      console.error(`Gmail send failed [${res.status}]: ${text}`);
-      return { ok: false, ms, detail: `Gmail refused the email (${res.status}). ${text}` };
-    }
-    return { ok: true, ms, detail: `Email sent from ${conn.email ?? "your Gmail"} to ${msg.to.join(", ")}.` };
   });
