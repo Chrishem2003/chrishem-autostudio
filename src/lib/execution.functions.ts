@@ -1,7 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { executeStep, type ExecutionMode } from "@/lib/execute-step.server";
+import { type ExecutionMode } from "@/lib/execute-step.server";
+import { executeStepSafely } from "@/lib/execute-step-safely.server";
 import type { WorkflowNode } from "@/lib/workflow";
 import { planLinearExecution } from "@/lib/execution-plan";
 import { classifyExecutionOutcome } from "@/lib/execution-outcome";
@@ -254,11 +255,19 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
       if (Date.now() - startedMs >= MAX_FLOW_RUNTIME_MS) {
         step = { nodeId: node.id, label: node.name, status: "failed" as const, ms: 0, detail: "The flow exceeded its four-minute execution budget. Remaining steps were halted." };
       } else {
-        try {
-          step = await executeStep({ node, flowName: flow.name, userId: context.userId, mode: data.mode });
-        } catch (error) {
-          step = { nodeId: node.id, label: node.name, status: "failed" as const, ms: 0, detail: "The step stopped unexpectedly. Its external outcome may be uncertain; verify the destination before retrying." };
-        }
+        step = await executeStepSafely({
+          node,
+          flowName: flow.name,
+          userId: context.userId,
+          mode: data.mode,
+          onUnexpectedError: (error) => {
+            console.error("[AutoStudio executor] Step failed unexpectedly.", {
+              automationId: row.id,
+              nodeId: node.id,
+              errorName: error instanceof Error ? error.name : "UnknownError",
+            });
+          },
+        });
       }
       steps.push(step);
       const outcomeState = classifyExecutionOutcome(step.status, step.detail);
