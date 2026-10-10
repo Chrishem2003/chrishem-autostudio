@@ -76,15 +76,14 @@ export async function enqueueExecutionJob(input: EnqueueExecutionJobInput): Prom
   });
   if (error) throw new Error(`Unable to enqueue execution job: ${error.message}`);
   const row = Array.isArray(data) ? data[0] : null;
-  if (
-    !row ||
-    typeof row !== "object" ||
-    typeof row["id"] !== "string" ||
-    typeof row["status"] !== "string"
-  ) {
+  if (!row || typeof row !== "object" || Array.isArray(row)) {
     throw new Error("Queue enqueue returned no valid job.");
   }
-  return { id: row["id"], status: row["status"] };
+  const record = row as Record<string, unknown>;
+  if (typeof record["id"] !== "string" || typeof record["status"] !== "string") {
+    throw new Error("Queue enqueue returned no valid job.");
+  }
+  return { id: record["id"], status: record["status"] };
 }
 
 /**
