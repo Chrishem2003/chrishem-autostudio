@@ -69,6 +69,7 @@ describe("persisted workflow runtime validation", () => {
   it("rejects duplicate node IDs and invalid graph connections at the planner boundary", async () => {
     const { planLinearExecution } = await import("../execution-plan");
     const duplicateNodes = {
+      name: "Duplicate identifiers",
       nodes: [
         { ...valid.nodes[0], id: "trigger" },
         { ...valid.nodes[1], id: "trigger" },
@@ -76,8 +77,11 @@ describe("persisted workflow runtime validation", () => {
       edges: [],
     };
     const parsedDuplicate = parsePersistedWorkflow(duplicateNodes);
-    // Duplicate identifiers are rejected at the earliest runtime boundary.
-    expect(parsedDuplicate.success).toBe(false);
+    // Shape validation accepts well-formed fields; graph planning rejects duplicate IDs.
+    expect(parsedDuplicate.success).toBe(true);
+    if (parsedDuplicate.success) {
+      expect(planLinearExecution(parsedDuplicate.data).error).toMatch(/missing or duplicate step ID/i);
+    }
 
     const dangling = {
       ...valid,
