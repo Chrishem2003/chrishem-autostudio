@@ -54,8 +54,39 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
           }
           if (!lockToken) continue; // Another scheduler already owns this run or the lease is still active.
 
-          ran++;
           const started = Date.now();
+          const startedAt = new Date(started).toISOString();
+          // Persist the run before any external side effects. If audit persistence
+          // is unavailable, fail closed and release the lease without executing.
+          const { data: run, error: runError } = await supabaseAdmin
+            .from("run_logs")
+            .insert({
+              automation_id: row.id,
+              workspace_id: row.workspace_id,
+              trigger_type: "schedule",
+              is_dry_run: false,
+              status: "running",
+              started_at: startedAt,
+            })
+            .select("id")
+            .single();
+
+          if (runError || !run) {
+            console.error("[AutoStudio scheduler] Could not persist run start; flow was not executed.", {
+              automationId: row.id,
+              errorCode: runError?.code ?? "NO_RUN_RECORD",
+            });
+            const failedAt = new Date().toISOString();
+            await supabaseAdmin.rpc("release_scheduled_automation", {
+              _automation_id: row.id,
+              _lock_token: lockToken,
+              _last_run_at: failedAt,
+            });
+            failed++;
+            continue;
+          }
+
+          ran++;
           const steps: Array<{
             nodeId: string;
             label: string;
@@ -103,28 +134,23 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
           const hasFailure = steps.some((step) => step.status === "failed");
           if (hasFailure) failed++;
           const finishedAt = new Date().toISOString();
-          const { data: run, error: runError } = await supabaseAdmin
+          const { error: finishError } = await supabaseAdmin
             .from("run_logs")
-            .insert({
-              automation_id: row.id,
-              workspace_id: row.workspace_id,
-              trigger_type: "schedule",
-              is_dry_run: false,
+            .update({
               status: hasFailure ? "failed" : "success",
-              started_at: new Date(started).toISOString(),
               finished_at: finishedAt,
               duration_ms: Date.now() - started,
               error_summary: hasFailure ? steps.find((step) => step.status === "failed")!.detail.slice(0, 500) : null,
             })
-            .select("id")
-            .single();
+            .eq("id", run.id);
 
-          if (runError) {
+          if (finishError) {
             console.error("[AutoStudio scheduler] Could not persist run summary.", {
               automationId: row.id,
-              errorCode: runError.code,
+              runId: run.id,
+              errorCode: finishError.code,
             });
-          } else if (run && steps.length) {
+          } else if (steps.length) {
             const { error: stepError } = await supabaseAdmin.from("run_step_logs").insert(
               steps.map((step, index) => ({
                 run_id: run.id,
