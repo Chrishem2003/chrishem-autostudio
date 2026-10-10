@@ -81,7 +81,7 @@ This section records actual changes on the branch; it does not imply they are me
 
 1. The newest commit must complete CI successfully; the earlier green run does not cover later changes.
 2. Runtime execution of the pinned HTTP transport must be verified on the actual deployment runtime. The repository's current build configuration defaults to a Cloudflare target, while the strongest DNS-pinning implementation uses Node's HTTP(S) request APIs. A successful bundle build alone does not prove those APIs work in the deployed runtime. Do not claim outbound HTTP is production-ready until a deployed smoke test passes or the deployment target/egress transport is reconciled.
-3. Add an atomic scheduler lease/job queue so concurrent cron calls cannot execute the same flow twice, then implement queue retries, dead-lettering, idempotency keys, and circuit state in P2.
+3. The atomic scheduler lease is now implemented; the durable job queue, queue retries, dead-lettering, idempotency keys, and circuit state remain P2 work.
 4. Finish the connector manifest registry and true `verify()` adapters. Gmail gets a real read-only profile check; generic app entries remain unverified, and the chat-webhook path still needs an explicit provider verification/test UX.
 5. Add a complete server-side `executeFlow` endpoint so manual, scheduled, and webhook runs share flow traversal, branch handling, run creation, event logs, and idempotency rather than sharing only the per-step executor.
 6. Reconcile the credential vault with the plan's future `credentials` table and key-version rotation; current storage intentionally matches the existing `app_user_connections` contract.
