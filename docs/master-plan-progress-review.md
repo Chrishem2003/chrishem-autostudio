@@ -219,3 +219,19 @@ GitHub CI is evidence for code/build/unit-test and disposable PostgreSQL behavio
 - Run a controlled staging rehearsal with outbound transport and durable queue still disabled first.
 - Verify deployment-specific DNS/network behavior and operator-controlled enablement before activating external requests.
 - Keep uncertain external side effects in manual review rather than automatic replay.
+
+
+## Prototype-safe mapping storage — 2026-10-10
+
+**Implemented on commit `75244ff8f00620093fd65d9980f1f69ee737bdf7`; both CI jobs passed on the exact code head.**
+
+- Prior-step output storage and resolved configuration objects now use null-prototype records, avoiding inherited object properties and special-key setter behavior during interpolation.
+- Resolver lookups require an own entry for the referenced step ID as well as an own field on the step output.
+- Added regression tests for special-looking step IDs and for resolved config objects without inherited prototypes.
+- Verification: typecheck, unit tests, production build, and durable queue migration smoke test all passed on the exact code head: [GitHub Actions](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38085054808).
+
+### Next batch priority
+
+1. Finish the API-entrypoint and persisted-workflow negative-path review.
+2. Add staging checklist assertions for output redaction, queue disabled-by-default, and outbound transport disabled-by-default.
+3. Only after those checks, plan the controlled staging rehearsal; do not enable live transport merely because CI is green.
