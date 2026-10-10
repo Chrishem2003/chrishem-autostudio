@@ -10,7 +10,7 @@ export function classifyExecutionOutcome(status: StepStatus, detail: string): Ou
   if (status === "success") return "confirmed";
   if (status === "dry_run") return "not_attempted";
 
-  return /network error|no reply|couldn't reach|did not respond|timed? ?out|timeout|unexpectedly|verify external effects|outcome could not be safely recorded|provider error|http 5\d\d|status 5\\d\\d|got 5\d\d/i.test(detail)
+  return /network error|no reply|couldn't reach|did not respond|timed? ?out|timeout|unexpectedly|verify external effects|outcome could not be safely recorded|provider error|http 5\d\d|status 5\d\d|got 5\d\d/i.test(detail)
     ? "uncertain"
     : "not_attempted";
 }
