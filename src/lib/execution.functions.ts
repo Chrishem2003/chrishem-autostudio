@@ -127,84 +127,9 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
       return { queued: true as const, jobId: id, status, mode: "live" as const, steps: [] as RunStep[] };
     }
 
-    let releaseManualLock: (() => Promise<void>) | null = null;
-    if (data.mode === "live") {
-      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-      const { data: lockToken, error: lockError } = await supabaseAdmin.rpc("claim_manual_automation", {
-        _automation_id: row.id,
-        _lease_seconds: 600,
-      });
-      if (lockError) throw new Error("Could not safely claim this flow for execution.");
-      if (!lockToken) throw new Error("This flow is already running. Wait for the current run to finish before starting another.");
-      releaseManualLock = async () => {
-        const { error: releaseError } = await supabaseAdmin.rpc("release_manual_automation", {
-          _automation_id: row.id,
-          _lock_token: lockToken,
-        });
-        if (releaseError) {
-          console.error("[AutoStudio executor] Manual run lease release failed.", {
-            automationId: row.id,
-            errorCode: releaseError.code,
-          });
-        }
-      };
-    }
-
     let activeRunId: string | null = null;
     let runStartedMs = Date.now();
     try {
-    // Recover abandoned manual runs for this automation only after the maximum
-    // lease and runtime window. Unfinished step intents remain uncertain.
-    if (data.mode === "live") {
-      const staleBefore = new Date(Date.now() - 20 * 60 * 1000).toISOString();
-      const { data: staleRuns, error: staleQueryError } = await context.supabase
-        .from("run_logs")
-        .select("id")
-        .eq("automation_id", row.id)
-        .eq("status", "running")
-        .eq("trigger_type", "manual")
-        .lt("started_at", staleBefore)
-        .limit(50);
-      if (staleQueryError) {
-        console.error("[AutoStudio executor] Could not inspect stale manual runs; refusing to start another live run.", {
-          automationId: row.id, errorCode: staleQueryError.code,
-        });
-        throw new Error("Could not safely reconcile previous runs. No new live run was started; inspect run history and try again.");
-      }
-      for (const stale of staleRuns ?? []) {
-        const { error: stepRecoveryError } = await context.supabase
-          .from("run_step_logs")
-          .update({
-            status: "failed",
-            outcome_state: "uncertain",
-            error_detail: "The worker stopped before confirming this step. Verify external effects before retrying.",
-            output_snapshot: { recoveryHint: "Stale in-flight step; external outcome is uncertain. Verify before retry." },
-          })
-          .eq("run_id", stale.id)
-          .eq("status", "running");
-        if (stepRecoveryError) {
-          console.error("[AutoStudio executor] Could not recover stale step logs; refusing to start another live run.", {
-            runId: stale.id, errorCode: stepRecoveryError.code,
-          });
-          throw new Error("Could not safely recover an earlier run. No new live run was started; inspect run history and try again.");
-        }
-        const { error: runRecoveryError } = await context.supabase
-          .from("run_logs")
-          .update({
-            status: "failed",
-            finished_at: new Date().toISOString(),
-            error_summary: "The manual worker stopped before finalizing this run. Inspect uncertain step outcomes before retrying.",
-          })
-          .eq("id", stale.id)
-          .eq("status", "running");
-        if (runRecoveryError) {
-          console.error("[AutoStudio executor] Could not finalize stale manual run; refusing to start another live run.", {
-            runId: stale.id, errorCode: runRecoveryError.code,
-          });
-          throw new Error("Could not safely finalize an earlier run. No new live run was started; inspect run history and try again.");
-        }
-      }
-    }
     const startedAt = new Date().toISOString();
     const startedMs = Date.now();
     runStartedMs = startedMs;
@@ -335,14 +260,5 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
         }
       }
       throw error;
-    } finally {
-      if (releaseManualLock) {
-        try {
-          await releaseManualLock();
-        } catch {
-          // Lease expiry is the final safety net; never mask the run result with cleanup failure.
-          console.error("[AutoStudio executor] Manual run lease cleanup failed.");
-        }
-      }
     }
   });
