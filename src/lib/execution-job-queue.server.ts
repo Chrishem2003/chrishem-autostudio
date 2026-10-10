@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import type { Json } from "@/integrations/supabase/types";
 import type { ExecutionJobStatus } from "@/lib/execution-job-policy";
 import type {
   ClaimedExecutionJob,
@@ -45,7 +46,7 @@ export interface EnqueueExecutionJobInput {
   automationId: string;
   triggerType: "manual" | "scheduled" | "webhook";
   idempotencyKey: string;
-  payload?: Record<string, unknown>;
+  payload?: Json;
   requestedBy?: string | null;
   maxAttempts?: number;
   availableAt?: string;
@@ -67,7 +68,7 @@ export async function enqueueExecutionJob(input: EnqueueExecutionJobInput): Prom
   if (!row || typeof row !== "object" || !("id" in row) || !("status" in row)) {
     throw new Error("Queue enqueue returned no valid job.");
   }
-  return { id: String(row.id), status: String(row.status) };
+  return { id: String(row["id"]), status: String(row["status"]) };
 }
 
 /**
