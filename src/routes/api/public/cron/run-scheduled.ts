@@ -5,6 +5,7 @@ import type { Workflow } from "@/lib/workflow";
 import { planLinearExecution } from "@/lib/execution-plan";
 import { executeFlowSteps } from "@/lib/execute-flow-steps.server";
 import { buildRunFinalization } from "@/lib/run-finalization";
+import { enqueueExecutionJob } from "@/lib/execution-job-queue.server";
 
 const MAX_SCHEDULED_FLOW_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -89,6 +90,53 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
           if (!trigger) continue;
           const cadence = trigger.config?.["cadence"] || "Hourly";
           if (!isDue(cadence, row.last_run_at ? new Date(row.last_run_at) : null, now, trigger.config?.["timezone"])) continue;
+
+          // Roll out durable queue consumption explicitly. Until the worker cron is
+          // configured and runtime-validated, the legacy direct path remains the
+          // default. With the flag enabled, this branch only enqueues and never
+          // executes workflow steps in the scheduler request.
+          if (process.env["AUTOSTUDIO_DURABLE_QUEUE_ENABLED"] === "true") {
+            const { data: queueLock, error: queueLockError } = await supabaseAdmin.rpc("claim_scheduled_automation", {
+              _automation_id: row.id,
+              _lease_seconds: 900,
+            });
+            if (queueLockError || !queueLock) continue;
+
+            const enqueuedAt = new Date().toISOString();
+            const idempotencyKey = "schedule:" + row.id + ":" + Math.floor(now.getTime() / 60_000);
+            let enqueueSucceeded = false;
+            try {
+              await enqueueExecutionJob({
+                automationId: row.id,
+                triggerType: "scheduled",
+                idempotencyKey,
+                requestedBy: row.user_id,
+                payload: { triggerType: "schedule", scheduledAt: enqueuedAt },
+              });
+              enqueueSucceeded = true;
+              ran++;
+            } catch (queueError) {
+              failed++;
+              console.error("[AutoStudio scheduler] Durable job enqueue failed.", {
+                automationId: row.id,
+                errorName: queueError instanceof Error ? queueError.name : "UnknownError",
+              });
+            }
+
+            const { error: queueReleaseError } = await supabaseAdmin.rpc("release_scheduled_automation", {
+              _automation_id: row.id,
+              _lock_token: queueLock,
+              _last_run_at: enqueueSucceeded ? enqueuedAt : (row.last_run_at ?? enqueuedAt),
+            });
+            if (queueReleaseError) {
+              console.error("[AutoStudio scheduler] Could not release queue-enqueue lease.", {
+                automationId: row.id,
+                errorCode: queueReleaseError.code,
+              });
+              failed++;
+            }
+            continue;
+          }
 
           const { data: lockToken, error: claimError } = await supabaseAdmin.rpc("claim_scheduled_automation", {
             _automation_id: row.id,
