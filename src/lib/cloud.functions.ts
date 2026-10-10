@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertClientRunRecordIsDryRun } from "@/lib/client-run-record-policy";
+import { sanitizeRunOutput } from "@/lib/run-output-sanitizer";
 
 /**
  * Cloud persistence for the studio. Every save writes an immutable version row
@@ -319,16 +320,6 @@ export const listRuns = createServerFn({ method: "GET" })
     }));
   });
 
-const SECRETISH = /(secret|token|key|password|authorization|bearer|credential)/i;
-
-/** Never persist anything that looks like a credential. */
-function redact(value: Record<string, unknown> | undefined) {
-  if (!value) return null;
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(value)) out[k] = SECRETISH.test(k) ? "[redacted]" : v;
-  return out;
-}
-
 export const recordRun = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
@@ -383,7 +374,7 @@ export const recordRun = createServerFn({ method: "POST" })
           status: s.status,
           duration_ms: s.durationMs,
           error_detail: s.detail ?? null,
-          output_snapshot: redact(s.output) as never,
+          output_snapshot: (sanitizeRunOutput(s.output) ?? null) as never,
         })),
       );
       if (stepErr) throw new Error(stepErr.message);
