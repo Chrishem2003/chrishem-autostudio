@@ -95,8 +95,10 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
             detail: string;
           }> = [];
 
-          for (const node of executionPlan.nodes) {
+          for (let index = 0; index < executionPlan.nodes.length; index++) {
+            const node = executionPlan.nodes[index]!;
             if (steps.some((step) => step.status === "failed")) break;
+
             if (Date.now() - started >= MAX_SCHEDULED_FLOW_RUNTIME_MS) {
               steps.push({
                 nodeId: node.id,
@@ -105,29 +107,58 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
                 ms: 0,
                 detail: "Scheduled flow exceeded its four-minute execution budget. Remaining steps were halted.",
               });
-              break;
+            } else {
+              try {
+                const result = await executeStep({
+                  node,
+                  flowName: wf.name || row.name,
+                  userId: row.user_id,
+                  mode: "live",
+                });
+                steps.push(result);
+              } catch (error) {
+                console.error("[AutoStudio scheduler] Step failed.", {
+                  automationId: row.id,
+                  nodeId: node.id,
+                  errorName: error instanceof Error ? error.name : "UnknownError",
+                });
+                steps.push({
+                  nodeId: node.id,
+                  label: node.name.slice(0, 160),
+                  status: "failed",
+                  ms: 0,
+                  detail: "The step failed unexpectedly. Check the connection and run details before retrying.",
+                });
+              }
             }
-            try {
-              const result = await executeStep({
-                node,
-                flowName: wf.name || row.name,
-                userId: row.user_id,
-                mode: "live",
-              });
-              steps.push(result);
-            } catch (error) {
-              console.error("[AutoStudio scheduler] Step failed.", {
+
+            // Write each step outcome before starting the next external side effect.
+            // If persistence fails, stop the flow rather than compounding an unknown state.
+            const step = steps[steps.length - 1]!;
+            const { error: stepError } = await supabaseAdmin.from("run_step_logs").insert({
+              run_id: run.id,
+              workspace_id: row.workspace_id,
+              step_index: index,
+              node_id: step.nodeId,
+              node_label: step.label.slice(0, 160),
+              status: step.status,
+              duration_ms: Math.max(0, Math.round(step.ms)),
+              error_detail: step.status === "failed" ? step.detail.slice(0, 500) : null,
+              output_snapshot: { detail: step.detail.slice(0, 500) },
+            });
+            if (stepError) {
+              console.error("[AutoStudio scheduler] Could not persist step outcome; stopping flow.", {
                 automationId: row.id,
+                runId: run.id,
                 nodeId: node.id,
-                errorName: error instanceof Error ? error.name : "UnknownError",
+                errorCode: stepError.code,
               });
-              steps.push({
-                nodeId: node.id,
-                label: node.name.slice(0, 160),
+              steps[steps.length - 1] = {
+                ...step,
                 status: "failed",
-                ms: 0,
-                detail: "The step failed unexpectedly. Check the connection and run details before retrying.",
-              });
+                detail: "The step outcome could not be safely recorded. Verify external effects before retrying.",
+              };
+              break;
             }
           }
 
@@ -150,27 +181,6 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
               runId: run.id,
               errorCode: finishError.code,
             });
-          } else if (steps.length) {
-            const { error: stepError } = await supabaseAdmin.from("run_step_logs").insert(
-              steps.map((step, index) => ({
-                run_id: run.id,
-                workspace_id: row.workspace_id,
-                step_index: index,
-                node_id: step.nodeId,
-                node_label: step.label.slice(0, 160),
-                status: step.status,
-                duration_ms: step.ms,
-                error_detail: step.status === "failed" ? step.detail.slice(0, 500) : null,
-                output_snapshot: { detail: step.detail.slice(0, 500) },
-              })),
-            );
-            if (stepError) {
-              console.error("[AutoStudio scheduler] Could not persist step events.", {
-                automationId: row.id,
-                runId: run.id,
-                errorCode: stepError.code,
-              });
-            }
           }
 
           // Release only our own lease and advance the cadence cursor even after failure.
