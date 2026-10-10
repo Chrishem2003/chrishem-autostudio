@@ -19,6 +19,8 @@ export interface ExecutionJobResult {
   sideEffectCertainty: SideEffectCertainty;
   error?: string | null;
   retryAt?: string | null;
+  /** False for permanent validation/configuration failures; do not spin retries. */
+  retryable?: boolean;
   providerSupportsIdempotency?: boolean;
 }
 
@@ -87,6 +89,10 @@ export async function processOneExecutionJob(
   if (result.status === "succeeded") {
     finalStatus = "succeeded";
     error = null;
+  } else if (result.retryable === false) {
+    // Permanent validation/configuration failures are terminal for this job.
+    // Keep them distinct from transient no-side-effect failures that can retry.
+    finalStatus = "failed";
   } else {
     const decision = decideExecutionRetry({
       sideEffectCertainty: result.sideEffectCertainty,
