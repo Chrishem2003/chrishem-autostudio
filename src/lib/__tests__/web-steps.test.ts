@@ -46,7 +46,7 @@ describe("web step address rules", () => {
   });
   it("rejects mixed DNS answers when any address is private", async () => {
     await expect(resolvePublicTarget("mixed.example", async () => [
-      { address: "203.0.113.7", family: 4 },
+      { address: "8.8.8.8", family: 4 },
       { address: "10.0.0.5", family: 4 },
     ])).rejects.toThrow(/private/i);
   });
