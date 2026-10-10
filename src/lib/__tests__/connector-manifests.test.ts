@@ -61,4 +61,20 @@ describe("connector manifests", () => {
   it("rejects non-string config values at the connector boundary", () => {
     expect(validateConnectorActionConfig("action.http", { url: "https://example.com", timeout: 30 })).toContain("must be text");
   });
+
+  it("rejects unknown connector settings instead of silently ignoring typos", () => {
+    expect(validateConnectorActionConfig("action.gmail", { to: "user@example.com", subejct: "typo" })).toContain("not supported");
+    expect(validateConnectorActionConfig("action.http", { url: "https://example.com", headers: "x-api-key: secret" })).toContain("not supported");
+  });
+
+  it("validates HTTP methods and timeout bounds before live execution", () => {
+    expect(validateConnectorActionConfig("action.http", { url: "https://example.com", method: "TRACE" })).toContain("HTTP method");
+    expect(validateConnectorActionConfig("action.http", { url: "https://example.com", timeout: "0" })).toContain("timeout");
+    expect(validateConnectorActionConfig("action.http", { url: "https://example.com", timeout: "31" })).toContain("timeout");
+    expect(validateConnectorActionConfig("action.http", { url: "https://example.com", method: "POST", timeout: "10" })).toBeNull();
+  });
+
+  it("preserves the documented legacy chat message fallback field", () => {
+    expect(validateConnectorActionConfig("app.slack.create.message", { webhook: "https://hooks.slack.com/services/example", fields: "hello" }, "Slack")).toBeNull();
+  });
 });
