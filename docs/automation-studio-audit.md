@@ -151,3 +151,22 @@ Still required before merging/deploying:
 The branch now includes responsive Workspace navigation, Studio links to primary product areas, saved-automation search/status filters, and `docs/product-north-star.md`. A starter registry in `src/lib/connector-manifests.ts` documents the current Gmail, chat-webhook, and generic HTTP execution paths, including verification levels, runtime gates, and retry policies. The live capability gate rejects action nodes without a reviewed manifest. Tests specifically ensure that a configured chat webhook is not described as provider-verified.
 
 CI passed on commit `c3cf62968358b58d85d857282f633d993803a23f`: frozen dependency install, TypeScript typecheck, 39 unit tests across 6 files, and production build. Later commits must pass their own CI. These checks do not substitute for the outstanding non-production migration rehearsal and deployed provider/runtime smoke tests.
+
+
+## Shared orchestration and finalization follow-up — 2026-10-10
+
+Latest verified branch head: `21514a023eebae01589cda4c563aefa8c8a71483`.
+
+GitHub Actions passed on this head:
+- Frozen dependency installation: passed
+- TypeScript typecheck: passed
+- Unit tests: **60 passed, 0 failed**
+- Production build: passed
+
+New source changes:
+- `src/lib/execute-flow-steps.server.ts` is now the shared ordered step traversal used by both manual and scheduled runs. It owns the intent-before-action boundary, execution-budget check, outcome classification, and stop-on-failure behavior. Trigger adapters continue to own authentication, lease claims/releases, and database-specific persistence.
+- `src/lib/run-finalization.ts` now defines the shared terminal status, duration, finish timestamp, and bounded error-summary policy for manual and scheduled runs.
+- Added focused tests for intent-write failure, outcome-write failure, ordered execution, and finalization status/duration behavior.
+- The execution-budget failure detail explicitly states that the action was not attempted, so its outcome classifier can distinguish it from an uncertain provider failure.
+
+This reduces orchestration drift but does **not** yet deliver the full planned `executeFlow(flow, trigger, mode)` system. Graph/branch semantics, schema-validated step inputs/outputs, a durable queue/worker, provider idempotency, controlled retries/backoff, circuit breakers, and dead-letter handling remain open. Migration rehearsal and deployed runtime/provider tests remain release gates. The pull request remains a draft and has not been merged.
