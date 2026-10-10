@@ -54,7 +54,7 @@ function parseIPv6(host: string): number[] | null {
   const right = halves.length === 2 && halves[1] ? halves[1].split(":") : [];
   if (
     left.some((part) => !/^[0-9a-f]{1,4}$/.test(part)) ||
-    right.some((part) => !/^[0-9a-f]{1,4}$/.test(part)
+    right.some((part) => !/^[0-9a-f]{1,4}$/.test(part))
   ) return null;
 
   const explicit = left.length + right.length;
@@ -158,6 +158,7 @@ function requestOnce(url: URL, data: WebInput, target: PinnedAddress): Promise<{
     }, (res) => {
       const chunks: Buffer[] = [];
       let size = 0;
+      let previewSize = 0;
       let settled = false;
       const finish = (fn: () => void) => {
         if (settled) return;
@@ -172,7 +173,11 @@ function requestOnce(url: URL, data: WebInput, target: PinnedAddress): Promise<{
           res.destroy();
           return;
         }
-        if (Buffer.concat(chunks).length < PREVIEW_BYTES) chunks.push(bytes);
+        if (previewSize < PREVIEW_BYTES) {
+          const previewChunk = bytes.subarray(0, PREVIEW_BYTES - previewSize);
+          chunks.push(previewChunk);
+          previewSize += previewChunk.length;
+        }
       });
       res.on("end", () => finish(() => resolve({
         status: res.statusCode ?? 0,
