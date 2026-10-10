@@ -211,3 +211,16 @@ This module is deliberately not wired into production execution yet; that requir
 The first CI run for the new retry-policy tests exposed a TypeScript test-runner typing mismatch (`bun:test` declarations are provided at runtime but not to `tsc`). The test file now follows the existing suite's `@ts-nocheck` convention; subsequent CI passed typecheck, tests, and build for that test fix. A further migration review tightened the lease consistency constraint so non-running rows require both lease fields to be null, rather than allowing a partially populated lease.
 
 A further SQL review changed the payload limit from `pg_column_size` to `octet_length(payload::text)` (and the matching enqueue check), so the 64 KiB policy is based on serialized JSON size rather than a potentially compressed storage representation.
+
+
+## Guarded worker orchestration — 2026-10-10
+
+Added a one-job worker orchestration boundary in `src/lib/execution-job-worker.ts` with focused tests in `src/lib/__tests__/execution-job-worker.test.ts`.
+
+- Claims at most one job through an injected adapter, keeping database/RPC transport separate from policy.
+- Converts unexpected executor exceptions into an uncertain outcome, which defaults to `needs_review`.
+- Uses the shared retry policy before choosing queued, needs-review, or dead-letter outcomes.
+- Requires successful finalization to be acknowledged; rejected finalization is reported explicitly rather than described as success.
+- If the executor heartbeats and the lease is rejected, the worker does not try to finalize with a stale token.
+
+This is orchestration logic only. It is not yet connected to a Supabase RPC adapter, a scheduler/worker deployment, or production execution routes. The executor must use the supplied stable idempotency key only with provider-specific guarantees that have been verified. A real worker runtime must heartbeat during long-running work and abort further work as soon as lease loss is detected.
