@@ -209,7 +209,10 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
         outcome_state: classifyExecutionOutcome(step.status, step.detail),
         duration_ms: Math.max(0, Math.round(step.ms)),
         error_detail: step.status === "failed" ? step.detail.slice(0, 500) : null,
-        output_snapshot: { detail: step.detail.slice(0, 500) },
+        output_snapshot: {
+          detail: step.detail.slice(0, 500),
+          outcomeState: classifyExecutionOutcome(step.status, step.detail),
+        },
       });
       if (stepLogError) {
         steps[steps.length - 1] = {
