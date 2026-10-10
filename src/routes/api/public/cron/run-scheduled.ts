@@ -6,7 +6,6 @@ import { executeFlowSteps } from "@/lib/execute-flow-steps.server";
 import { preparePersistedExecutionPlan } from "@/lib/prepare-execution-plan";
 import { buildRunFinalization } from "@/lib/run-finalization";
 import { enqueueExecutionJob } from "@/lib/execution-job-queue.server";
-import { parsePersistedWorkflow } from "@/lib/persisted-workflow";
 import { isDurableQueueEnabled } from "@/lib/runtime-feature-gates";
 
 const MAX_SCHEDULED_FLOW_RUNTIME_MS = 4 * 60 * 1000;
