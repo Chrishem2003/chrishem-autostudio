@@ -4,7 +4,7 @@ import { buildChatRequest, isChatMessageStep } from "@/lib/chat-steps";
 import { buildGmailMessage, isGmailSendStep, toRawEmail } from "@/lib/gmail-steps";
 import { callWeb, isBlockedHost, resolvePublicTarget, type WebInput } from "@/lib/web-steps.server";
 import { NODES } from "@/lib/automation-catalog";
-import { getConnectorManifestForNode } from "@/lib/connector-manifests";
+import { getConnectorManifestForNode, validateConnectorActionConfig } from "@/lib/connector-manifests";
 import type { WorkflowNode } from "@/lib/workflow";
 
 const GMAIL_GATEWAY = "https://connector-gateway.lovable.dev";
@@ -30,6 +30,8 @@ export function liveCapabilityError(node: WorkflowNode): string | null {
   if (!manifest) {
     return `"${node.name}" has no verified live executor or reviewed connector manifest. It must remain Test only until both are implemented.`;
   }
+  const contractError = validateConnectorActionConfig(node.defId, node.config, tool);
+  if (contractError) return `"${node.name}": ${contractError}`;
   if (isGmailSendStep(node.defId)) {
     return node.config["to"]?.trim()
       ? null
