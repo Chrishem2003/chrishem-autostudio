@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { executeStep, type ExecutionMode } from "@/lib/execute-step.server";
 import type { WorkflowNode } from "@/lib/workflow";
+import { planLinearExecution } from "@/lib/execution-plan";
 
 const MAX_FLOW_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -115,10 +116,9 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
       }
     }
 
-    const connectedOrder = (await import("@/lib/workflow")).orderedNodes(flow).filter(
-      (node) => flow.edges.some((edge) => edge.from === node.id || edge.to === node.id) || flow.nodes.length === 1,
-    );
-    if (!connectedOrder.length) throw new Error("Nothing to run yet — add and connect a couple of steps.");
+    const executionPlan = planLinearExecution(flow);
+    if (executionPlan.error) throw new Error(executionPlan.error);
+    const connectedOrder = executionPlan.nodes;
 
     let releaseManualLock: (() => Promise<void>) | null = null;
     if (data.mode === "live") {
