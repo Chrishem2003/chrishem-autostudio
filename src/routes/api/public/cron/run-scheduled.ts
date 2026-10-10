@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { authenticateCronRequest } from "@/integrations/supabase/cron-auth";
 import { isDue } from "@/lib/schedule";
-import { orderedNodes, type Workflow } from "@/lib/workflow";
+import type { Workflow } from "@/lib/workflow";
+import { planLinearExecution } from "@/lib/execution-plan";
 import { executeStep } from "@/lib/execute-step.server";
 
 const MAX_SCHEDULED_FLOW_RUNTIME_MS = 4 * 60 * 1000;
@@ -27,6 +28,14 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
         for (const row of rows ?? []) {
           const wf = row.flow_json as unknown as Workflow | null;
           if (!wf?.nodes || !Array.isArray(wf.nodes)) continue;
+          const executionPlan = planLinearExecution(wf);
+          if (executionPlan.error) {
+            console.warn("[AutoStudio scheduler] Flow rejected by execution planner.", {
+              automationId: row.id,
+              reason: executionPlan.error,
+            });
+            continue;
+          }
           const trigger = wf.nodes.find((node) => node.defId === "trigger.schedule");
           if (!trigger) continue;
           const cadence = trigger.config?.["cadence"] || "Hourly";
@@ -55,7 +64,7 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
             detail: string;
           }> = [];
 
-          for (const node of orderedNodes(wf)) {
+          for (const node of executionPlan.nodes) {
             if (steps.some((step) => step.status === "failed")) break;
             if (Date.now() - started >= MAX_SCHEDULED_FLOW_RUNTIME_MS) {
               steps.push({
