@@ -4,6 +4,11 @@ import type { WorkflowNode } from "@/lib/workflow";
 
 const TOKEN = /\{\{steps\.([A-Za-z0-9_-]+)\.([A-Za-z][A-Za-z0-9_]*)\}\}/g;
 
+export interface StepMappingValidationError {
+  nodeId: string;
+  error: string;
+}
+
 function allowedMappingKeys(node: WorkflowNode): ReadonlySet<string> {
   if (node.defId === "action.gmail") return new Set(["subject", "body"]);
   if (node.defId === "action.http") return new Set(["body"]);
@@ -14,27 +19,19 @@ function allowedMappingKeys(node: WorkflowNode): ReadonlySet<string> {
   return new Set();
 }
 
-/**
- * Validate every mapping before the flow starts, so a broken reference in a
- * later node cannot be discovered only after earlier steps have side effects.
- * The caller must supply nodes in their actual planned execution order.
- */
-export function validateStepMappings(nodes: readonly WorkflowNode[]): string | null {
+/** Validate every mapping before execution so later bad references cannot follow earlier side effects. */
+export function validateStepMappings(nodes: readonly WorkflowNode[]): StepMappingValidationError | null {
   const priorNodes = new Map<string, WorkflowNode>();
 
   for (const node of nodes) {
     const allowedKeys = allowedMappingKeys(node);
-    const tool = NODES[node.defId]?.tool;
-    const action = getConnectorActionForNode(node.defId, tool)?.action;
-    const allowedOutputFields = new Set(action?.output.fields ?? []);
-
     for (const [key, rawValue] of Object.entries(node.config)) {
       if (typeof rawValue !== "string") {
-        return `Step "${node.name}" has a non-text configuration value.`;
+        return { nodeId: node.id, error: `Step "${node.name}" has a non-text configuration value.` };
       }
       if (!rawValue.includes("{{") && !rawValue.includes("}}")) continue;
       if (!allowedKeys.has(key)) {
-        return `Data mapping is not allowed for "${key}" on step "${node.name}".`;
+        return { nodeId: node.id, error: `Data mapping is not allowed for "${key}" on step "${node.name}".` };
       }
 
       let malformed = false;
@@ -57,13 +54,12 @@ export function validateStepMappings(nodes: readonly WorkflowNode[]): string | n
         malformed = replaced.includes("{{") || replaced.includes("}}");
       }
       if (malformed) {
-        return `Step "${node.name}" contains an invalid or unsupported data token.`;
+        return { nodeId: node.id, error: `Step "${node.name}" contains an invalid or unsupported data token.` };
       }
       if (invalidReference) {
-        return `Step "${node.name}" has an invalid data mapping: ${invalidReference}.`;
+        return { nodeId: node.id, error: `Step "${node.name}" has an invalid data mapping: ${invalidReference}.` };
       }
     }
-
     priorNodes.set(node.id, node);
   }
   return null;
