@@ -422,3 +422,11 @@ These are database-level regression checks, not a substitute for staging rehears
 - Hardened ownership lookup error handling for version reads/restores, run recording, and integration disconnection. Integration-triggered automation pauses now explicitly retain the authenticated owner predicate and report persistence failure rather than silently returning a successful disconnect response when pausing fails.
 
 **Acceptance boundary:** exact-head CI must pass. This is server-side policy and unit-test coverage; it does not replace RLS review or authenticated integration tests against staging. Keep durable queue and outbound transport flags disabled until the staging acceptance gates pass.
+
+## Recursive run-output minimization — 2026-10-11
+
+- Replaced the legacy shallow output redactor on client-submitted dry-run records with a recursive sanitizer. Secret-like keys are redacted at any nesting level; bearer credentials, URLs and email addresses in strings are masked; strings, object/array breadth, and nesting depth are bounded before persistence.
+- Added deterministic tests for nested headers/tokens, embedded credentials and PII, collection/depth limits, string truncation, and unsupported runtime values.
+- This reduces accidental exposure in stored run-step snapshots but is not a substitute for data minimization at each connector. New connectors should return explicit allowlisted output fields rather than raw provider payloads.
+
+**Acceptance boundary:** exact-head CI must pass. This sanitizer is a defense-in-depth layer and does not prove every proprietary secret format is recognized.
