@@ -20,12 +20,18 @@ describe("connector manifests", () => {
     expect(getConnectorManifestForNode("app.hubspot.create.contact", "HubSpot")).toBeUndefined();
   });
 
-  it("labels capability according to the reviewed runtime contract", () => {
-    expect(getConnectorCapabilityLabel("action.gmail", "Gmail")).toBe("User test required");
-    expect(getConnectorCapabilityLabel("app.slack.create.message", "Slack")).toBe("Runtime gated");
+  it("labels capability according to both verification and runtime gates", () => {
+    expect(getConnectorCapabilityLabel("action.gmail", "Gmail")).toBe("Test email required");
+    expect(getConnectorCapabilityLabel("app.slack.create.message", "Slack")).toBe("Runtime gated · delivery unverified");
     expect(getConnectorCapabilityLabel("action.http", "HTTP")).toBe("Runtime gated");
     expect(getConnectorCapabilityLabel("app.hubspot.create.contact", "HubSpot")).toBe("Catalog only");
     expect(getConnectorCapabilityLabel("trigger.schedule", "Core")).toBeNull();
+  });
+
+  it("rejects malformed generated message node IDs rather than matching a prefix/suffix only", () => {
+    expect(getConnectorManifestForNode("app.slack.extra.create.message", "Slack")).toBeUndefined();
+    expect(getConnectorActionForNode("app.slack.extra.create.message", "Slack")).toBeUndefined();
+    expect(getConnectorManifestForNode("app.slack.create.message", "Slack")?.id).toBe("chat_webhooks");
   });
 
   it("defines unique, bounded action contracts with truthful outputs", () => {
@@ -39,7 +45,7 @@ describe("connector manifests", () => {
         expect(action.timeoutSeconds).toBeLessThanOrEqual(60);
         expect(action.output.fields.length).toBeGreaterThan(0);
         expect(action.output.description.length).toBeGreaterThan(0);
-        expect(action.nodeIds.every((id) => manifest.nodeIds.includes(id))).toBe(true);
+        expect(action.nodeIds.every((id) => manifest.nodeIds.includes(id)).every(Boolean)).toBe(true);
       }
     }
   });
