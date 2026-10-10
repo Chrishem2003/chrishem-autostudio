@@ -73,7 +73,7 @@ This section records actual changes on the branch; it does not imply they are me
 - Protected AI planning with Supabase auth middleware, schema validation, timeout, and a database-enforced per-user quota.
 - Added shared server-side step execution for manual saved-flow runs and scheduled runs. Unsupported nodes fail closed instead of being marked as successful practice steps.
 - Saved-flow execution now requires ownership and persisted live status. The live toggle is cloud-backed; editing and saving an existing live flow pauses it until a fresh Preview is run.
-- Generic metadata-only connector calls no longer claim an app is connected. Gmail OAuth is saved only after a successful read-only profile check; direct Gmail and direct HTTP server functions are disabled so they cannot bypass saved-flow/live-status checks.
+- Generic metadata-only connector calls no longer claim an app is connected. Gmail uses only the gmail.send scope and stays pending until the user explicitly sends a test email to a recipient they control; direct Gmail and direct HTTP server functions are disabled so they cannot bypass saved-flow/live-status checks.
 - Added explicit owner filters to important automation reads/writes and redaction of credential-like fields/text in persisted run details.
 - Rewrote README with environment, CI, and scheduler operations guidance; removed the tracked `.env` from this branch and added a placeholder-only `.env.example`.
 
