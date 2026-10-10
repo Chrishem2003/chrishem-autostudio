@@ -8,6 +8,7 @@ import { processOneExecutionJob } from "@/lib/execution-job-worker";
 import { planLinearExecution } from "@/lib/execution-plan";
 import { buildRunFinalization } from "@/lib/run-finalization";
 import { executeStep, livePreflightError } from "@/lib/execute-step.server";
+import { parsePersistedWorkflow } from "@/lib/persisted-workflow";
 import type { Workflow } from "@/lib/workflow";
 
 const MAX_JOB_RUNTIME_MS = 4 * 60 * 1000;
@@ -44,13 +45,8 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
             };
           }
 
-          const workflow = automation.flow_json as unknown as Workflow | null;
-          if (
-            !workflow ||
-            typeof workflow.name !== "string" ||
-            !Array.isArray(workflow.nodes) ||
-            !Array.isArray(workflow.edges)
-          ) {
+          const parsedWorkflow = parsePersistedWorkflow(automation.flow_json);
+          if (!parsedWorkflow.success) {
             return {
               status: "failed" as const,
               sideEffectCertainty: "not_attempted" as const,
@@ -58,6 +54,7 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
               retryable: false,
             };
           }
+          const workflow = parsedWorkflow.data as unknown as Workflow;
 
           const plan = planLinearExecution(workflow);
           if (plan.error) {
