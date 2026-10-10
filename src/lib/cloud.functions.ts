@@ -340,7 +340,9 @@ export const listRuns = createServerFn({ method: "GET" })
           id: s.id,
           label: s.node_label,
           status: s.status,
-          outcomeState: s.outcome_state,
+          outcomeState: s.outcome_state === "confirmed" || s.outcome_state === "uncertain"
+            ? s.outcome_state
+            : "not_attempted",
           durationMs: s.duration_ms,
           errorDetail: s.error_detail,
           output: s.output_snapshot,
