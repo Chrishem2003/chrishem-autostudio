@@ -2,6 +2,7 @@ import { executeStepSafely } from "@/lib/execute-step-safely.server";
 import { classifyExecutionOutcome } from "@/lib/execution-outcome";
 import { executeStep, type ExecutionMode, type ExecutedStep } from "@/lib/execute-step.server";
 import type { WorkflowNode } from "@/lib/workflow";
+import { resolveStepConfig, type SafeStepOutput } from "@/lib/runtime-data-mapping";
 
 export interface StepIntent {
   id: string;
@@ -34,6 +35,7 @@ export interface ExecuteFlowStepsResult {
  */
 export async function executeFlowSteps(input: ExecuteFlowStepsInput): Promise<ExecuteFlowStepsResult> {
   const steps: ExecutedStep[] = [];
+  const priorOutputs: Record<string, SafeStepOutput> = {};
 
   for (let index = 0; index < input.nodes.length; index++) {
     const node = input.nodes[index]!;
@@ -67,14 +69,25 @@ export async function executeFlowSteps(input: ExecuteFlowStepsInput): Promise<Ex
         detail: "The flow exceeded its execution budget. No action was attempted for this step; remaining steps were halted.",
       };
     } else {
+      const resolution = resolveStepConfig(node.config, priorOutputs);
+      if (!resolution.ok) {
+        step = {
+          nodeId: node.id,
+          label: node.name.slice(0, 160),
+          status: "failed",
+          ms: 0,
+          detail: `Data mapping failed before the external action: ${resolution.error} No action was attempted.`,
+        };
+      } else {
       step = await executeStepSafely({
-        node,
+        node: { ...node, config: resolution.config },
         flowName: input.flowName,
         userId: input.userId,
         mode: input.mode,
         ...(input.execute ? { execute: input.execute } : {}),
         onUnexpectedError: (error) => input.onUnexpectedError?.(node, error),
       });
+      }
     }
 
     const outcomeState = classifyExecutionOutcome(step.status, step.detail);
@@ -94,6 +107,9 @@ export async function executeFlowSteps(input: ExecuteFlowStepsInput): Promise<Ex
       break;
     }
     steps.push(step);
+    if (step.status === "success" && step.outputs) {
+      priorOutputs[node.id] = step.outputs;
+    }
   }
 
   return { steps, failed: steps.some((step) => step.status === "failed") };
