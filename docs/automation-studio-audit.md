@@ -209,3 +209,5 @@ This module is deliberately not wired into production execution yet; that requir
 
 
 The first CI run for the new retry-policy tests exposed a TypeScript test-runner typing mismatch (`bun:test` declarations are provided at runtime but not to `tsc`). The test file now follows the existing suite's `@ts-nocheck` convention; subsequent CI passed typecheck, tests, and build for that test fix. A further migration review tightened the lease consistency constraint so non-running rows require both lease fields to be null, rather than allowing a partially populated lease.
+
+A further SQL review changed the payload limit from `pg_column_size` to `octet_length(payload::text)` (and the matching enqueue check), so the 64 KiB policy is based on serialized JSON size rather than a potentially compressed storage representation.
