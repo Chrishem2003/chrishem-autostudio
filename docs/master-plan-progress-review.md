@@ -99,7 +99,7 @@ GitHub CI is evidence for code/build/unit-test and disposable PostgreSQL behavio
 
 ## Data-mapping safety boundary — 2026-10-10
 
-**Implemented; exact-head CI verification pending.**
+**Accepted on commit `f1c769d8a1affe2e2794caef670707bd898fd668`: typecheck, unit tests, production build, and PostgreSQL queue smoke test all passed.**
 
 - The Inspector now clearly labels displayed mapping tokens as design hints, not working runtime bindings.
 - Live preflight rejects unresolved {{...}} placeholders in action configuration before any external side effect can occur. This prevents literal template strings from being sent as recipients, message content, or request payload values.
