@@ -4,6 +4,7 @@ import { executeStep, type ExecutionMode, type ExecutedStep } from "@/lib/execut
 import type { WorkflowNode } from "@/lib/workflow";
 import { resolveStepConfig, type SafeStepOutput } from "@/lib/runtime-data-mapping";
 import { validateStepMappings } from "@/lib/validate-step-mappings";
+import { sanitizeStepOutputs } from "@/lib/safe-step-outputs";
 
 export interface StepIntent { id: string; }
 export interface ExecuteFlowStepsInput {
@@ -87,6 +88,7 @@ export async function executeFlowSteps(input: ExecuteFlowStepsInput): Promise<Ex
       }
     }
 
+    step = sanitizeStepOutputs(node, step);
     const outcomeState = classifyExecutionOutcome(step.status, step.detail);
     let persisted = false;
     try { persisted = await input.persistOutcome(intent.id, step, outcomeState); } catch { persisted = false; }
