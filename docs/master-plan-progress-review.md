@@ -69,8 +69,8 @@ These fixes are covered by the branch's typecheck, unit tests, production build 
 
 ## Recommended build order from here
 
-1. Finish staging queue/transport rehearsal and close any runtime failures.
-2. Complete the connector manifest contract and derive truth labels from the registry.
+1. Complete the connector manifest contract and derive truth labels from the registry.
+2. Finish staging queue/transport rehearsal and close any runtime failures.
 3. Replace linear-only assumptions with an explicitly modeled execution graph and safe data mapping; keep unsupported branches disabled until semantics and tests exist.
 4. Finish the provider-agnostic AI gateway and complete draft/refine/missing-input experience.
 5. Audit onboarding, keyboard navigation, WCAG AA and mobile layout against measurable plan targets.
@@ -82,7 +82,7 @@ GitHub CI is evidence for code/build/unit-test and disposable PostgreSQL behavio
 
 ## Connector capability labels — 2026-10-10
 
-**Implemented in the audit branch; CI verification pending for this commit series.**
+**Accepted on commit `7811db4d5e22ad986cb2a33e846e377249822c07`: GitHub Actions passed typecheck, unit tests, production build, and PostgreSQL queue smoke test.**
 
 - Added a shared capability-label resolver backed by the reviewed connector manifest registry.
 - The Step Library and Inspector now distinguish 'User test required', 'Runtime gated', 'Preflight only', and 'Catalog only' for connector-facing steps.
@@ -96,3 +96,19 @@ GitHub CI is evidence for code/build/unit-test and disposable PostgreSQL behavio
 2. Confirm the Step Library and Inspector render matching labels for the same node.
 3. Confirm unsupported app.* and action.* nodes stay visibly marked 'Catalog only'.
 4. Continue to keep deployment-gated HTTP and webhook transports disabled for production until staging security checks pass.
+
+## Data-mapping safety boundary — 2026-10-10
+
+**Implemented; exact-head CI verification pending.**
+
+- The Inspector now clearly labels displayed mapping tokens as design hints, not working runtime bindings.
+- Live preflight rejects unresolved {{...}} placeholders in action configuration before any external side effect can occur. This prevents literal template strings from being sent as recipients, message content, or request payload values.
+- Added regression tests covering Gmail recipient/subject/body and HTTP JSON payload tokens.
+- The live executor still supports only a validated linear chain. Actual upstream-output capture, safe field-path resolution, type-aware interpolation and per-step output persistence remain future work. Do not treat this guard as implementation of data mapping.
+
+### Acceptance evidence required
+
+1. CI passes on the exact commit.
+2. Unresolved tokens fail preflight with a clear error and no provider call.
+3. Ordinary literal configurations and existing dry-run behavior remain unchanged.
+4. The master plan's data-mapping milestone is not complete until output values can be safely produced, mapped, validated, redacted and audited end-to-end.
