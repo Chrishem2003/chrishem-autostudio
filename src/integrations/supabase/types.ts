@@ -109,6 +109,27 @@ export type Database = {
           },
         ]
       }
+      scheduled_run_locks: {
+        Row: {
+          automation_id: string
+          lock_token: string
+          locked_until: string
+          updated_at: string
+        }
+        Insert: {
+          automation_id: string
+          lock_token: string
+          locked_until: string
+          updated_at?: string
+        }
+        Update: {
+          automation_id?: string
+          lock_token?: string
+          locked_until?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       automations: {
         Row: {
           created_at: string
@@ -118,8 +139,6 @@ export type Database = {
           id: string
           is_published: boolean
           last_run_at: string | null
-          schedule_lock_token: string | null
-          schedule_lock_until: string | null
           name: string
           published_at: string | null
           remix_count: number
@@ -138,8 +157,6 @@ export type Database = {
           id?: string
           is_published?: boolean
           last_run_at?: string | null
-          schedule_lock_token?: string | null
-          schedule_lock_until?: string | null
           name?: string
           published_at?: string | null
           remix_count?: number
@@ -158,8 +175,6 @@ export type Database = {
           id?: string
           is_published?: boolean
           last_run_at?: string | null
-          schedule_lock_token?: string | null
-          schedule_lock_until?: string | null
           name?: string
           published_at?: string | null
           remix_count?: number
