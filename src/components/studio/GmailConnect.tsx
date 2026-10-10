@@ -83,8 +83,8 @@ export function GmailConnect() {
         <>
           <p className="mt-1 text-[11px] text-muted-foreground">
             {state?.connected
-              ? `Connected as ${state.email ?? "your Gmail"}. "Send Gmail" steps send for real when you press Run.`
-              : "Connect once, then add a “Send Gmail” step, fill in To, Subject and Message, and press Run. We only ask permission to send — never to read your inbox."}
+              ? `Verified as ${state.email ?? "your Gmail"}. Live sends only run from a saved automation after Preview and explicit Go live.`
+              : "Connect once, then configure a “Send Gmail” step. We only ask permission to send — never to read your inbox. Draft previews never send email; live execution requires a saved flow and explicit Go live."}
           </p>
           <div className="mt-2 flex gap-1.5">
             <button onClick={connect} disabled={busy} className="flex-1 rounded-md border border-primary/60 px-2 py-1 text-[11px] font-semibold text-primary hover:bg-primary/10 disabled:opacity-60">
