@@ -3,6 +3,7 @@ import { authenticateCronRequest } from "@/integrations/supabase/cron-auth";
 import { isDue } from "@/lib/schedule";
 import type { Workflow } from "@/lib/workflow";
 import { planLinearExecution } from "@/lib/execution-plan";
+import { classifyExecutionOutcome } from "@/lib/execution-outcome";
 import { executeStep } from "@/lib/execute-step.server";
 
 const MAX_SCHEDULED_FLOW_RUNTIME_MS = 4 * 60 * 1000;
@@ -143,6 +144,7 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
               node_id: step.nodeId,
               node_label: step.label.slice(0, 160),
               status: step.status,
+              outcome_state: classifyExecutionOutcome(step.status, step.detail),
               duration_ms: Math.max(0, Math.round(step.ms)),
               error_detail: step.status === "failed" ? step.detail.slice(0, 500) : null,
               output_snapshot: { detail: step.detail.slice(0, 500) },
