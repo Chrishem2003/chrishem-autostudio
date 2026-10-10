@@ -187,7 +187,7 @@ begin
 
   update public.execution_jobs
      set status = case
-           when _status = 'queued' and attempts >= max_attempts then 'dead_letter'
+           when _status in ('queued', 'failed') and attempts >= max_attempts then 'dead_letter'
            else _status
          end,
          worker_token = null,
