@@ -369,3 +369,11 @@ The build remains aligned with the plan's reliability-first sequence: execution 
 - CI must pass on the exact latest `main` SHA, including typecheck, tests, production build, and database queue smoke tests.
 - This does not authorize rollout: `AUTOSTUDIO_DURABLE_QUEUE_ENABLED` and `AUTOSTUDIO_OUTBOUND_TRANSPORT_READY` must remain disabled until staging verifies cron auth, migrations, worker fencing/recovery, and provider-side effects.
 - Team/workspace roles, authenticated manual-entry route integration tests, and a real staging rehearsal remain open.
+
+
+## Manual live-execution rollout fail-closed — 2026-10-11
+
+- Removed the unsafe fallback that could execute a manual live flow inline when `AUTOSTUDIO_DURABLE_QUEUE_ENABLED` was disabled.
+- Manual live runs now stop with an explicit no-side-effect message until the durable queue is enabled; authenticated dry-run previews remain available.
+- Centralized this decision in `src/lib/live-execution-policy.ts` and added unit tests for enabled live runs, disabled live runs, and dry-run behavior.
+- CI acceptance is tied to the exact latest `main` SHA. This hardening intentionally reduces availability until staging proves the queue worker is ready; it does not enable the feature flag or claim production readiness.
