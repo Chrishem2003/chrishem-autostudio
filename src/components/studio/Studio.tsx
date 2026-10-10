@@ -442,6 +442,14 @@ export function Studio({ embedded = false, initialVertical, initialTemplate }: P
         <ThemeToggle />
 
         {!embedded && (
+          <nav aria-label="Primary navigation" className="flex items-center gap-1 rounded-lg border border-border bg-background/60 p-1 text-xs">
+            <Link to="/marketplace" className="rounded-md px-2 py-1.5 text-muted-foreground transition-colors hover:bg-surface-raised hover:text-foreground">Marketplace</Link>
+            <Link to="/gallery" className="rounded-md px-2 py-1.5 text-muted-foreground transition-colors hover:bg-surface-raised hover:text-foreground">Gallery</Link>
+            <Link to="/impact" className="rounded-md px-2 py-1.5 text-muted-foreground transition-colors hover:bg-surface-raised hover:text-foreground">Impact</Link>
+          </nav>
+        )}
+
+        {!embedded && (
           <>
             <button
               onClick={saveToCloud}
