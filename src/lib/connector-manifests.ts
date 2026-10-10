@@ -77,7 +77,7 @@ export const CONNECTOR_MANIFESTS: readonly ConnectorManifest[] = [
       "The Gmail send scope is present",
     ],
     retryPolicy: "provider-contract",
-    truthLabel: "Verified by test email",
+    truthLabel: "Test email required",
     notes: "Send-only OAuth scope. A successful OAuth handshake alone is not verification.",
   },
   {
@@ -105,7 +105,7 @@ export const CONNECTOR_MANIFESTS: readonly ConnectorManifest[] = [
       "The deployed outbound transport smoke test has passed",
     ],
     retryPolicy: "never-without-idempotency",
-    truthLabel: "Configured; delivery not pre-verified",
+    truthLabel: "Configured only; delivery unverified",
     notes: "A syntactically valid webhook URL is not proof the provider will accept a message. Do not label this connection Verified.",
   },
   {
@@ -187,16 +187,25 @@ export function getConnectorManifestForNode(
   return CONNECTOR_MANIFESTS.find((manifest) => {
     if (manifest.nodeIds.includes(defId)) return true;
     if (!tool || !manifest.generatedMessageToolNames?.includes(tool)) return false;
-    return /^app\.[^.]+\.create\.message$/.test(defId);
+    return defId.startsWith("app.") &&
+      defId.endsWith(".create.message") &&
+      defId.split(".").length === 4;
   });
 }
+
 /** Human-readable execution capability for connector-facing UI surfaces. */
 export function getConnectorCapabilityLabel(defId: string, tool?: string): string | null {
   const manifest = getConnectorManifestForNode(defId, tool);
   if (!manifest) {
     return defId.startsWith("app.") || defId.startsWith("action.") ? "Catalog only" : null;
   }
-  if (manifest.runtime === "deployment-gated") return "Runtime gated";
-  if (manifest.verification === "user-initiated-test-send") return "User test required";
-  return "Preflight only";
+  // Runtime gates take precedence: configured credentials must never imply that
+  // an external side effect is currently executable in this deployment.
+  if (manifest.runtime === "deployment-gated") {
+    return manifest.id === "chat_webhooks"
+      ? "Runtime gated · delivery unverified"
+      : "Runtime gated";
+  }
+  if (manifest.verification === "user-initiated-test-send") return "Test email required";
+  return manifest.truthLabel;
 }
