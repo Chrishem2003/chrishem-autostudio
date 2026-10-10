@@ -122,7 +122,7 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
         triggerType: "manual",
         idempotencyKey: "manual:" + context.userId + ":" + (data.requestId ?? crypto.randomUUID()),
         requestedBy: context.userId,
-        payload: { triggerType: "manual", requestedAt: new Date().toISOString() },
+        payload: { triggerType: "manual" },
       });
       return { queued: true as const, jobId: id, status, mode: "live" as const, steps: [] as RunStep[] };
     }
