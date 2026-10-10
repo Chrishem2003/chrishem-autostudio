@@ -109,9 +109,15 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
     if (executionPlan.error) throw new Error(executionPlan.error);
     const connectedOrder = executionPlan.nodes;
 
+    // Live execution must never fall back to inline provider calls while the
+    // durable queue rollout is disabled. Preview remains synchronous.
+    if (data.mode === "live" && !isDurableQueueEnabled()) {
+      throw new Error("Live execution is temporarily unavailable while the durable queue is disabled. No external action was taken.");
+    }
+
     // Queue only authenticated, owner-scoped live runs after all workflow and
     // provider preflight checks have passed. Preview remains synchronous.
-    if (data.mode === "live" && isDurableQueueEnabled()) {
+    if (data.mode === "live") {
       const { id, status } = await enqueueExecutionJob({
         automationId: row.id,
         triggerType: "manual",
