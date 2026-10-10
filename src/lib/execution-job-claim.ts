@@ -4,6 +4,7 @@ import type { ClaimedExecutionJob } from "@/lib/execution-job-worker";
 type ClaimedJobRow = {
   id: unknown;
   automation_id: unknown;
+  trigger_type: unknown;
   payload: unknown;
   attempts: unknown;
   max_attempts: unknown;
@@ -24,6 +25,7 @@ export function parseClaimedExecutionJob(value: unknown): ClaimedExecutionJob {
   if (
     typeof row.id !== "string" || row.id.trim().length === 0 ||
     typeof row.automation_id !== "string" || row.automation_id.trim().length === 0 ||
+    typeof row.trigger_type !== "string" || !["manual", "scheduled", "webhook"].includes(row.trigger_type) ||
     typeof row.worker_token !== "string" || row.worker_token.trim().length === 0 ||
     typeof row.idempotency_key !== "string" ||
     row.idempotency_key.trim().length === 0 || row.idempotency_key.length > 200
@@ -52,6 +54,7 @@ export function parseClaimedExecutionJob(value: unknown): ClaimedExecutionJob {
   return {
     id: row.id,
     automationId: row.automation_id,
+    triggerType: row.trigger_type as "manual" | "scheduled" | "webhook",
     payload: payloadValidation.payload,
     attempts: row.attempts,
     maxAttempts: row.max_attempts,
