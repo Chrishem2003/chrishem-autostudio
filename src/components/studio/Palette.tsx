@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { KIND_LABEL, KIND_ORDER, NODES, VERTICALS } from "@/lib/automation-catalog";
-import { getConnectorManifestForNode } from "@/lib/connector-manifests";
+import { getConnectorCapabilityLabel } from "@/lib/connector-manifests";
 import { KIND_STYLE } from "./kind-styles";
 import { cn } from "@/lib/utils";
 
@@ -68,24 +68,11 @@ export function Palette({ vertical, onAdd }: Props) {
                     <span className="ml-auto text-[10px] text-muted-foreground">{d.tool}</span>
                   </div>
                   <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{d.summary}</p>
-                  {(() => {
-                    const manifest = getConnectorManifestForNode(d.id, d.tool);
-                    const capability = manifest
-                      ? manifest.runtime === "deployment-gated"
-                        ? "Runtime gated"
-                        : manifest.verification === "user-initiated-test-send"
-                          ? "User test required"
-                          : "Preflight only"
-                      : d.id.startsWith("app.") || d.id.startsWith("action.")
-                        ? "Catalog only"
-                        : null;
-                    if (!capability) return null;
-                    return (
-                      <p className="mt-1 text-[10px] font-medium text-amber-700 dark:text-amber-300">
-                        Capability: {capability}
-                      </p>
-                    );
-                  })()}
+                  {getConnectorCapabilityLabel(d.id, d.tool) ? (
+                    <p className="mt-1 text-[10px] font-medium text-amber-700 dark:text-amber-300">
+                      Capability: {getConnectorCapabilityLabel(d.id, d.tool)}
+                    </p>
+                  ) : null}
                 </button>
               ))}
             </div>
