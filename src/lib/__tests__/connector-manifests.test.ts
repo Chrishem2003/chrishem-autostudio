@@ -45,7 +45,7 @@ describe("connector manifests", () => {
         expect(action.timeoutSeconds).toBeLessThanOrEqual(60);
         expect(action.output.fields.length).toBeGreaterThan(0);
         expect(action.output.description.length).toBeGreaterThan(0);
-        expect(action.nodeIds.every((id) => manifest.nodeIds.includes(id)).every(Boolean)).toBe(true);
+        expect(action.nodeIds.every((id) => manifest.nodeIds.includes(id))).toBe(true);
       }
     }
   });
