@@ -15,6 +15,9 @@ describe("web step address rules", () => {
     expect(isBlockedHost("169.254.169.254")).toBe(true);
     expect(isBlockedHost("100.64.0.1")).toBe(true);
     expect(isBlockedHost("172.31.255.255")).toBe(true);
+    expect(isBlockedHost("192.31.196.10")).toBe(true);
+    expect(isBlockedHost("192.52.193.10")).toBe(true);
+    expect(isBlockedHost("192.175.48.10")).toBe(true);
   });
   it("blocks IPv4-mapped IPv6 in dotted and hexadecimal forms", () => {
     expect(isBlockedHost("[::ffff:127.0.0.1]")).toBe(true);
@@ -28,6 +31,8 @@ describe("web step address rules", () => {
     expect(isBlockedHost("fe80::1")).toBe(true);
     expect(isBlockedHost("ff02::1")).toBe(true);
     expect(isBlockedHost("2001:db8::1")).toBe(true);
+    expect(isBlockedHost("3fff::1")).toBe(true);
+    expect(isBlockedHost("3fff:0fff::1")).toBe(true);
     expect(isBlockedHost("2002:c000:0201::1")).toBe(true);
     expect(isBlockedHost("2001::1::2")).toBe(true);
   });
