@@ -5,6 +5,7 @@ import { processOneExecutionJob } from "../execution-job-worker";
 const job = {
   id: "job-1",
   automationId: "automation-1",
+  triggerType: "webhook",
   payload: {},
   attempts: 1,
   maxAttempts: 3,
