@@ -100,6 +100,7 @@ export function isBlockedHost(host: string): boolean {
   const version = isIP(h);
   if (version === 4) return isBlockedIPv4(h);
   if (version === 6) return isBlockedIPv6(h);
+  if (h.includes(":")) return true; // colons are not valid in DNS hostnames; reject malformed IP literals
   return false;
 }
 
