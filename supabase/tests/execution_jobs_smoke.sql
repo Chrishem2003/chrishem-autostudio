@@ -32,7 +32,7 @@ begin
       '00000000-0000-4000-8000-000000000002',
       'manual',
       'smoke-idempotency-key',
-      '{"source":"duplicate"}'::jsonb,
+      '{"source":"ci"}'::jsonb,
       '00000000-0000-4000-8000-000000000001',
       3,
       now()
@@ -41,6 +41,25 @@ begin
   if first_job.id is null or duplicate_job.id is distinct from first_job.id then
     raise exception 'Idempotent enqueue did not return the same job';
   end if;
+
+  -- A duplicate key may replay the same logical request, not smuggle in
+  -- different work while receiving the original job's ID.
+  begin
+    perform * from public.enqueue_execution_job(
+      '00000000-0000-4000-8000-000000000002',
+      'manual',
+      'smoke-idempotency-key',
+      '{"source":"different-intent"}'::jsonb,
+      '00000000-0000-4000-8000-000000000001',
+      3,
+      now()
+    );
+    raise exception 'Conflicting idempotency replay unexpectedly succeeded';
+  exception when others then
+    if sqlerrm not like 'Idempotency key was reused with a different request%' then
+      raise;
+    end if;
+  end;
 
   select * into claimed from public.claim_execution_job(300);
   if claimed.id is distinct from first_job.id or claimed.status <> 'running'
