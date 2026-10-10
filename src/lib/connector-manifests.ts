@@ -190,7 +190,7 @@ export function validateConnectorActionConfig(
       return "HTTP method must be GET, POST, PUT, PATCH, or DELETE.";
     }
     const timeout = (config["timeout"] as string | undefined)?.trim();
-    if (timeout && (!/^\\d+(?:\\.\\d+)?$/.test(timeout) || Number(timeout) < 1 || Number(timeout) > 30)) {
+    if (timeout && (!/^\d+(?:\.\d+)?$/.test(timeout) || Number(timeout) < 1 || Number(timeout) > 30)) {
       return "HTTP timeout must be a number between 1 and 30 seconds.";
     }
   }
