@@ -184,3 +184,21 @@ GitHub CI is evidence for code/build/unit-test and disposable PostgreSQL behavio
 1. Add explicit regression coverage for output redaction and persistence snapshots, including ensuring provider credentials or arbitrary response bodies can never enter mapped outputs.
 2. Test malformed persisted workflows through the actual API entry points, not only the shared engine.
 3. Run a staging rehearsal with queue flag and outbound transport disabled first; enable only after reviewed operator-controlled acceptance checks.
+
+
+## Output allowlisting and pre-enqueue mapping validation — 2026-10-10
+
+**Implemented on the active hardening branch; the latest code CI typecheck, unit tests, and production build passed. Final queue smoke-test result is being checked against the exact current head.**
+
+- Added a shared execution-boundary sanitizer that treats adapter outputs as untrusted, retains only connector-declared fields, validates field-specific formats, and drops undeclared fields such as arbitrary response bodies and access-token fields.
+- Sanitization occurs before audit persistence and before outputs are made available to downstream steps. Regression tests assert that sensitive-looking fields and private response payloads do not appear in persisted step objects or downstream mapping values.
+- The linear execution planner now performs whole-flow mapping contract validation after determining the actual graph order. Scheduler/worker paths that use the planner reject malformed mappings before queueing or running the workflow; the shared execution engine repeats validation as defense in depth.
+- Added planning tests for rejected trigger/non-output references and accepted declared HTTP status mappings, plus engine-level tests for sanitized persistence and downstream mapping.
+- Fixed an existing test fixture that had passed connector IDs as configuration values rather than using actual node definition IDs. CI caught this mismatch; the corrected fixture now exercises the intended HTTP output contract.
+- The workflow still supports only a linear chain. Branching, arbitrary provider response mapping, and production transport activation remain out of scope until their contracts and staging evidence are complete.
+
+### Next batch
+
+1. Add API-route regression tests for invalid saved workflow payloads and confirm rejection happens before enqueue/intent creation.
+2. Review outbound HTTP SSRF protections and deployment-gate behavior against the actual transport implementation.
+3. Verify the latest exact-head CI run and keep the durable queue disabled until a staging rehearsal is signed off.
