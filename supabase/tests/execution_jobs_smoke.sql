@@ -1,12 +1,14 @@
 \set ON_ERROR_STOP on
 
 insert into auth.users (id)
-values ('00000000-0000-4000-8000-000000000001')
+values
+  ('00000000-0000-4000-8000-000000000001'),
+  ('00000000-0000-4000-8000-000000000003')
 on conflict do nothing;
 
-insert into public.automations (id, status)
-values ('00000000-0000-4000-8000-000000000002', 'live')
-on conflict (id) do update set status = excluded.status;
+insert into public.automations (id, user_id, status)
+values ('00000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000001', 'live')
+on conflict (id) do update set user_id = excluded.user_id, status = excluded.status;
 
 do $$
 declare
@@ -41,6 +43,24 @@ begin
   if first_job.id is null or duplicate_job.id is distinct from first_job.id then
     raise exception 'Idempotent enqueue did not return the same job';
   end if;
+
+  -- A forged requester must not be attached to another user's automation.
+  begin
+    perform * from public.enqueue_execution_job(
+      '00000000-0000-4000-8000-000000000002',
+      'manual',
+      'smoke-forged-requester',
+      '{"source":"forged"}'::jsonb,
+      '00000000-0000-4000-8000-000000000003',
+      3,
+      now()
+    );
+    raise exception 'Requester ownership check unexpectedly succeeded';
+  exception when others then
+    if sqlerrm not like 'Execution job requester does not own the automation%' then
+      raise;
+    end if;
+  end;
 
   -- A duplicate key may replay the same logical request, not smuggle in
   -- different work while receiving the original job's ID.
