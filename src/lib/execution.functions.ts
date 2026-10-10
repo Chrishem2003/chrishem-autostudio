@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { executeStep, type ExecutionMode } from "@/lib/execute-step.server";
 import { executeFlowSteps } from "@/lib/execute-flow-steps.server";
-import type { WorkflowNode } from "@/lib/workflow";
+import type { RunStep, WorkflowNode } from "@/lib/workflow";
 import { planLinearExecution } from "@/lib/execution-plan";
 import { buildRunFinalization } from "@/lib/run-finalization";
 import { enqueueExecutionJob } from "@/lib/execution-job-queue.server";
