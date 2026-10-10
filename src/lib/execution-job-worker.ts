@@ -8,6 +8,7 @@ import { sanitizeExecutionError } from "@/lib/execution-error-sanitizer";
 export interface ClaimedExecutionJob {
   id: string;
   automationId: string;
+  triggerType: "manual" | "scheduled" | "webhook";
   payload: unknown;
   attempts: number;
   maxAttempts: number;
