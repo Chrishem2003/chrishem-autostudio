@@ -127,6 +127,20 @@ describe("persisted workflow runtime validation", () => {
     }).success).toBe(false);
   });
 
+  it("rejects oversized passthrough metadata that bypasses field-level limits", () => {
+    expect(parsePersistedWorkflow({
+      ...valid,
+      metadataBlob: "x".repeat(520_000),
+    }).success).toBe(false);
+  });
+
+  it("rejects circular and non-JSON workflow values without throwing", () => {
+    const circular: Record<string, unknown> = { ...valid };
+    circular.self = circular;
+    expect(parsePersistedWorkflow(circular).success).toBe(false);
+    expect(parsePersistedWorkflow({ ...valid, metadata: 1n }).success).toBe(false);
+  });
+
   it("rejects aggregate configuration payloads above the safety budget", () => {
     const oversized = {
       ...valid,
