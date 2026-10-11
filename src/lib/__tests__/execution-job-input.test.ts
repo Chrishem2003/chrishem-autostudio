@@ -1,7 +1,7 @@
 // @ts-nocheck -- Bun's test runner supplies test types at runtime
 import { describe, expect, it } from "bun:test";
 import {
-  MAX_EXECUTION_JOB_PAYLOAD_BYTES,
+  MAX_EXECUTION_JOB_PAYLOAD_BYTES,\n  parseExecutionJobEnqueueResult,
   validateExecutionJobEnqueueMetadata,
   validateExecutionJobPayload,
 } from "../execution-job-input";
@@ -89,5 +89,30 @@ describe("durable execution job payload validation", () => {
       success: false,
       error: "Execution job payload must be valid JSON.",
     });
+  });
+});
+
+describe("durable execution job enqueue RPC response validation", () => {
+  it("accepts a known queue status and bounded non-empty identifier", () => {
+    expect(parseExecutionJobEnqueueResult({ id: "job-1", status: "queued" })).toEqual({
+      id: "job-1",
+      status: "queued",
+    });
+    expect(parseExecutionJobEnqueueResult({ id: "job-2", status: "needs_review" }).status).toBe("needs_review");
+  });
+
+  it("rejects malformed identifiers and unknown statuses", () => {
+    const invalidRows = [
+      null,
+      [],
+      { id: "", status: "queued" },
+      { id: "x".repeat(201), status: "queued" },
+      { id: "job-1", status: "complete" },
+      { id: "job-1", status: 1 },
+      { id: "job-1" },
+    ];
+    for (const row of invalidRows) {
+      expect(() => parseExecutionJobEnqueueResult(row)).toThrow("Queue enqueue returned no valid job.");
+    }
   });
 });

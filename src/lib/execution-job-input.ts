@@ -86,3 +86,30 @@ export function validateExecutionJobPayload(value: unknown): ExecutionJobPayload
     return { success: false, error: "Execution job payload must be valid JSON." };
   }
 }
+
+export type ExecutionJobEnqueueResult = {
+  id: string;
+  status: "queued" | "running" | "succeeded" | "failed" | "needs_review" | "dead_letter";
+};
+
+/** Treat the database RPC result as untrusted data before returning it to callers. */
+export function parseExecutionJobEnqueueResult(value: unknown): ExecutionJobEnqueueResult {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Queue enqueue returned no valid job.");
+  }
+  const record = value as Record<string, unknown>;
+  const validStatuses = ["queued", "running", "succeeded", "failed", "needs_review", "dead_letter"];
+  if (
+    typeof record["id"] !== "string" ||
+    !record["id"].trim() ||
+    record["id"].length > 200 ||
+    typeof record["status"] !== "string" ||
+    !validStatuses.includes(record["status"])
+  ) {
+    throw new Error("Queue enqueue returned no valid job.");
+  }
+  return {
+    id: record["id"],
+    status: record["status"] as ExecutionJobEnqueueResult["status"],
+  };
+}

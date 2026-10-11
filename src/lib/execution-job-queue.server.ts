@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import type { Json } from "@/integrations/supabase/types";
-import { validateExecutionJobEnqueueMetadata, validateExecutionJobPayload } from "@/lib/execution-job-input";
+import { parseExecutionJobEnqueueResult, validateExecutionJobEnqueueMetadata, validateExecutionJobPayload } from "@/lib/execution-job-input";
 import { parseClaimedExecutionJob } from "@/lib/execution-job-claim";
 import type { ExecutionJobStatus } from "@/lib/execution-job-policy";
 import type {
@@ -20,7 +20,7 @@ export interface EnqueueExecutionJobInput {
 }
 
 /** Server-only enqueue adapter. Duplicate keys return the existing queue row. */
-export async function enqueueExecutionJob(input: EnqueueExecutionJobInput): Promise<{ id: string; status: string }> {
+export async function enqueueExecutionJob(input: EnqueueExecutionJobInput): Promise<{ id: string; status: "queued" | "running" | "succeeded" | "failed" | "needs_review" | "dead_letter" }> {
   const metadata = validateExecutionJobEnqueueMetadata(input);
   if (!metadata.success) throw new Error(metadata.error);
   const { automationId, triggerType, idempotencyKey, requestedBy, maxAttempts, availableAt } = metadata.value;
@@ -38,14 +38,7 @@ export async function enqueueExecutionJob(input: EnqueueExecutionJobInput): Prom
   });
   if (error) throw new Error("Unable to enqueue execution job.");
   const row = Array.isArray(data) ? data[0] : null;
-  if (!row || typeof row !== "object" || Array.isArray(row)) {
-    throw new Error("Queue enqueue returned no valid job.");
-  }
-  const record = row as Record<string, unknown>;
-  if (typeof record["id"] !== "string" || typeof record["status"] !== "string") {
-    throw new Error("Queue enqueue returned no valid job.");
-  }
-  return { id: record["id"], status: record["status"] };
+  return parseExecutionJobEnqueueResult(row);
 }
 
 /**
