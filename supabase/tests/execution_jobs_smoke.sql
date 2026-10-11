@@ -16,6 +16,38 @@ declare
   expired_job public.execution_jobs%rowtype;
   dead_job public.execution_jobs%rowtype;
 begin
+  -- Required scalar parameters must reject explicit NULL, not fall through
+  -- PostgreSQL's three-valued IF logic and fail later with a constraint error.
+  begin
+    perform * from public.enqueue_execution_job(
+      '00000000-0000-4000-8000-000000000002',
+      null,
+      'smoke-null-trigger',
+      '{}'::jsonb,
+      '00000000-0000-4000-8000-000000000001',
+      3,
+      now()
+    );
+    raise exception 'Enqueue accepted a NULL trigger type';
+  exception when others then
+    if sqlerrm <> 'Unsupported execution trigger' then raise; end if;
+  end;
+
+  begin
+    perform * from public.enqueue_execution_job(
+      '00000000-0000-4000-8000-000000000002',
+      'manual',
+      'smoke-null-max-attempts',
+      '{}'::jsonb,
+      '00000000-0000-4000-8000-000000000001',
+      null,
+      now()
+    );
+    raise exception 'Enqueue accepted NULL maximum attempts';
+  exception when others then
+    if sqlerrm <> 'Invalid maximum attempt count' then raise; end if;
+  end;
+
   select * into first_job
     from public.enqueue_execution_job(
       '00000000-0000-4000-8000-000000000002',
