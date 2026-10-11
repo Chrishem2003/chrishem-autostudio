@@ -112,7 +112,10 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
                 triggerType: "scheduled",
                 idempotencyKey,
                 requestedBy: row.user_id,
-                payload: { triggerType: "schedule", scheduledAt: enqueuedAt },
+                // Keep the payload stable for a given idempotency key. If enqueue succeeds
+                // but lease release fails, the next scheduler pass must receive the same
+                // logical request instead of conflicting on a fresh wall-clock timestamp.
+                payload: { triggerType: "schedule" },
               });
               enqueueSucceeded = true;
               ran++;
