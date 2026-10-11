@@ -114,7 +114,14 @@ export async function processOneExecutionJob(
   }
 
   let finalStatus: Exclude<ExecutionJobStatus, "running">;
-  let finalRetryAt = result.retryAt ?? null;
+  // Executor adapters are runtime boundaries: a malformed retry timestamp must
+  // not make database finalization fail and leave a job running until lease expiry.
+  // Normalize valid timestamps and discard invalid values; safe queued retries get
+  // the worker's bounded backoff below when no usable timestamp remains.
+  const parsedRetryAt = typeof result.retryAt === "string" ? Date.parse(result.retryAt) : Number.NaN;
+  let finalRetryAt = Number.isFinite(parsedRetryAt)
+    ? new Date(parsedRetryAt).toISOString()
+    : null;
   let error = result.error
     ? sanitizeExecutionError(result.error, "Execution failed; inspect the run details and verify external outcome before retrying.")
     : null;
