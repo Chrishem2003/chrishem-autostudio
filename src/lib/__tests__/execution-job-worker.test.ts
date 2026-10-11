@@ -75,6 +75,22 @@ describe("processOneExecutionJob", () => {
     expect(calls.finished[0].retryAt).toBeNull();
   });
 
+  test("applies a default delay when a safe retry has no explicit retry time", async () => {
+    const { deps, calls } = dependencies({
+      execute: async () => ({
+        status: "failed",
+        sideEffectCertainty: "not_attempted",
+        error: "Temporary failure",
+      }),
+    });
+    const before = Date.now();
+    const result = await processOneExecutionJob(deps);
+    const retryAt = Date.parse(calls.finished[0].retryAt);
+    expect(result.status).toBe("queued");
+    expect(retryAt).toBeGreaterThanOrEqual(before + 4_000);
+    expect(retryAt).toBeLessThanOrEqual(Date.now() + 6_000);
+  });
+
   test("preserves scheduled retry time for transient lock contention", async () => {
     const retryAt = new Date(Date.now() + 30_000).toISOString();
     const { deps, calls } = dependencies({
