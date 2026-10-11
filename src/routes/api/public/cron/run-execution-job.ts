@@ -2,6 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { authenticateCronRequest } from "@/integrations/supabase/cron-auth";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { classifyExecutionOutcome } from "@/lib/execution-outcome";
+import { sanitizeExecutionError } from "@/lib/execution-error-sanitizer";
+import { sanitizeRunOutput } from "@/lib/run-output-sanitizer";
 import { executeFlowSteps } from "@/lib/execute-flow-steps.server";
 import { createSupabaseExecutionJobDependencies } from "@/lib/execution-job-queue.server";
 import { processOneExecutionJob } from "@/lib/execution-job-worker";
@@ -165,8 +167,14 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
                   status: step.status,
                   outcome_state: outcomeState,
                   duration_ms: Math.max(0, Math.round(step.ms)),
-                  error_detail: step.status === "failed" ? step.detail.slice(0, 500) : null,
-                  output_snapshot: { detail: step.detail.slice(0, 500), outcomeState, ...(step.outputs ? { outputs: step.outputs } : {}) },
+                  error_detail: step.status === "failed"
+                    ? sanitizeExecutionError(step.detail, "Step failed; inspect the run summary and verify external effects before retrying.")
+                    : null,
+                  output_snapshot: (sanitizeRunOutput({
+                    detail: step.detail,
+                    outcomeState,
+                    ...(step.outputs ? { outputs: step.outputs } : {}),
+                  }) ?? null) as never,
                 })
                 .eq("id", intentId)
                 .eq("run_id", run.id);
