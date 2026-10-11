@@ -559,3 +559,8 @@ This is a diagnostics correctness improvement, not P0 completion. The final P0 g
 - Uncertain effects now always enter `needs_review` until a trusted, reviewed adapter capability is explicitly integrated. Malformed side-effect certainty also fails closed to manual review rather than falling through to a retry path.
 - Regression tests cover legacy caller-supplied idempotency claims and malformed certainty. This is deliberately conservative: no provider-specific automatic retry is enabled by this change.
 - Exact-head CI and the PostgreSQL smoke test are required for this batch. P0 still requires real staging verification of provider behavior, interruption recovery, concurrency, authentication, and migration rollout; keep durable queue and outbound transport disabled until acceptance evidence is recorded.
+
+
+## Long-running execution lease keepalive — 2026-10-11
+
+The queue worker now renews both its durable-job lease and shared automation overlap-prevention lease periodically while a provider action is pending. Unit coverage and exact-head CI passed at commit `bfcf93482b53f3956ca166a93991d616a84df3eb` ([run 38159286868](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38159286868)). A lost lease during an in-flight action remains an uncertain outcome; the helper cannot cancel an already-issued provider request. Add a slow-action and interrupted-worker rehearsal to staging acceptance before enabling queue consumers. This closes a code-level gap, not the staging gate.

@@ -100,3 +100,11 @@ The queue flag controls producers, not already queued jobs. Stopping the worker 
 ## Current environment boundary
 
 GitHub CI currently validates the worker code and the migration against a disposable PostgreSQL 16 schema. Unit tests also exercise outbound HTTP preflight rejection for non-HTTP schemes, embedded credentials, unsupported methods, and oversized bodies without allowing a request attempt. It does not authenticate to the user's Supabase project, deploy the application, configure a cron provider, or send a real provider action. Those steps require the project's own deployment access and must be completed in staging before production activation.
+
+
+### Long-running provider-call lease check
+
+- [ ] Use a provider sandbox action that remains pending longer than one heartbeat interval; confirm both the queue lease and per-automation lease continue to advance while the request is pending.
+- [ ] Simulate a failed or rejected heartbeat during an in-flight provider request; verify the run is marked uncertain/needs review and is not blindly replayed.
+- [ ] Inspect provider-side history after the request settles and confirm no duplicate side effect is created during lease expiry or worker restart.
+- [ ] Confirm the behavior under the actual staging runtime and scheduler; unit tests and disposable PostgreSQL CI do not prove timer execution or provider semantics in deployment.

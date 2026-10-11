@@ -136,3 +136,11 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - The worker now snapshots and freezes the claimed job envelope before exposing it to the executor. This protects the job ID and lease fencing token used for heartbeat/finalization from accidental or hostile mutation by execution adapters.
 - Regression coverage attempts to mutate both identifiers and verifies heartbeat and finalization still use the original claimed identity.
 - Exact-head CI is required. This is defense in depth and does not replace staging validation of provider idempotency, recovery, concurrency, authentication, or migrations.
+
+
+## Provider-call lease keepalive — 2026-10-11
+
+- Commit `bfcf93482b53f3956ca166a93991d616a84df3eb` adds a bounded recurring keepalive while a provider action is pending. Each pulse renews the queue lease first, then the shared automation lease; malformed, rejected, or false heartbeat results fail closed.
+- Unit tests cover pending-action renewal, lost lease, malformed heartbeat response, action failure propagation, and invalid intervals. Exact-head CI passed both required jobs: [run 38159286868](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38159286868).
+- This does not cancel an already-issued provider request. If lease ownership is lost during a request, the worker treats the result as uncertain and requires review; staging must prove a slow/interrupted provider call does not create duplicate effects.
+- Current gate head has changed since the above CI checkpoint; rerun exact-head CI after the next commit. P0 remains open and queue/outbound flags must remain disabled until staging evidence is recorded.
