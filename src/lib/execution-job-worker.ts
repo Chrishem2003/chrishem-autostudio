@@ -64,8 +64,13 @@ export async function processOneExecutionJob(
   const heartbeat = async (): Promise<boolean> => {
     try {
       const alive = await dependencies.heartbeat(job);
-      if (!alive) leaseLost = true;
-      return alive;
+      // A runtime adapter must prove lease ownership with literal true. Truthy
+      // objects/strings are malformed responses, not evidence that the lease lives.
+      if (alive !== true) {
+        leaseLost = true;
+        return false;
+      }
+      return true;
     } catch {
       // A failed heartbeat is indistinguishable from lost ownership. Fail closed:
       // never finalize based on a lease whose state could not be verified.
@@ -198,7 +203,9 @@ export async function processOneExecutionJob(
 
   let finalized: boolean;
   try {
-    finalized = await dependencies.finish(job, finalStatus, error, finalRetryAt);
+    // RPC adapters are expected to return a boolean, but enforce the contract
+    // here too: only literal true confirms durable finalization.
+    finalized = (await dependencies.finish(job, finalStatus, error, finalRetryAt)) === true;
   } catch {
     // A database/network error means finalization is unknown, not successful.
     return { outcome: "finalization_rejected", jobId: job.id };

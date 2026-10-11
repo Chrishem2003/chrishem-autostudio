@@ -88,3 +88,10 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Worker result validation snapshots adapter output into a plain object and routes thrown property access or malformed runtime values to `needs_review`.
 - Regression coverage includes a throwing status getter and a changing getter, preventing malformed adapter values from escaping the worker's uncertain-outcome policy.
 - This remains code-level hardening; exact-head CI and all staging acceptance gates are still required before P0 closure.
+
+
+## Worker RPC boolean contract — 2026-10-11
+
+- The worker now requires literal `true` from heartbeat and finalization dependencies. Truthy but malformed runtime responses cannot masquerade as lease ownership or durable completion.
+- Regression cases cover object/string/number heartbeat and finalization responses. This is defense in depth alongside the Supabase adapter's strict `data === true` conversion.
+- Exact-head CI is required for this change. Staging provider-idempotency, interruption-recovery, concurrency, and deployment gates remain open; do not enable the durable queue or outbound transport based on unit tests alone.

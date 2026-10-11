@@ -282,6 +282,22 @@ describe("processOneExecutionJob", () => {
     expect(calls.finished).toHaveLength(0);
   });
 
+  test("treats a truthy non-boolean heartbeat response as lease loss", async () => {
+    let executeCalls = 0;
+    const { deps, calls } = dependencies({
+      heartbeat: async () => ({ alive: true } as any),
+      execute: async (_job, context) => {
+        executeCalls++;
+        expect(await context.heartbeat()).toBe(false);
+        return { status: "succeeded", sideEffectCertainty: "effect_confirmed" };
+      },
+    });
+
+    expect(await processOneExecutionJob(deps)).toEqual({ outcome: "lease_lost", jobId: "job-1" });
+    expect(executeCalls).toBe(1);
+    expect(calls.finished).toHaveLength(0);
+  });
+
   test("fails closed when heartbeat transport throws", async () => {
     const { deps, calls } = dependencies({
       execute: async (_job, context) => {
@@ -367,6 +383,16 @@ describe("processOneExecutionJob", () => {
     await expect(processOneExecutionJob(deps)).rejects.toThrow("queue database unavailable");
     expect(executeCalls).toBe(0);
     expect(finishCalls).toBe(0);
+  });
+
+  test("rejects truthy non-boolean finalization responses", async () => {
+    for (const malformedResponse of ["true", 1, {}, { ok: true }]) {
+      const { deps } = dependencies({ finish: async () => malformedResponse as any });
+      expect(await processOneExecutionJob(deps)).toEqual({
+        outcome: "finalization_rejected",
+        jobId: "job-1",
+      });
+    }
   });
 
   test("reports rejected finalization instead of claiming success", async () => {
