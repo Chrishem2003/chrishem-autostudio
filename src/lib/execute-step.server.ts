@@ -27,6 +27,10 @@ export type ExecutedStep = {
 export function liveCapabilityError(node: WorkflowNode): string | null {
   const tool = NODES[node.defId]?.tool;
   if (node.defId === "trigger.schedule" || node.defId === "trigger.manual") return null;
+  if (node.defId === "logic.map") {
+    const mapped = mapFields(node.config["mapping"] ?? "");
+    return mapped.ok ? null : mapped.error;
+  }
   if (NODES[node.defId]?.kind === "trigger") return `Trigger "${node.name}" has no live trigger adapter yet.`;
   const mappingKeys = node.defId === "action.gmail"
     ? new Set(["subject", "body"])
