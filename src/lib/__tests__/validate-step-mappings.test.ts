@@ -43,4 +43,20 @@ describe("whole-flow mapping preflight", () => {
     ]);
     expect(result?.error).toMatch(/not a declared output/i);
   });
+  it("accepts mapped JSON and field-count outputs from a prior logic.map step", () => {
+    const result = validateStepMappings([
+      node("mapper", "logic.map", { mapping: "full_name = Ada" }),
+      node("request", "action.http", { body: '{"data": {{steps.mapper.mapped}}, "count": {{steps.mapper.mappedCount}}}' }),
+    ]);
+    expect(result).toBeNull();
+  });
+
+  it("rejects unknown outputs from logic.map", () => {
+    const result = validateStepMappings([
+      node("mapper", "logic.map", { mapping: "full_name = Ada" }),
+      node("request", "action.http", { body: "{{steps.mapper.secret}}" }),
+    ]);
+    expect(result?.error).toMatch(/not a declared output/i);
+  });
+
 });

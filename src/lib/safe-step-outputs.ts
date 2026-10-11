@@ -10,8 +10,8 @@ export function sanitizeStepOutputs(node: WorkflowNode, step: ExecutedStep): Exe
   const action = getConnectorActionForNode(node.defId, tool)?.action;
   if (node.defId === "logic.map") {
     const safe: Record<string, string | number | boolean> = Object.create(null) as Record<string, string | number | boolean>;
-    if (typeof step.outputs.mapped === "string" && step.outputs.mapped.length <= 8_000) safe.mapped = step.outputs.mapped;
-    if (typeof step.outputs.mappedCount === "number" && Number.isInteger(step.outputs.mappedCount) && step.outputs.mappedCount >= 0 && step.outputs.mappedCount <= 50) safe.mappedCount = step.outputs.mappedCount;
+    if (typeof step.outputs["mapped"] === "string" && step.outputs["mapped"].length <= 8_000) safe.mapped = step.outputs["mapped"];
+    if (typeof step.outputs["mapped"]Count === "number" && Number.isInteger(step.outputs["mapped"]Count) && step.outputs["mapped"]Count >= 0 && step.outputs["mapped"]Count <= 50) safe.mappedCount = step.outputs["mapped"]Count;
     const { outputs: _discarded, ...rest } = step;
     return Object.keys(safe).length ? { ...rest, outputs: safe } : rest;
   }
