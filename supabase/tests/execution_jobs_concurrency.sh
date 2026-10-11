@@ -73,6 +73,82 @@ fi
 
 echo "Concurrent idempotency safety passed: 8 duplicate deliveries converged on one job."
 
+# Remove the completed fixture request so the next claim is deterministic.
+psql -v ON_ERROR_STOP=1 -c "
+  update public.execution_jobs
+     set status = 'dead_letter', finished_at = now(), updated_at = now()
+   where automation_id = '00000000-0000-4000-8000-000000000002'
+     and idempotency_key = 'concurrent-idempotency-race'
+     and status = 'queued';
+"
+
+# An expired worker must never win finalization while lease recovery races it.
+# The database predicate fences the expired token, and recovery must close the
+# associated audit run while preserving its uncertain step outcome.
+psql -v ON_ERROR_STOP=1 -c "
+  select public.enqueue_execution_job(
+    '00000000-0000-4000-8000-000000000002',
+    'manual',
+    'expired-finalize-recovery-race',
+    '{\"race\":true}'::jsonb,
+    null,
+    3,
+    now()
+  );
+  insert into public.run_logs (id, automation_id, status, started_at, trigger_type)
+  values ('00000000-0000-4000-8000-000000000040',
+          '00000000-0000-4000-8000-000000000002', 'running', now() - interval '2 minutes', 'manual');
+  insert into public.run_step_logs (id, run_id, status, outcome_state)
+  values ('00000000-0000-4000-8000-000000000041',
+          '00000000-0000-4000-8000-000000000040', 'running', 'uncertain');
+"
+race_job_id="$(psql -X -A -t -v ON_ERROR_STOP=1 -c "
+  select id from public.execution_jobs
+   where idempotency_key = 'expired-finalize-recovery-race'
+")"
+race_claim="$(psql -X -A -t -v ON_ERROR_STOP=1 -c "select id || ':' || worker_token from public.claim_execution_job(300)" | tr -d '[:space:]')"
+if [[ -z "$race_claim" ]]; then
+  echo "Could not claim expired-finalization race fixture" >&2
+  exit 1
+fi
+race_worker_token="${race_claim#*:}"
+psql -v ON_ERROR_STOP=1 -c "
+  select public.attach_execution_job_run(
+    '$race_job_id', '$race_worker_token', '00000000-0000-4000-8000-000000000040'
+  );
+  update public.execution_jobs
+     set locked_until = now() - interval '1 second'
+   where id = '$race_job_id';
+"
+(
+  psql -X -A -t -v ON_ERROR_STOP=1 -c "
+    select public.finish_execution_job(
+      '$race_job_id', '$race_worker_token', 'succeeded', null, null
+    );
+  " > "$tmp_dir/expired-finish"
+) &
+finish_pid=$!
+(
+  sleep 0.1
+  psql -X -q -v ON_ERROR_STOP=1 -c "select id from public.claim_execution_job(300)" > "$tmp_dir/expired-recovery"
+) &
+recovery_pid=$!
+wait "$finish_pid"
+wait "$recovery_pid"
+finish_result="$(tr -d '[:space:]' < "$tmp_dir/expired-finish")"
+race_status="$(psql -X -A -t -v ON_ERROR_STOP=1 -c "select status from public.execution_jobs where id = '$race_job_id'" | tr -d '[:space:]')"
+run_status="$(psql -X -A -t -v ON_ERROR_STOP=1 -c "select status from public.run_logs where id = '00000000-0000-4000-8000-000000000040'" | tr -d '[:space:]')"
+step_state="$(psql -X -A -t -v ON_ERROR_STOP=1 -c "select status || ':' || outcome_state from public.run_step_logs where id = '00000000-0000-4000-8000-000000000041'" | tr -d '[:space:]')"
+if [[ "$finish_result" != "f" || "$race_status" != "needs_review" || "$run_status" != "failed" || "$step_state" != "failed:uncertain" ]]; then
+  echo "Expired finalize/recovery race failed: finish=$finish_result job=$race_status run=$run_status step=$step_state" >&2
+  psql -X -c "select id, status, worker_token, locked_until, run_id from public.execution_jobs where id = '$race_job_id'" >&2
+  psql -X -c "select id, status, finished_at, error_summary from public.run_logs where id = '00000000-0000-4000-8000-000000000040'" >&2
+  psql -X -c "select id, status, outcome_state, error_detail from public.run_step_logs where id = '00000000-0000-4000-8000-000000000041'" >&2
+  exit 1
+fi
+
+echo "Expired finalize/recovery race passed: stale finalization rejected and audit outcome retained as uncertain."
+
 # Race stale-run reconciliation against a fresh scheduler lease claim. The
 # claimant first owns the automation row; reconciliation must wait, then see
 # the newly committed lease and leave the stale run open for a later review.
