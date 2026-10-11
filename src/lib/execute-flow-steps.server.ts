@@ -72,7 +72,7 @@ export async function executeFlowSteps(input: ExecuteFlowStepsInput): Promise<Ex
     let intent: StepIntent | null;
     try { intent = await input.persistIntent(node, index); } catch { intent = null; }
     if (!intent) {
-      input.onPersistenceError?.("intent", node);
+      notifyPersistenceError(input, "intent", node);
       steps.push({ nodeId: node.id, label: node.name.slice(0, 160), status: "failed", ms: 0,
         detail: "Could not persist the step intent. No action was attempted; remaining steps were halted." });
       break;
@@ -102,7 +102,7 @@ export async function executeFlowSteps(input: ExecuteFlowStepsInput): Promise<Ex
     let persisted = false;
     try { persisted = await input.persistOutcome(intent.id, step, outcomeState); } catch { persisted = false; }
     if (!persisted) {
-      input.onPersistenceError?.("outcome", node);
+      notifyPersistenceError(input, "outcome", node);
       steps.push({ ...step, status: "failed", detail: "The step outcome could not be safely recorded. Verify external effects before retrying." });
       break;
     }
