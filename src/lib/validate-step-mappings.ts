@@ -10,6 +10,12 @@ export interface StepMappingValidationError {
   error: string;
 }
 
+function awaitMapFields(mapping: string | undefined): Record<string, string> {
+  if (typeof mapping !== "string") return {};
+  const result = mapFields(mapping);
+  return result.ok ? result.fields : {};
+}
+
 function allowedMappingKeys(node: WorkflowNode): ReadonlySet<string> {
   if (node.defId === "logic.map") return new Set(["mapping"]);
   if (node.defId === "logic.filter") return new Set(["condition"]);
