@@ -177,7 +177,7 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
                   output_snapshot: {
                     detail: sanitizeExecutionError(step.detail, "Step completed without safe detail."),
                     outcomeState,
-                    ...(step.outputs ? { outputs: sanitizeExecutionAuditValue(step.outputs) } : {}),
+                    ...(step.outputs ? { outputs: sanitizeExecutionAuditValue(step.outputs) as import("@/integrations/supabase/types").Json } : {}),
                   },
                 })
                 .eq("id", intentId)
