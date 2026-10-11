@@ -64,3 +64,45 @@ export function summarizeExecutionQueueHealth(
     recentFailures,
   };
 }
+
+export interface ExpiredExecutionLeaseRow {
+  id: string;
+  locked_until: string;
+  updated_at: string;
+  attempts: number;
+  max_attempts: number;
+}
+
+export interface ExpiredExecutionLeaseSummary {
+  totalCount: number;
+  sampledCount: number;
+  truncated: boolean;
+  sample: Array<{
+    jobId: string;
+    lockedUntil: string;
+    updatedAt: string;
+    attempts: number;
+    maxAttempts: number;
+  }>;
+}
+
+/** Keep a bounded diagnostic sample while reporting the database's exact total. */
+export function summarizeExpiredExecutionLeases(
+  totalCount: number,
+  rows: ExpiredExecutionLeaseRow[],
+): ExpiredExecutionLeaseSummary {
+  const safeTotal = Number.isSafeInteger(totalCount) && totalCount >= 0 ? totalCount : rows.length;
+  const sample = rows.slice(0, 20).map((job) => ({
+    jobId: job.id,
+    lockedUntil: job.locked_until,
+    updatedAt: job.updated_at,
+    attempts: job.attempts,
+    maxAttempts: job.max_attempts,
+  }));
+  return {
+    totalCount: safeTotal,
+    sampledCount: rows.length,
+    truncated: safeTotal > rows.length,
+    sample,
+  };
+}
