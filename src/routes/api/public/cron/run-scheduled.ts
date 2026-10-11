@@ -263,7 +263,7 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
             console.error("[AutoStudio scheduler] Could not persist run summary; attempting a failed-state fallback.", {
               automationId: row.id,
               runId: run.id,
-              errorCode: finishError.code,
+              errorCode: finishError?.code ?? "NO_ROW_UPDATED",
             });
             const { error: fallbackError } = await supabaseAdmin
               .from("run_logs")
