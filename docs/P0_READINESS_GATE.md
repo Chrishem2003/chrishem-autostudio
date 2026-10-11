@@ -151,3 +151,9 @@ Do not mark any unchecked item as passed based on code inspection alone.
 
 - Added PostgreSQL regression coverage that recovery changes only unfinished steps in the interrupted run, preserves already-terminal step diagnostics, and leaves unrelated running runs untouched.
 - This is database-smoke evidence only. The live staging interruption/restart rehearsal and provider-side duplicate-effect inspection remain unchecked. Queue/outbound transport remain disabled until all release gates pass.
+
+## Exact-head queue input and lease-bound verification — 2026-10-11
+
+- Commit `0ef5cacd6f95f20e1954d6138b3cb7b634843a7d` passed both required CI jobs: [run 38170222554](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38170222554).
+- The disposable PostgreSQL smoke test now verifies that the database rejects out-of-range worker lease durations, unsupported trigger types, retry limits outside the allowed range, and queue payloads exceeding the 64 KiB database limit.
+- This is a regression-test checkpoint, not staging acceptance. Provider idempotency, interrupted-worker recovery, production-runtime transport compatibility, staging authentication, and the full migration rollout remain unverified. Keep durable queue and outbound transport disabled until those gates have evidence.
