@@ -19,6 +19,7 @@ This checklist is the release gate for P0 execution-integrity hardening. A code 
 
 ## B. Execution lifecycle and recovery
 
+- [x] Worker rejects a `succeeded` result unless the executor reports `effect_confirmed`; contradictory results go to `needs_review` rather than false success or automatic replay. Regression tests added; current-head CI result remains pending.
 - [ ] Verify run creation and queue claiming failures leave no false-success state.
 - [ ] Verify missing or invalid job-to-run links cannot lead to success.
 - [ ] Verify finalization failures remain visible and recoverable.
