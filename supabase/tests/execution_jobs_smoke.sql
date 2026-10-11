@@ -544,6 +544,35 @@ begin
     raise exception 'Untrusted roles can invoke stale-run reconciliation RPC';
   end if;
 
+  -- Explicit NULL bypasses ordinary range comparisons in SQL unless
+  -- checked separately; neither queue RPC may create an unleased running job.
+  begin
+    perform * from public.claim_execution_job(null);
+    raise exception 'Claim accepted a NULL lease duration';
+  exception when others then
+    if sqlerrm <> 'Invalid execution worker lease duration' then raise; end if;
+  end;
+  begin
+    perform public.heartbeat_execution_job(
+      '00000000-0000-4000-8000-000000000099',
+      gen_random_uuid(),
+      null
+    );
+    raise exception 'Heartbeat accepted a NULL lease duration';
+  exception when others then
+    if sqlerrm <> 'Invalid execution worker lease duration' then raise; end if;
+  end;
+  begin
+    perform public.heartbeat_execution_job(
+      '00000000-0000-4000-8000-000000000099',
+      gen_random_uuid(),
+      901
+    );
+    raise exception 'Heartbeat accepted a lease above the maximum';
+  exception when others then
+    if sqlerrm <> 'Invalid execution worker lease duration' then raise; end if;
+  end;
+
   -- Reject invalid worker lease bounds before any queue state can change.
   begin
     perform * from public.claim_execution_job(29);
