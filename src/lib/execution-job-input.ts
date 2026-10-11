@@ -25,7 +25,7 @@ export function validateExecutionJobEnqueueMetadata(value: unknown): ExecutionJo
     return { success: false, error: "Execution job request must be an object." };
   }
   const input = value as Record<string, unknown>;
-  if (typeof input["automationId"] !== "string" || !input["automationId"].trim()) {
+  if (typeof input["automationId"] !== "string" || !input["automationId"].trim() || input["automationId"].length > 200) {
     return { success: false, error: "An automation ID is required." };
   }
   if (!["manual", "scheduled", "webhook"].includes(input["triggerType"] as string)) {
@@ -34,7 +34,7 @@ export function validateExecutionJobEnqueueMetadata(value: unknown): ExecutionJo
   if (typeof input["idempotencyKey"] !== "string" || !input["idempotencyKey"].trim() || input["idempotencyKey"].length > 200) {
     return { success: false, error: "Idempotency key must contain between 1 and 200 characters." };
   }
-  if (input["requestedBy"] !== undefined && input["requestedBy"] !== null && typeof input["requestedBy"] !== "string") {
+  if (input["requestedBy"] !== undefined && input["requestedBy"] !== null && (typeof input["requestedBy"] !== "string" || input["requestedBy"].length > 200)) {
     return { success: false, error: "Requesting user ID must be a string or null." };
   }
   const maxAttempts = input["maxAttempts"] === undefined ? 3 : input["maxAttempts"];

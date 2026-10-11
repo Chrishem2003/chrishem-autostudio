@@ -1,6 +1,10 @@
 // @ts-nocheck -- Bun's test runner supplies test types at runtime
 import { describe, expect, it } from "bun:test";
-import { MAX_EXECUTION_JOB_PAYLOAD_BYTES, validateExecutionJobPayload } from "../execution-job-input";
+import {
+  MAX_EXECUTION_JOB_PAYLOAD_BYTES,
+  validateExecutionJobEnqueueMetadata,
+  validateExecutionJobPayload,
+} from "../execution-job-input";
 
 describe("durable execution job enqueue metadata validation", () => {
   const valid = () => ({ automationId: "automation-1", triggerType: "manual", idempotencyKey: "request-1" });
@@ -17,10 +21,12 @@ describe("durable execution job enqueue metadata validation", () => {
     const invalidRequests = [
       null,
       { ...valid(), automationId: 12 },
+      { ...valid(), automationId: "x".repeat(201) },
       { ...valid(), triggerType: "unknown" },
       { ...valid(), idempotencyKey: " " },
       { ...valid(), idempotencyKey: "x".repeat(201) },
       { ...valid(), requestedBy: { user: "spoofed" } },
+      { ...valid(), requestedBy: "x".repeat(201) },
       { ...valid(), maxAttempts: 0 },
       { ...valid(), maxAttempts: 11 },
       { ...valid(), availableAt: { toString: () => "2030-01-01" } },
