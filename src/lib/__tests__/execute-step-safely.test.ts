@@ -27,6 +27,26 @@ describe("shared safe step execution boundary", () => {
     expect(result.detail).not.toContain("private provider details");
   });
 
+  it("preserves the uncertain failure result when diagnostics throw", async () => {
+    const result = await executeStepSafely({
+      node,
+      flowName: "test flow",
+      userId: "user-1",
+      mode: "live",
+      execute: async () => { throw new Error("provider timed out"); },
+      onUnexpectedError: () => { throw new Error("logger failed"); },
+    });
+
+    expect(result).toMatchObject({
+      nodeId: "step-1",
+      label: "Send notification",
+      status: "failed",
+      ms: 0,
+    });
+    expect(result.detail).toMatch(/outcome may be uncertain/i);
+    expect(result.detail).not.toContain("logger failed");
+  });
+
   it("preserves successful executor results", async () => {
     const expected = {
       nodeId: "step-1",

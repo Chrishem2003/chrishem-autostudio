@@ -20,7 +20,13 @@ export async function executeStepSafely(input: SafeStepExecutionInput): Promise<
   try {
     return await execute(stepInput);
   } catch (error) {
-    onUnexpectedError?.(error);
+    // Diagnostics are best-effort and must never replace the conservative
+    // failed result; a throwing logger must not bypass audit persistence.
+    try {
+      onUnexpectedError?.(error);
+    } catch {
+      // Preserve the original uncertain execution outcome.
+    }
     return {
       nodeId: input.node.id,
       label: input.node.name.slice(0, 160),
