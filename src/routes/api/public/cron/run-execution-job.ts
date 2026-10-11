@@ -258,8 +258,9 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
                   output_snapshot: { recoveryHint: "Queued worker failed after recording intent; verify the external outcome before retrying." },
                 })
                 .eq("run_id", activeRunId)
-                .eq("status", "running");
-              const { error: runRecoveryError } = await supabaseAdmin
+                .eq("status", "running")
+                .select("id");
+              const { data: recoveredRun, error: runRecoveryError } = await supabaseAdmin
                 .from("run_logs")
                 .update({
                   status: "failed",
@@ -268,8 +269,10 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
                   error_summary: "Queued execution stopped unexpectedly. Verify uncertain step outcomes before retrying.",
                 })
                 .eq("id", activeRunId)
-                .eq("status", "running");
-              if (stepRecoveryError || runRecoveryError) {
+                .eq("status", "running")
+                .select("id")
+                .maybeSingle();
+              if (stepRecoveryError || runRecoveryError || !recoveredRun) {
                 console.error("[AutoStudio queue worker] Interrupted run recovery was incomplete.", {
                   jobId: job.id,
                   runId: activeRunId,

@@ -417,3 +417,15 @@ This closes the Supabase/PostgREST distinction between a successful request and 
 Both synchronous manual execution and durable queued execution now consider a step outcome persisted only when the database update returns the expected run_step_logs row. Updates are scoped by step intent ID and run ID. A database error or zero-row result fails closed; the shared traversal halts subsequent steps because the external action may already have occurred while its outcome remains unrecorded.
 
 Regression coverage explicitly exercises the zero-row/no-error callback result and verifies later steps do not execute. This is unit coverage of the traversal contract, not a substitute for staging fault-injection against the real Supabase adapter. Durable queue and outbound transport remain gated off pending staging acceptance.
+
+
+## Interrupted-run recovery confirmation — 2026-10-11
+
+Hardened recovery paths so they do not treat a no-error database response as proof that a run was actually recovered:
+
+- Manual stale-run reconciliation now requests the updated run row and refuses to start a new live run if the stale run summary was not transitioned from `running` to `failed`.
+- Manual, queued-worker, and scheduled-run exception recovery now scope the run update to `status = running`, request the updated row, and log an explicit recovery failure when no row is returned. Existing step-intent recovery remains uncertainty-preserving; zero in-flight step rows is allowed, but a database error is not.
+- Scheduled step-outcome persistence is now scoped by both intent ID and run ID and succeeds only when the updated step row is returned, matching the manual and queued execution boundaries.
+- Scheduled finalization fallback also checks for a returned row and records a diagnostic if fallback recovery cannot be confirmed.
+
+These checks improve diagnosability and avoid false confidence in PostgREST zero-row updates. They do not make provider actions and audit writes transactional; controlled staging fault-injection is still required before enabling durable queue or outbound transport.

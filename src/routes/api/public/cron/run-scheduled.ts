@@ -215,14 +215,14 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
               return { id: attempt.id };
             },
             persistOutcome: async (intentId, step, outcomeState) => {
-              const { error: stepError } = await supabaseAdmin.from("run_step_logs").update({
+              const { data: persistedStep, error: stepError } = await supabaseAdmin.from("run_step_logs").update({
                 status: step.status,
                 outcome_state: outcomeState,
                 duration_ms: Math.max(0, Math.round(step.ms)),
                 error_detail: step.status === "failed" ? step.detail.slice(0, 500) : null,
                 output_snapshot: { detail: step.detail.slice(0, 500), outcomeState, ...(step.outputs ? { outputs: step.outputs } : {}) },
-              }).eq("id", intentId);
-              return !stepError;
+              }).eq("id", intentId).eq("run_id", run.id).select("id").maybeSingle();
+              return !stepError && Boolean(persistedStep);
             },
             onUnexpectedError: (node, error) => {
               console.error("[AutoStudio scheduler] Step failed unexpectedly.", {
@@ -265,7 +265,7 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
               runId: run.id,
               errorCode: finishError?.code ?? "NO_ROW_UPDATED",
             });
-            const { error: fallbackError } = await supabaseAdmin
+            const { data: fallbackRun, error: fallbackError } = await supabaseAdmin
               .from("run_logs")
               .update({
                 status: "failed",
@@ -273,8 +273,11 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
                 duration_ms: Date.now() - started,
                 error_summary: "The final run summary could not be safely persisted. Verify recorded step outcomes before retrying.",
               })
-              .eq("id", run.id);
-            if (fallbackError) {
+              .eq("id", run.id)
+              .eq("status", "running")
+              .select("id")
+              .maybeSingle();
+            if (fallbackError || !fallbackRun) {
               console.error("[AutoStudio scheduler] Failed-state fallback also failed.", {
                 automationId: row.id,
                 runId: run.id,
@@ -292,7 +295,7 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
             if (activeRunId) {
               try {
                 const failedAt = new Date().toISOString();
-                const { error: auditError } = await supabaseAdmin
+                const { data: recoveredRun, error: auditError } = await supabaseAdmin
                   .from("run_logs")
                   .update({
                     status: "failed",
@@ -300,8 +303,11 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
                     duration_ms: Date.now() - started,
                     error_summary: "The scheduled run stopped unexpectedly. Verify external effects before retrying.",
                   })
-                  .eq("id", activeRunId);
-                if (auditError) {
+                  .eq("id", activeRunId)
+                  .eq("status", "running")
+                  .select("id")
+                  .maybeSingle();
+                if (auditError || !recoveredRun) {
                   console.error("[AutoStudio scheduler] Could not mark interrupted run failed.", {
                     automationId: row.id,
                     runId: activeRunId,

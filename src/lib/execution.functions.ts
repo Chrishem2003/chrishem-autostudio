@@ -184,7 +184,7 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
           });
           throw new Error("Could not safely recover an earlier run. No new live run was started; inspect run history and try again.");
         }
-        const { error: runRecoveryError } = await context.supabase
+        const { data: runRecovery, error: runRecoveryError } = await context.supabase
           .from("run_logs")
           .update({
             status: "failed",
@@ -192,8 +192,10 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
             error_summary: "The manual worker stopped before finalizing this run. Inspect uncertain step outcomes before retrying.",
           })
           .eq("id", stale.id)
-          .eq("status", "running");
-        if (runRecoveryError) {
+          .eq("status", "running")
+          .select("id")
+          .maybeSingle();
+        if (runRecoveryError || !runRecovery) {
           console.error("[AutoStudio executor] Could not finalize stale manual run; refusing to start another live run.", {
             runId: stale.id, errorCode: runRecoveryError.code,
           });
@@ -310,7 +312,7 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
       if (activeRunId) {
         try {
           const failedAt = new Date().toISOString();
-          const { error: auditError } = await context.supabase
+          const { data: recoveredRun, error: auditError } = await context.supabase
             .from("run_logs")
             .update({
               status: "failed",
@@ -318,8 +320,11 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
               duration_ms: Date.now() - runStartedMs,
               error_summary: "The manual run stopped unexpectedly. Verify external effects before retrying.",
             })
-            .eq("id", activeRunId);
-          if (auditError) {
+            .eq("id", activeRunId)
+            .eq("status", "running")
+            .select("id")
+            .maybeSingle();
+          if (auditError || !recoveredRun) {
             console.error("[AutoStudio executor] Could not mark interrupted manual run failed.", {
               automationId: row.id,
               runId: activeRunId,
