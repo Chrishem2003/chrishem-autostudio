@@ -116,6 +116,8 @@ export interface FileRoutesByTo {
   '/workspace': typeof AuthenticatedWorkspaceRoute
   '/oauth/gmail/return': typeof OauthGmailReturnRoute
   '/api/public/cron/run-scheduled': typeof ApiPublicCronRunScheduledRoute
+  '/api/public/cron/run-execution-job': typeof ApiPublicCronRunExecutionJobRoute
+  '/api/public/cron/execution-queue-health': typeof ApiPublicCronExecutionQueueHealthRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
