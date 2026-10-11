@@ -83,6 +83,34 @@ export async function processOneExecutionJob(
     payload: freezeExecutionPayload(claimedJob.payload),
   });
 
+  // A successful database claim must have incremented attempts to a positive
+  // integer and must respect the database's bounded retry policy. If an adapter
+  // returns malformed counters, do not execute external effects or let the
+  // retry-policy helper throw after execution has already begun.
+  if (
+    !Number.isInteger(job.attempts) ||
+    job.attempts < 1 ||
+    !Number.isInteger(job.maxAttempts) ||
+    job.maxAttempts < 1 ||
+    job.maxAttempts > 10 ||
+    job.attempts > job.maxAttempts
+  ) {
+    let finalized = false;
+    try {
+      finalized = (await dependencies.finish(
+        job,
+        "needs_review",
+        "Claimed job retry metadata is invalid. Verify the queue record before retrying.",
+        null,
+      )) === true;
+    } catch {
+      // Do not execute when the claim envelope contradicts the queue contract.
+    }
+    return finalized
+      ? { outcome: "finished", jobId: job.id, status: "needs_review" }
+      : { outcome: "finalization_rejected", jobId: job.id };
+  }
+
   let leaseLost = false;
   const heartbeat = async (): Promise<boolean> => {
     try {
