@@ -359,6 +359,17 @@ The build remains aligned with the plan's reliability-first sequence: execution 
 2. Add route-level regression coverage for malformed persisted workflows at the real enqueue/run boundaries.
 3. Continue the provider reliability contract: per-adapter capability declarations and only verified idempotency claims; no speculative retries of uncertain effects.
 
+## Worker retry capability boundary — 2026-10-11
+
+**Implemented on the active hardening branch; exact-head CI pending.**
+
+- Removed `providerSupportsIdempotency` from the worker executor result contract. An executor can no longer self-assert that an uncertain provider action is safe to replay.
+- The durable worker now sends uncertain outcomes to `needs_review` unless a trusted, reviewed adapter capability is explicitly wired into the worker. That integration is intentionally not inferred from payloads, provider errors, or executor return values.
+- Added a regression test that deliberately returns `providerSupportsIdempotency: true` from an executor and asserts the worker still chooses manual review. This protects runtime behavior even if an old adapter continues returning the legacy field.
+- Safe retries for failures known not to have attempted an external effect remain available; permanent configuration failures remain terminal.
+
+**Acceptance boundary:** this narrows automatic retries conservatively. It does not implement provider-side idempotency or authorize queue/transport activation. Exact-head typecheck, unit tests, production build, and PostgreSQL queue smoke tests must pass; staging still must verify real provider effects and recovery.
+
 ## Provider idempotency claims corrected — 2026-10-11
 
 **Implemented on the active hardening branch; exact-head CI pending.**
