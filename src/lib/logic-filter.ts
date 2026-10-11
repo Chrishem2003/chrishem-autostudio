@@ -20,7 +20,7 @@ export function validateFilterCondition(source: string): { ok: true } | { ok: fa
   const match = /^(.+?)\s+(not contains|contains|==|!=|>=|<=|>|<)\s+(.+)$/i.exec(condition);
   if (!match) return { ok: false, error: 'Use a supported condition, for example: score >= 70, status == "ready", or message contains "urgent".' };
   if ([">", ">=", "<", "<="].includes(match[2]!)) {
-    const right = operand(match[3]!, values);
+    const right = operand(match[3]!);
     if (!right.trim() || !Number.isFinite(Number(right))) return { ok: false, error: "Numeric comparisons require a finite number on the right side." };
   }
   return { ok: true };
