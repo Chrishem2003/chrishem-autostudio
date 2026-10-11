@@ -970,9 +970,10 @@ declare
   ];
 begin
   foreach signature in array protected_signatures loop
+    -- PUBLIC grants are inherited by both test roles, so checking anon and
+    -- authenticated also catches a function accidentally left executable by PUBLIC.
     if has_function_privilege('anon', signature, 'EXECUTE')
-       or has_function_privilege('authenticated', signature, 'EXECUTE')
-       or has_function_privilege('public', signature, 'EXECUTE') then
+       or has_function_privilege('authenticated', signature, 'EXECUTE') then
       raise exception 'Untrusted role can execute protected RPC: %', signature;
     end if;
     if not has_function_privilege('service_role', signature, 'EXECUTE') then
