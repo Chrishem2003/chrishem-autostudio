@@ -430,3 +430,11 @@ These are database-level regression checks, not a substitute for staging rehears
 - This reduces accidental exposure in stored run-step snapshots but is not a substitute for data minimization at each connector. New connectors should return explicit allowlisted output fields rather than raw provider payloads.
 
 **Acceptance boundary:** exact-head CI must pass. This sanitizer is a defense-in-depth layer and does not prove every proprietary secret format is recognized.
+
+## Hard-crash run-history reconciliation — 2026-10-11
+
+- Added a nullable unique linkage from each durable execution job to the run-history row it creates. The worker now writes the queue job ID when it persists a live run, allowing database-level recovery to find the exact run even if the worker process disappears without entering its error handler.
+- Added a database trigger that fires when a running queue job is moved to `needs_review` after lease expiry. Any linked run still marked `running` is closed as failed with a bounded recovery summary, and linked in-flight step rows are closed as failed with `outcome_state = uncertain` and an explicit instruction to verify external effects. Already-terminal run summaries are not overwritten.
+- Extended the disposable CI database schema and smoke test to simulate a hard crash after run/step intent persistence, expire the queue lease, and assert that both run and step audit records reconcile correctly. CI applies the new migration before running the smoke test.
+
+**Safety boundary:** expired jobs remain `needs_review`; reconciliation does not replay provider actions or imply that an external effect did not happen. The database smoke test verifies this recovery path locally in CI, but staging verification is still required before enabling the durable queue or outbound transport.
