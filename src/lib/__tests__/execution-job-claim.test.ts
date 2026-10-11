@@ -1,6 +1,6 @@
 // @ts-nocheck -- Bun's test runner supplies test types at runtime
 import { describe, expect, test } from "bun:test";
-import { parseClaimedExecutionJob } from "../execution-job-claim";
+import { parseClaimedExecutionJob, parseClaimedExecutionJobResponse } from "../execution-job-claim";
 
 const validRow = () => ({
   id: "job-1",
@@ -11,6 +11,24 @@ const validRow = () => ({
   max_attempts: 3,
   worker_token: "lease-token",
   idempotency_key: "automation-1:job-1",
+});
+
+describe("parseClaimedExecutionJobResponse", () => {
+  test("treats null and empty arrays as no available job", () => {
+    expect(parseClaimedExecutionJobResponse(null)).toBeNull();
+    expect(parseClaimedExecutionJobResponse([])).toBeNull();
+  });
+
+  test("accepts exactly one valid claimed row", () => {
+    expect(parseClaimedExecutionJobResponse([validRow()])).toEqual(parseClaimedExecutionJob(validRow()));
+  });
+
+  test("rejects malformed envelopes and multiple claimed rows", () => {
+    for (const value of ["job", 42, {}]) {
+      expect(() => parseClaimedExecutionJobResponse(value)).toThrow("unexpected response");
+    }
+    expect(() => parseClaimedExecutionJobResponse([validRow(), validRow()])).toThrow("multiple job rows");
+  });
 });
 
 describe("parseClaimedExecutionJob", () => {

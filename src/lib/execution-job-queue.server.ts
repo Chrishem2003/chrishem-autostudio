@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import type { Json } from "@/integrations/supabase/types";
 import { parseExecutionJobEnqueueResult, validateExecutionJobEnqueueMetadata, validateExecutionJobPayload } from "@/lib/execution-job-input";
-import { parseClaimedExecutionJob } from "@/lib/execution-job-claim";
+import { parseClaimedExecutionJobResponse } from "@/lib/execution-job-claim";
 import type { ExecutionJobStatus } from "@/lib/execution-job-policy";
 import type {
   ClaimedExecutionJob,
@@ -54,10 +54,7 @@ export function createSupabaseExecutionJobDependencies(
         _lease_seconds: 300,
       });
       if (error) throw new Error("Unable to claim execution job.");
-      if (data === null) return null;
-      if (!Array.isArray(data)) throw new Error("Queue claim returned an unexpected response.");
-      if (data.length === 0) return null;
-      return parseClaimedExecutionJob(data[0]);
+      return parseClaimedExecutionJobResponse(data);
     },
     heartbeat: async (job) => {
       const { data, error } = await supabaseAdmin.rpc("heartbeat_execution_job", {

@@ -58,3 +58,19 @@ export function parseClaimedExecutionJob(value: unknown): ClaimedExecutionJob {
     idempotencyKey: row.idempotency_key,
   };
 }
+
+/**
+ * Validate the claim RPC envelope before allowing any returned job to execute.
+ * The database contract is zero or one row; multiple rows are a protocol error.
+ */
+export function parseClaimedExecutionJobResponse(value: unknown): ClaimedExecutionJob | null {
+  if (value === null) return null;
+  if (!Array.isArray(value)) {
+    throw new Error("Queue claim returned an unexpected response.");
+  }
+  if (value.length === 0) return null;
+  if (value.length !== 1) {
+    throw new Error("Queue claim returned multiple job rows.");
+  }
+  return parseClaimedExecutionJob(value[0]);
+}
