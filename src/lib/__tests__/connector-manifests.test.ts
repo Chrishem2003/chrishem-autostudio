@@ -9,6 +9,13 @@ describe("connector manifests", () => {
   it("requires a user test-send for Gmail", () => {
     expect(getConnectorManifestForNode("action.gmail", "Gmail")?.verification).toBe("user-initiated-test-send");
   });
+  it("does not claim provider-managed idempotency for Gmail send", () => {
+    const gmail = getConnectorManifestForNode("action.gmail", "Gmail");
+    expect(gmail?.actions[0]?.idempotency).toBe("not-guaranteed");
+    expect(gmail?.retryPolicy).toBe("never-without-idempotency");
+    expect(gmail?.notes).toMatch(/uncertain outcomes require review/i);
+  });
+
   it("does not call webhook configuration provider verification", () => {
     expect(getConnectorManifestForNode("app.slack.create.message", "Slack")?.verification).toBe("configuration-preflight-only");
     expect(getConnectorActionForNode("app.slack.create.message", "Slack")?.action.id).toBe("chat.post_message");
