@@ -392,3 +392,13 @@ The build remains aligned with the plan's reliability-first sequence: execution 
 
 **Acceptance gate:** typecheck, tests, production build, and PostgreSQL queue smoke tests must pass on the exact resulting commit. Staging must still demonstrate provider behavior independently; manifest metadata alone is not provider-side proof.
 
+## Audit persistence failure-injection tests — 2026-10-11
+
+Added deterministic regression tests at the shared ordered step-execution boundary for three failure cases:
+
+- A thrown step-intent persistence callback stops execution before any executor is called.
+- A step that returns success but whose outcome cannot be persisted causes the flow to stop before any later step begins. The returned summary is failed and explicitly directs operators to verify external effects before retrying.
+- When whole-flow mapping preflight fails and its audit intent cannot be persisted, the executor and outcome-persistence callback are never called; no provider step is attempted.
+
+These tests strengthen the step-level fail-closed contract without pretending to test database transactions or provider behavior. They do not yet constitute server-function/route integration tests for run-log creation, durable-job association, or final run finalization. Those boundaries remain rollout acceptance items and must be verified against a controlled staging database before enabling the durable queue.
+
