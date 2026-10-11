@@ -157,6 +157,10 @@ export async function processOneExecutionJob(
     );
   }
 
+  // Retry scheduling is meaningful only for a queued job. Never pass an
+  // executor-supplied retry timestamp to terminal/manual-review finalization.
+  if (finalStatus !== "queued") finalRetryAt = null;
+
   let finalized: boolean;
   try {
     finalized = await dependencies.finish(job, finalStatus, error, finalRetryAt);
