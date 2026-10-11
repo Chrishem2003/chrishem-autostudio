@@ -503,6 +503,7 @@ export type Database = {
         Returns: Json[];
       }
       claim_execution_job: { Args: { _lease_seconds?: number }; Returns: Json[] }
+      attach_execution_job_run: { Args: { _job_id: string; _worker_token: string; _run_id: string }; Returns: boolean }
       heartbeat_execution_job: {
         Args: { _job_id: string; _worker_token: string; _lease_seconds?: number };
         Returns: boolean;
