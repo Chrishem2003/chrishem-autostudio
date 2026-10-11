@@ -134,19 +134,20 @@ describe("persisted workflow runtime validation", () => {
     }).success).toBe(false);
   });
 
-  it("rejects accessors that change or throw between serialization and schema validation", () => {
+  it("validates the exact serialized snapshot instead of re-reading changing accessors", () => {
     let reads = 0;
     const unstable = { ...valid };
     Object.defineProperty(unstable, "name", {
       enumerable: true,
       get() {
         reads += 1;
-        if (reads === 1) return "Example";
-        throw new Error("untrusted getter must not escape");
+        return reads === 1 ? "Snapshot name" : "Changed after snapshot";
       },
     });
-    expect(() => parsePersistedWorkflow(unstable)).not.toThrow();
-    expect(parsePersistedWorkflow(unstable).success).toBe(false);
+    const result = parsePersistedWorkflow(unstable);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.name).toBe("Snapshot name");
+    expect(reads).toBe(1);
   });
 
   it("rejects proxy traps that throw during schema validation", () => {

@@ -48,7 +48,11 @@ export function parsePersistedWorkflow(value: unknown):
   // may return one value during serialization and throw/change during parsing.
   // Any such runtime behavior must reject the workflow rather than escape.
   try {
-    const parsed = persistedWorkflowShape.safeParse(value);
+    // Validate the exact JSON snapshot whose size was checked. Parsing the
+    // original object again would re-read getters/proxies and could validate a
+    // different value than the one serialized at this trust boundary.
+    const snapshot: unknown = JSON.parse(serialized);
+    const parsed = persistedWorkflowShape.safeParse(snapshot);
     if (!parsed.success) return { success: false };
 
     // Per-field limits alone still allow a large configuration payload across
