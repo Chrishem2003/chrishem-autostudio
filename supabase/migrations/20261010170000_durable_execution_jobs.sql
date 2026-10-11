@@ -113,7 +113,7 @@ as $$
 declare
   _token uuid := gen_random_uuid();
 begin
-  if _lease_seconds < 30 or _lease_seconds > 900 then
+  if _lease_seconds is null or _lease_seconds < 30 or _lease_seconds > 900 then
     raise exception 'Invalid execution worker lease duration';
   end if;
 
@@ -164,7 +164,7 @@ security definer
 set search_path = public
 as $$
 begin
-  if _lease_seconds < 30 or _lease_seconds > 900 then
+  if _lease_seconds is null or _lease_seconds < 30 or _lease_seconds > 900 then
     raise exception 'Invalid execution worker lease duration';
   end if;
 
