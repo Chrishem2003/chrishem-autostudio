@@ -68,6 +68,16 @@ describe("processOneExecutionJob", () => {
     expect(calls.finished[0].status).toBe("needs_review");
   });
 
+  test("routes malformed executor results to manual review", async () => {
+    const { deps, calls } = dependencies({
+      execute: async () => ({ status: "succeeded", sideEffectCertainty: "unknown" } as any),
+    });
+    const result = await processOneExecutionJob(deps);
+    expect(result.status).toBe("needs_review");
+    expect(calls.finished[0].status).toBe("needs_review");
+    expect(calls.finished[0].error).toContain("invalid result");
+  });
+
   test("routes uncertain failures to manual review", async () => {
     const { deps, calls } = dependencies({
       execute: async () => ({ status: "failed", sideEffectCertainty: "uncertain", error: "Timed out" }),
