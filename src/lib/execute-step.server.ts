@@ -4,6 +4,7 @@ import { buildChatRequest, isChatMessageStep } from "@/lib/chat-steps";
 import { buildGmailMessage, isGmailSendStep, toRawEmail } from "@/lib/gmail-steps";
 import { callWeb, isBlockedHost, resolvePublicTarget, type WebInput } from "@/lib/web-steps.server";
 import { NODES } from "@/lib/automation-catalog";
+import { mapFields } from "@/lib/field-mapping";
 import { getConnectorManifestForNode, validateConnectorActionConfig } from "@/lib/connector-manifests";
 import type { WorkflowNode } from "@/lib/workflow";
 
@@ -116,6 +117,16 @@ export async function executeStep(args: {
 
   if (Object.values(node.config).some((value) => typeof value === "string" && (value.includes("{{") || value.includes("}}")))) {
     return result("failed", "Unresolved data tokens reached the executor. No external action was taken.", 0);
+  }
+
+  // This is a local transformation: it never calls a provider or needs a connector.
+  if (node.defId === "logic.map") {
+    const mapped = mapFields(node.config["mapping"] ?? "");
+    if (!mapped.ok) return result("failed", mapped.error, 0);
+    return result("success", `Mapped ${Object.keys(mapped.fields).length} field(s) locally.`, 0, {
+      mapped: mapped.serialized,
+      mappedCount: Object.keys(mapped.fields).length,
+    });
   }
 
   const unsupported = liveCapabilityError(node);

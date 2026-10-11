@@ -467,3 +467,10 @@ Still not complete: full graph execution (branches/parallel paths), provider-agn
 - The boundary fails closed for cyclic objects, BigInt, and other values that cannot be represented as JSON instead of allowing serialization exceptions to escape.
 - Added regression tests for oversized metadata, aggregate configuration payloads, and non-JSON runtime values. This protects the shared workflow parser used by execution paths from disproportionately large persisted payloads.
 - Master-plan alignment: this is P0/P2 execution-boundary hardening, not graph feature completion. Linear-chain-only execution remains intentional; branch and parallel semantics are still rejected. CI success will establish repository-level coverage only; staging checks remain required.
+
+
+## Local field-mapping node — 2026-10-11
+
+- Implemented `logic.map` as a deterministic server-side transformation in the shared step executor. It parses `field_name = value` lines after the shared prior-step token resolver has run, and emits a JSON string plus a field count for downstream mapping.
+- Added fail-closed validation for duplicate/invalid keys, malformed lines, empty mappings, more than 50 fields, values over 2,000 characters, and serialized output over 8 KB. The output sanitizer has a dedicated allowlist for this local node; arbitrary fields are not persisted or exposed to later steps.
+- This is a real local capability, not a new third-party connector. It does not make branching, loops, or currently unsupported catalog actions executable. Live provider transport and durable queue flags remain gated pending staging acceptance.
