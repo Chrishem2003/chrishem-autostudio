@@ -42,6 +42,8 @@ jobs:
         run: bun run typecheck
       - name: Unit tests
         run: bun run test
+      - name: Lint
+        run: bun run lint
       - name: Production build
         run: bun run build
 
