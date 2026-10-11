@@ -59,6 +59,14 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Added smoke assertions for the exact validation errors and wired the migration into the PostgreSQL CI chain. Verify the exact-head workflow before treating this as accepted.
 - Staging deployment and real provider-side duplicate-effect evidence remain open; do not enable production queue or outbound transport.
 
+## Queue-to-audit association integrity — 2026-10-11
+
+- Added a forward-only migration that prevents a queue job from attaching an audit run belonging to a different automation.
+- Added a partial unique index so one audit run cannot be associated with multiple durable queue jobs. Migration intentionally fails with an explicit message if existing duplicate associations need manual reconciliation.
+- PostgreSQL smoke coverage verifies cross-automation association is rejected and the same audit run cannot be attached to a second job.
+- CI applies this migration after the existing audit-success guard. Exact-head CI must pass before this is accepted.
+- This remains code/CI verification only; actual staging migration and provider-effect acceptance are still open. Keep queue and outbound transport disabled.
+
 ## SQL NULL lease-boundary hardening — 2026-10-11
 
 - Review found that PostgreSQL comparisons against explicit `NULL` evaluate to unknown, so range-only checks could be bypassed by a caller passing `NULL` to queue claim/heartbeat RPCs. A claim could then attempt to create a running job with no valid expiry.
