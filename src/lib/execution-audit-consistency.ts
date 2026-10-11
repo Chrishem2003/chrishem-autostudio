@@ -22,7 +22,8 @@ export type AuditConsistencyIssue =
   | "linked_run_missing"
   | "succeeded_job_without_confirmed_successful_run"
   | "succeeded_job_without_queue_completion_timestamp"
-  | "non_successful_job_with_successful_audit_run";
+  | "non_successful_job_with_successful_audit_run"
+  | "successful_audit_run_without_completion_timestamp";
 
 export interface AuditConsistencyFinding {
   issue: AuditConsistencyIssue;
@@ -64,6 +65,9 @@ export function findExecutionAuditConsistencyIssues(
       continue;
     }
 
+    if (run.status === "succeeded" && !run.finished_at) {
+      findings.push({ issue: "successful_audit_run_without_completion_timestamp", jobId: job.id, runId: run.id });
+    }
     if (job.status === "succeeded" && (run.status !== "succeeded" || !run.finished_at)) {
       findings.push({ issue: "succeeded_job_without_confirmed_successful_run", jobId: job.id, runId: run.id });
     }
