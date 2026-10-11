@@ -27,6 +27,18 @@ describe("parseClaimedExecutionJob", () => {
     });
   });
 
+  test("preserves the authoritative trigger type from the database row", () => {
+    for (const trigger_type of ["manual", "scheduled", "webhook"]) {
+      expect(parseClaimedExecutionJob({ ...validRow(), trigger_type }).triggerType).toBe(trigger_type);
+    }
+  });
+
+  test("rejects missing or unsupported trigger types before execution", () => {
+    for (const trigger_type of [undefined, null, "schedule", "unknown"]) {
+      expect(() => parseClaimedExecutionJob({ ...validRow(), trigger_type })).toThrow("missing required fields");
+    }
+  });
+
   test("rejects null, arrays, and non-object RPC results", () => {
     for (const value of [null, [], "job", 42]) {
       expect(() => parseClaimedExecutionJob(value)).toThrow("invalid job row");
