@@ -18,6 +18,18 @@ export function sanitizeStepOutputs(node: WorkflowNode, step: ExecutedStep): Exe
     const safe: Record<string, string | number | boolean> = Object.create(null) as Record<string, string | number | boolean>;
     if (typeof step.outputs["mapped"] === "string" && step.outputs["mapped"].length <= 8_000) safe["mapped"] = step.outputs["mapped"];
     if (typeof step.outputs["mappedCount"] === "number" && Number.isInteger(step.outputs["mappedCount"]) && step.outputs["mappedCount"] >= 0 && step.outputs["mappedCount"] <= 50) safe["mappedCount"] = step.outputs["mappedCount"];
+    const mappedConfig = node.config["mapping"];
+    if (typeof mappedConfig === "string") {
+      const mappedFields = mappedConfig.split(/\\r?\\n/);
+      for (const line of mappedFields) {
+        const separator = line.indexOf("=");
+        if (separator < 1) continue;
+        const key = line.slice(0, separator).trim();
+        if (!/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(key) || key === "mapped" || key === "mappedCount") continue;
+        const value = step.outputs[key];
+        if (typeof value === "string" && value.length <= 2_000) safe[key] = value;
+      }
+    }
     const { outputs: _discarded, ...rest } = step;
     return Object.keys(safe).length ? { ...rest, outputs: safe } : rest;
   }

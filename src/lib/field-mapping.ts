@@ -8,6 +8,7 @@ export type FieldMappingResult =
 
 const KEY = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
 const MAX_FIELDS = 50;
+const RESERVED_KEYS = new Set(["mapped", "mappedCount"]);
 const MAX_SERIALIZED_BYTES = 8_000;
 
 export function mapFields(source: string): FieldMappingResult {
@@ -24,6 +25,7 @@ export function mapFields(source: string): FieldMappingResult {
     const key = line.slice(0, separator).trim();
     const value = line.slice(separator + 1).trim();
     if (!KEY.test(key)) return { ok: false, error: `Line ${index + 1} has an invalid field name. Use letters, numbers and underscores; start with a letter.` };
+    if (RESERVED_KEYS.has(key)) return { ok: false, error: `Field "${key}" is reserved for logic.map metadata; choose another field name.` };
     if (Object.prototype.hasOwnProperty.call(fields, key)) return { ok: false, error: `Field "${key}" is mapped more than once.` };
     if (value.length > 2_000) return { ok: false, error: `Value for "${key}" exceeds the 2,000-character limit.` };
     fields[key] = value;

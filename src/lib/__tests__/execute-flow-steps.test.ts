@@ -201,6 +201,22 @@ describe("shared flow-step engine", () => {
     expect(result.steps[2].outputs).toEqual({ passed: false });
   });
 
+  it("passes mapped fields directly to later steps", async () => {
+    const receivedConfigs = [];
+    const mapper = { id: "mapper", defId: "logic.map", name: "Map lead", x: 1, y: 0, config: { mapping: "full_name = Ada\\nstatus = ready" } };
+    const target = { ...nodes[2], defId: "action.gmail", config: { body: "Hello {{steps.mapper.full_name}} ({{steps.mapper.status}})" } };
+    const result = await executeFlowSteps(baseInput({
+      nodes: [nodes[0], mapper, target],
+      execute: async (args) => {
+        receivedConfigs.push({ id: args.node.id, config: args.node.config });
+        return args.node.defId === "logic.map" ? executeStep(args) : { nodeId: args.node.id, label: args.node.name, status: "success", ms: 1, detail: "ok" };
+      },
+    }));
+    expect(result.failed).toBe(false);
+    expect(receivedConfigs[2].config.body).toBe("Hello Ada (ready)");
+    expect(result.steps[1].outputs.full_name).toBe("Ada");
+  });
+
   it("allows only the declared passed output from a filter step", async () => {
     const filter = { id: "filter-1", defId: "logic.filter", name: "Filter", x: 2, y: 0, config: { condition: "score >= 70" } };
     const target = { ...nodes[2], defId: "action.http", config: { body: "{{steps.filter-1.passed}}" } };

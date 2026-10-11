@@ -1,6 +1,7 @@
 import { NODES } from "@/lib/automation-catalog";
 import { getConnectorActionForNode } from "@/lib/connector-manifests";
 import type { WorkflowNode } from "@/lib/workflow";
+import { mapFields } from "@/lib/field-mapping";
 
 const TOKEN = /\{\{steps\.([A-Za-z0-9_-]+)\.([A-Za-z][A-Za-z0-9_]*)\}\}/g;
 
@@ -46,7 +47,9 @@ export function validateStepMappings(nodes: readonly WorkflowNode[]): StepMappin
         }
         const sourceTool = NODES[source.defId]?.tool;
         const sourceAction = getConnectorActionForNode(source.defId, sourceTool)?.action;
-        const declaredOutputs = source.defId === "logic.map" ? ["mapped", "mappedCount"] : source.defId === "logic.filter" ? ["passed"] : sourceAction?.output.fields;
+        const declaredOutputs = source.defId === "logic.map"
+          ? ["mapped", "mappedCount", ...Object.keys((awaitMapFields(source.config["mapping"]))) ]
+          : source.defId === "logic.filter" ? ["passed"] : sourceAction?.output.fields;
         if (!declaredOutputs?.includes(field)) {
           invalidReference = `steps.${sourceId}.${field} is not a declared output`;
           return "";

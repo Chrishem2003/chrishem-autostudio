@@ -141,6 +141,7 @@ export async function executeStep(args: {
     const mapped = mapFields(node.config["mapping"] ?? "");
     if (!mapped.ok) return result("failed", mapped.error, 0);
     return result("success", `Mapped ${Object.keys(mapped.fields).length} field(s) locally.`, 0, {
+      ...mapped.fields,
       mapped: mapped.serialized,
       mappedCount: Object.keys(mapped.fields).length,
     });

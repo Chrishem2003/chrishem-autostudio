@@ -16,6 +16,11 @@ describe("logic.map field mapping", () => {
     expect(mapFields("not-valid = value").ok).toBe(false);
   });
 
+  it("reserves metadata output names so user fields cannot overwrite them", () => {
+    expect(mapFields("mapped = user value").ok).toBe(false);
+    expect(mapFields("mappedCount = 12").ok).toBe(false);
+  });
+
   it("rejects duplicate keys instead of silently overwriting", () => {
     const result = mapFields("status = first\nstatus = second");
     expect(result.ok).toBe(false);
