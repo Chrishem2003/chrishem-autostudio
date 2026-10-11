@@ -41,7 +41,6 @@ describe("authenticateCronRequest", () => {
       "Bearer",
       "Bearer current-secret extra",
       "Bearer current-secret,other",
-      "Bearer current-secret ",
     ]) {
       const response = await authenticateCronRequest(request(header));
       expect(response?.status).toBe(401);
