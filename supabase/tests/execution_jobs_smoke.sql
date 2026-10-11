@@ -184,6 +184,60 @@ begin
     raise exception 'Finalization accepted a stale/reused worker token';
   end if;
 
+  -- A job cannot borrow another automation's successful audit record.
+  insert into public.automations (id, status)
+  values ('00000000-0000-4000-8000-000000000003', 'live')
+  on conflict (id) do update set status = excluded.status;
+  insert into public.run_logs (id, automation_id, status, started_at, finished_at)
+  values ('00000000-0000-4000-8000-000000000018',
+          '00000000-0000-4000-8000-000000000003', 'succeeded', now(), now());
+  select * into first_job
+    from public.enqueue_execution_job(
+      '00000000-0000-4000-8000-000000000002',
+      'manual',
+      'smoke-cross-automation-run',
+      '{"source":"ci-cross-automation"}'::jsonb,
+      '00000000-0000-4000-8000-000000000001',
+      3,
+      now()
+    );
+  select * into claimed from public.claim_execution_job(300);
+  if claimed.id is distinct from first_job.id then
+    raise exception 'Could not claim cross-automation association fixture';
+  end if;
+  if public.attach_execution_job_run(
+    claimed.id, claimed.worker_token, '00000000-0000-4000-8000-000000000018'
+  ) then
+    raise exception 'Queue job attached an audit run from a different automation';
+  end if;
+  if not public.finish_execution_job(claimed.id, claimed.worker_token, 'failed', 'Association rejected', null) then
+    raise exception 'Could not safely finalize cross-automation association fixture';
+  end if;
+
+  -- One audit run cannot be attached to multiple queue jobs, even for the same automation.
+  select * into first_job
+    from public.enqueue_execution_job(
+      '00000000-0000-4000-8000-000000000002',
+      'manual',
+      'smoke-duplicate-run-link',
+      '{"source":"ci-duplicate-run-link"}'::jsonb,
+      '00000000-0000-4000-8000-000000000001',
+      3,
+      now()
+    );
+  select * into claimed from public.claim_execution_job(300);
+  if claimed.id is distinct from first_job.id then
+    raise exception 'Could not claim duplicate audit-run association fixture';
+  end if;
+  if public.attach_execution_job_run(
+    claimed.id, claimed.worker_token, '00000000-0000-4000-8000-000000000015'
+  ) then
+    raise exception 'Audit run was attached to more than one queue job';
+  end if;
+  if not public.finish_execution_job(claimed.id, claimed.worker_token, 'failed', 'Duplicate association rejected', null) then
+    raise exception 'Could not safely finalize duplicate association fixture';
+  end if;
+
   -- A failed audit summary must never permit a queue success, but the same
   -- valid worker lease must still be able to record a truthful failed result.
   select * into first_job
