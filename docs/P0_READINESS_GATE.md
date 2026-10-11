@@ -49,3 +49,12 @@ This checklist is the release gate for P0 execution-integrity hardening. A code 
 P0 is complete only when all applicable A, B, and C gates are evidenced by actual test or staging results, all critical failures are resolved, and the final branch head has green required CI checks. Then review the master plan and explicitly authorize P1.
 
 Do not mark any unchecked item as passed based on code inspection alone.
+
+
+## Exact-head queue-health verification — 2026-10-11
+
+- Current branch head `ba0f8aff3d62515229c17be39321de5ba4031b43` passed both required GitHub Actions jobs: [CI run 38138209525](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38138209525).
+- The passing jobs cover typecheck, the complete unit suite, targeted execution-integrity lint, production build, and the disposable PostgreSQL durable-queue migration/concurrency smoke test.
+- The verified diagnostics work distinguishes database totals, inspected rows, and returned samples; exposes queue-count mismatch and bounded finding-scan/sample truncation; and keeps health checks read-only and secret-protected.
+- This is an exact-head CI checkpoint, not P0 exit approval. The checklist below remains open for staging Supabase migration/authentication, provider idempotency and duplicate-effect verification, interrupted-worker recovery, concurrent-worker rehearsal, and final release evidence.
+- Keep `AUTOSTUDIO_DURABLE_QUEUE_ENABLED=false` and `AUTOSTUDIO_OUTBOUND_TRANSPORT_READY` unset/false until the non-production staging gates pass.

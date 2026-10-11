@@ -542,3 +542,12 @@ This is a diagnostics correctness improvement, not P0 completion. The final P0 g
 - Tightened the protected health endpoint's consistency metadata so operators can distinguish findings computed from the inspected newest-first job snapshot from the 20-finding response sample.
 - Added explicit findingScanTruncated and findingSampleTruncated fields. The compatibility field findingsTruncated now signals either kind of truncation, preventing a small finding sample from being mistaken for a queue-wide clean bill of health when more than 100 jobs exist.
 - The endpoint remains read-only. This improves diagnostic honesty only; it does not replace staging concurrency checks or authorize automatic repair/replay. Exact-head CI is required for this change.
+
+
+## Exact-head queue-health verification — 2026-10-11
+
+- Current branch head `ba0f8aff3d62515229c17be39321de5ba4031b43` passed both required GitHub Actions jobs: [CI run 38138209525](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38138209525).
+- The passing jobs cover typecheck, the complete unit suite, targeted execution-integrity lint, production build, and the disposable PostgreSQL durable-queue migration/concurrency smoke test.
+- The verified diagnostics work distinguishes database totals, inspected rows, and returned samples; exposes queue-count mismatch and bounded finding-scan/sample truncation; and keeps health checks read-only and secret-protected.
+- This is an exact-head CI checkpoint, not P0 exit approval. The checklist below remains open for staging Supabase migration/authentication, provider idempotency and duplicate-effect verification, interrupted-worker recovery, concurrent-worker rehearsal, and final release evidence.
+- Keep `AUTOSTUDIO_DURABLE_QUEUE_ENABLED=false` and `AUTOSTUDIO_OUTBOUND_TRANSPORT_READY` unset/false until the non-production staging gates pass.
