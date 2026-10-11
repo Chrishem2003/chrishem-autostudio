@@ -273,7 +273,7 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
     const finalization = buildRunFinalization({ steps, mode: data.mode, startedAtMs: startedMs });
     const finalStatus = finalization.status;
     const finishedAt = finalization.finishedAt;
-    const { error: finishError } = await context.supabase
+    const { data: finalizedRun, error: finishError } = await context.supabase
       .from("run_logs")
       .update({
         status: finalization.status,
@@ -281,9 +281,12 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
         duration_ms: finalization.durationMs,
         error_summary: finalization.errorSummary,
       })
-      .eq("id", run.id);
-    if (finishError) {
-      throw new Error("The run's final status could not be saved. Verify external effects before retrying.");
+      .eq("id", run.id)
+      .eq("status", "running")
+      .select("id")
+      .maybeSingle();
+    if (finishError || !finalizedRun) {
+      throw new Error("The run's final status could not be confirmed as saved. Verify external effects before retrying.");
     }
     activeRunId = null;
 
