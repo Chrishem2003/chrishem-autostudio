@@ -96,6 +96,36 @@ describe("processOneExecutionJob", () => {
     expect(calls.finished[0].status).toBe("queued");
   });
 
+  test("keeps uncertain effects in manual review even when marked non-retryable", async () => {
+    const { deps, calls } = dependencies({
+      execute: async () => ({
+        status: "failed",
+        sideEffectCertainty: "uncertain",
+        retryable: false,
+        error: "Provider timed out after request dispatch",
+      }),
+    });
+    const result = await processOneExecutionJob(deps);
+    expect(result.status).toBe("needs_review");
+    expect(calls.finished[0].status).toBe("needs_review");
+    expect(calls.finished[0].retryAt).toBeNull();
+  });
+
+  test("keeps confirmed effects in manual review even when marked non-retryable", async () => {
+    const { deps, calls } = dependencies({
+      execute: async () => ({
+        status: "failed",
+        sideEffectCertainty: "effect_confirmed",
+        retryable: false,
+        error: "Provider acknowledged the effect but returned a terminal error",
+      }),
+    });
+    const result = await processOneExecutionJob(deps);
+    expect(result.status).toBe("needs_review");
+    expect(calls.finished[0].status).toBe("needs_review");
+    expect(calls.finished[0].retryAt).toBeNull();
+  });
+
   test("does not spin retries for permanent preflight/configuration failures", async () => {
     const { deps, calls } = dependencies({
       execute: async () => ({

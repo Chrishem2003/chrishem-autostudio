@@ -136,9 +136,12 @@ export async function processOneExecutionJob(
       result.error,
       "Executor reported success without confirmed side-effect evidence. Verify the external outcome before retrying.",
     );
-  } else if (result.retryable === false) {
-    // Permanent validation/configuration failures are terminal for this job.
-    // Keep them distinct from transient no-side-effect failures that can retry.
+  } else if (
+    result.retryable === false &&
+    (result.sideEffectCertainty === "not_attempted" || result.sideEffectCertainty === "confirmed_no_effect")
+  ) {
+    // Permanent validation/configuration failures are terminal only when the
+    // adapter confirms no effect. Uncertain/confirmed effects must remain reviewable.
     finalStatus = "failed";
   } else {
     const decision = decideExecutionRetry({
