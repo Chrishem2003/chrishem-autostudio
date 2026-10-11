@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { authenticateCronRequest } from "@/integrations/supabase/cron-auth";
 import { runCronTaskAfterAuthentication } from "@/lib/cron-task-guard";
+import { isDurableQueueEnabled } from "@/lib/runtime-feature-gates";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { classifyExecutionOutcome } from "@/lib/execution-outcome";
 import { sanitizeExecutionAuditValue, sanitizeExecutionError } from "@/lib/execution-error-sanitizer";
@@ -28,6 +29,14 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
     handlers: {
       POST: async ({ request }) => {
         const guarded = await runCronTaskAfterAuthentication(request, authenticateCronRequest, async () => {
+        // The worker must honor the same rollout gate as enqueueing. A configured
+        // cron schedule must not drain old jobs while durable execution is disabled.
+        if (!isDurableQueueEnabled()) {
+          return Response.json({ error: "Durable execution queue is disabled." }, {
+            status: 503,
+            headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" },
+          });
+        }
         const dependencies = createSupabaseExecutionJobDependencies(async (job, context) => {
           const { data: automation, error: automationError } = await supabaseAdmin
             .from("automations")
