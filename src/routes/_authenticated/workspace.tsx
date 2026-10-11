@@ -231,6 +231,10 @@ function Versions({ automationId, onRestored }: { automationId: string; onRestor
   );
 }
 
+function ExecutionQueue() {
+  return <ExecutionQueuePanel />;
+}
+
 function Runs() {
   const list = useServerFn(listRuns);
   const q = useQuery({ queryKey: ["runs"], queryFn: () => list() });
