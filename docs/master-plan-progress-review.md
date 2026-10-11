@@ -524,3 +524,11 @@ Introduced a shared prepared-execution gate and wired it into authenticated manu
 ### Current release boundary
 
 This is a diagnostics correctness improvement, not P0 completion. The final P0 gate remains open until the actual non-production Supabase migration chain, authenticated deployed cron endpoint, provider-specific idempotency, interruption recovery, concurrent worker behavior, and secret/log checks have been evidenced in staging. Durable queue consumers and outbound transports remain disabled until those checks pass.
+
+
+## Queue-health consistency snapshot bounds — 2026-10-11
+
+- The read-only audit-consistency section now reports the total queue population from the already-collected per-status counts separately from the number of jobs inspected in its newest-first 100-row snapshot.
+- It also distinguishes findings discovered in that inspected snapshot from the 20 findings returned in the response, and exposes separate and combined truncation flags. Existing `sampledJobs` and `findingCount` fields remain for compatibility; `findingCount` is explicitly the count found within inspected rows, not a claim about the entire queue.
+- This avoids an operator mistaking a bounded diagnostic sample for a complete audit of every queued job. It does not mutate or repair queue/audit state, and it does not close the staging requirements in the P0 readiness gate.
+- Exact-head CI is required for this batch before it is considered verified.

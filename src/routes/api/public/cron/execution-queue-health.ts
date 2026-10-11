@@ -156,16 +156,26 @@ export const Route = createFileRoute("/api/public/cron/execution-queue-health")(
             expiredLeases,
           );
 
+          const totalQueueJobs = Object.values(counts).reduce((total, count) => total + count, 0);
+          const sampledFindings = findings.slice(0, 20);
           const consistency = {
+            // Keep sampledJobs for existing consumers; the explicit fields make
+            // clear that findings are computed from a bounded, newest-first snapshot.
             sampledJobs: jobs.length,
+            inspectedJobCount: jobs.length,
+            totalJobCount: totalQueueJobs,
             findingCount: findings.length,
+            sampledFindingCount: sampledFindings.length,
+            jobsTruncated: totalQueueJobs > jobs.length,
+            findingsTruncated: findings.length > sampledFindings.length,
+            truncated: totalQueueJobs > jobs.length || findings.length > sampledFindings.length,
             countsByIssue: Object.fromEntries(
               [...new Set(findings.map((finding) => finding.issue))].map((issue) => [
                 issue,
                 findings.filter((finding) => finding.issue === issue).length,
               ]),
             ),
-            sample: findings.slice(0, 20),
+            sample: sampledFindings,
           };
 
           // Manual/scheduled runs are not part of the durable queue lease table.
