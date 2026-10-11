@@ -49,4 +49,42 @@ describe("runWithExecutionLeaseKeepalive", () => {
     )).rejects.toThrow("Invalid execution lease heartbeat interval");
     expect(called).toBe(false);
   });
+
+  test("requires review when heartbeat rejects during a provider action", async () => {
+    let actionSettled = false;
+    await expect(runWithExecutionLeaseKeepalive(
+      () => new Promise((_resolve, reject) => setTimeout(() => {
+        actionSettled = true;
+        reject(new Error("provider request timed out"));
+      }, 30)),
+      async () => {
+        await new Promise((resolve) => setTimeout(resolve, 2));
+        throw new Error("heartbeat transport failed");
+      },
+      5,
+    )).rejects.toThrow("outcome requires review");
+    expect(actionSettled).toBe(true);
+  });
+
+  test("never runs overlapping lease heartbeat requests", async () => {
+    let active = 0;
+    let maximumActive = 0;
+    let heartbeats = 0;
+    const result = await runWithExecutionLeaseKeepalive(
+      () => new Promise((resolve) => setTimeout(() => resolve("done"), 45)),
+      async () => {
+        active += 1;
+        maximumActive = Math.max(maximumActive, active);
+        heartbeats += 1;
+        await new Promise((resolve) => setTimeout(resolve, 12));
+        active -= 1;
+        return true;
+      },
+      3,
+    );
+    expect(result).toBe("done");
+    expect(heartbeats).toBeGreaterThan(0);
+    expect(maximumActive).toBe(1);
+  });
+
 });

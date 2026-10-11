@@ -564,3 +564,10 @@ This is a diagnostics correctness improvement, not P0 completion. The final P0 g
 ## Long-running execution lease keepalive — 2026-10-11
 
 The queue worker now renews both its durable-job lease and shared automation overlap-prevention lease periodically while a provider action is pending. Unit coverage and exact-head CI passed at commit `bfcf93482b53f3956ca166a93991d616a84df3eb` ([run 38159286868](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38159286868)). A lost lease during an in-flight action remains an uncertain outcome; the helper cannot cancel an already-issued provider request. Add a slow-action and interrupted-worker rehearsal to staging acceptance before enabling queue consumers. This closes a code-level gap, not the staging gate.
+
+
+## Lease keepalive failure-path regression coverage — 2026-10-11
+
+- Added regression coverage for a heartbeat transport rejection while a provider action is still in flight. Even if the provider action later rejects, the lease-loss signal takes precedence and the worker requires review rather than assuming retry is safe.
+- Added a concurrency assertion that slow heartbeat requests never overlap when the interval fires faster than a heartbeat can complete.
+- These are deterministic behavior checks for the in-process keepalive helper; they do not replace the staging rehearsal of actual scheduler timing, provider history, lease expiry, or restart behavior.
