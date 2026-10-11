@@ -323,6 +323,18 @@ begin
   values ('00000000-0000-4000-8000-000000000021','00000000-0000-4000-8000-000000000020','running','uncertain',null),
          ('00000000-0000-4000-8000-000000000023','00000000-0000-4000-8000-000000000022','running','uncertain',null),
          ('00000000-0000-4000-8000-000000000025','00000000-0000-4000-8000-000000000020','succeeded','confirmed','preexisting successful step');
+  -- Old webhook-triggered runs are outside this recovery contract. Do not
+  -- accidentally sweep non-manual/non-scheduled execution types into it.
+  insert into public.run_logs (id, automation_id, status, started_at, trigger_type)
+  values ('00000000-0000-4000-8000-000000000028','00000000-0000-4000-8000-000000000002','running',now()-interval '30 minutes','webhook');
+  if public.reconcile_stale_execution_run('00000000-0000-4000-8000-000000000028', null) <> 'unsupported_trigger' then
+    raise exception 'Stale-run reconciliation accepted an unsupported webhook trigger';
+  end if;
+  if (select status from public.run_logs where id = '00000000-0000-4000-8000-000000000028') <> 'running'
+     or (select finished_at from public.run_logs where id = '00000000-0000-4000-8000-000000000028') is not null then
+    raise exception 'Unsupported webhook run was modified by stale-run recovery';
+  end if;
+
   insert into public.run_logs (id, automation_id, status, started_at, finished_at, trigger_type)
   values ('00000000-0000-4000-8000-000000000026','00000000-0000-4000-8000-000000000002','succeeded',now()-interval '30 minutes',now()-interval '29 minutes','manual');
   insert into public.run_step_logs (id, run_id, status, outcome_state, error_detail)
