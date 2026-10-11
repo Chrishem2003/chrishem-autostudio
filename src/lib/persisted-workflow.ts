@@ -5,6 +5,7 @@ import { z } from "zod";
  * Database JSON is untrusted even when it was originally written by our UI.
  * Graph semantics are checked separately by planLinearExecution.
  */
+const MAX_TOTAL_WORKFLOW_CHARS = 512_000;
 const MAX_TOTAL_CONFIG_CHARS = 256_000;
 
 const persistedWorkflowShape = z.object({
@@ -29,11 +30,24 @@ export type PersistedWorkflowShape = z.infer<typeof persistedWorkflowShape>;
 export function parsePersistedWorkflow(value: unknown):
   | { success: true; data: PersistedWorkflowShape }
   | { success: false } {
+  // The schema preserves workflow metadata for compatibility. Bound the whole
+  // JSON payload as well as config values so passthrough metadata cannot bypass
+  // the input budget. Reject non-JSON values (e.g. cycles or BigInt) safely.
+  let serialized: string | undefined;
+  try {
+    serialized = JSON.stringify(value);
+  } catch {
+    return { success: false };
+  }
+  if (typeof serialized !== "string" || serialized.length > MAX_TOTAL_WORKFLOW_CHARS) {
+    return { success: false };
+  }
+
   const parsed = persistedWorkflowShape.safeParse(value);
   if (!parsed.success) return { success: false };
 
-  // Per-field limits alone still allow a 1.6 MB configuration payload across
-  // 200 nodes. Bound the aggregate before graph planning, logging, or enqueueing.
+  // Per-field limits alone still allow a large configuration payload across
+  // many nodes. Bound the aggregate before graph planning, logging, or enqueueing.
   let totalConfigChars = 0;
   for (const node of parsed.data.nodes) {
     for (const [key, configValue] of Object.entries(node.config)) {
