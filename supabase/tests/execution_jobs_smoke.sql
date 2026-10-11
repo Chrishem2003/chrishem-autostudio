@@ -17,6 +17,7 @@ declare
   claimed public.execution_jobs%rowtype;
   expired_job public.execution_jobs%rowtype;
   dead_job public.execution_jobs%rowtype;
+  interrupted_run_id uuid;
 begin
   select * into first_job
     from public.enqueue_execution_job(
@@ -156,6 +157,19 @@ begin
   if claimed.id is distinct from expired_job.id then
     raise exception 'Could not claim the expired-lease fixture';
   end if;
+
+  -- Simulate a hard worker crash after run and step intent were persisted.
+  insert into public.run_logs (automation_id, execution_job_id, status, started_at)
+  values (
+    '00000000-0000-4000-8000-000000000002',
+    expired_job.id,
+    'running',
+    now() - interval '90 seconds'
+  )
+  returning id into interrupted_run_id;
+  insert into public.run_step_logs (run_id, status, outcome_state, error_detail)
+  values (interrupted_run_id, 'running', 'uncertain', 'Worker was interrupted.');
+
   update public.execution_jobs
      set locked_until = now() - interval '1 second'
    where id = expired_job.id;
@@ -163,6 +177,25 @@ begin
   select * into expired_job from public.execution_jobs where id = expired_job.id;
   if expired_job.status <> 'needs_review' or expired_job.worker_token is not null then
     raise exception 'Expired lease was not safely moved to needs_review';
+  end if;
+
+  if not exists (
+    select 1 from public.run_logs
+     where id = interrupted_run_id
+       and status = 'failed'
+       and finished_at is not null
+       and error_summary like 'Worker lease expired%'
+  ) then
+    raise exception 'Expired job did not reconcile its interrupted run summary';
+  end if;
+  if not exists (
+    select 1 from public.run_step_logs
+     where run_id = interrupted_run_id
+       and status = 'failed'
+       and outcome_state = 'uncertain'
+       and error_detail like 'Worker lease expired%'
+  ) then
+    raise exception 'Expired job did not reconcile its in-flight step as uncertain';
   end if;
 
   -- A worker whose lease expired cannot renew or finalize after recovery.
