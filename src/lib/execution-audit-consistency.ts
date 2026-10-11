@@ -52,7 +52,7 @@ export function findExecutionAuditConsistencyIssues(
     if (job.status === "needs_review" && run.status === "running") {
       findings.push({ issue: "review_job_with_running_audit_run", jobId: job.id, runId: run.id });
     } else if (
-      ["succeeded", "failed", "dead_letter"].includes(job.status) &&
+      ["queued", "succeeded", "failed", "dead_letter"].includes(job.status) &&
       run.status === "running"
     ) {
       findings.push({ issue: "nonrunning_job_with_running_audit_run", jobId: job.id, runId: run.id });
