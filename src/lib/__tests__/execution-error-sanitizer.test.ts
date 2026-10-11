@@ -1,6 +1,6 @@
 // @ts-nocheck -- Bun's test runner supplies test types at runtime
 import { describe, expect, test } from "bun:test";
-import { sanitizeExecutionError } from "../execution-error-sanitizer";
+import { sanitizeExecutionError, sanitizeExecutionAuditValue } from "../execution-error-sanitizer";
 
 describe("sanitizeExecutionError", () => {
   test("redacts authorization, key assignments, URLs, JWTs and email addresses", () => {
@@ -26,5 +26,40 @@ describe("sanitizeExecutionError", () => {
   test("normalizes line breaks and bounds audit text", () => {
     expect(sanitizeExecutionError("first\nsecond", "fallback")).toBe("first second");
     expect(sanitizeExecutionError("x".repeat(900), "fallback")).toHaveLength(500);
+  });
+});
+
+
+describe("sanitizeExecutionAuditValue", () => {
+  test("redacts nested secret fields and sanitizes string values", () => {
+    const result = sanitizeExecutionAuditValue({
+      access_token: "plain-token-value",
+      nested: {
+        password: "my-password",
+        message: "Failed for https://provider.test/action?key=secret user@example.com",
+        count: 2,
+      },
+    });
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("plain-token-value");
+    expect(serialized).not.toContain("my-password");
+    expect(serialized).not.toContain("provider.test");
+    expect(serialized).not.toContain("user@example.com");
+    expect(serialized).toContain("[REDACTED_SECRET]");
+    expect(serialized).toContain("[REDACTED_URL]");
+    expect(serialized).toContain("[REDACTED_EMAIL]");
+  });
+
+  test("bounds nested arrays, object entries, depth, and circular references", () => {
+    const circular: Record<string, unknown> = { keep: "safe" };
+    circular["self"] = circular;
+    const result = sanitizeExecutionAuditValue({
+      values: Array.from({ length: 80 }, (_, index) => index),
+      circular,
+      deep: { a: { b: { c: { d: { e: { f: { g: "too deep" } } } } } } },
+    }) as Record<string, unknown>;
+    expect((result["values"] as unknown[])).toHaveLength(50);
+    expect(JSON.stringify(result)).toContain("[CIRCULAR]");
+    expect(JSON.stringify(result)).toContain("[TRUNCATED]");
   });
 });
