@@ -256,6 +256,38 @@ begin
     raise exception 'Service role cannot execute a required queue, lease, or recovery RPC';
   end if;
 
+  -- RLS is defense in depth: untrusted roles must have no direct table
+  -- privileges, while the server-side service role needs the queue/lease tables.
+  if has_table_privilege('anon', 'public.execution_jobs', 'SELECT')
+     or has_table_privilege('anon', 'public.execution_jobs', 'INSERT')
+     or has_table_privilege('anon', 'public.execution_jobs', 'UPDATE')
+     or has_table_privilege('anon', 'public.execution_jobs', 'DELETE')
+     or has_table_privilege('authenticated', 'public.execution_jobs', 'SELECT')
+     or has_table_privilege('authenticated', 'public.execution_jobs', 'INSERT')
+     or has_table_privilege('authenticated', 'public.execution_jobs', 'UPDATE')
+     or has_table_privilege('authenticated', 'public.execution_jobs', 'DELETE')
+     or has_table_privilege('anon', 'public.scheduled_run_locks', 'SELECT')
+     or has_table_privilege('anon', 'public.scheduled_run_locks', 'INSERT')
+     or has_table_privilege('anon', 'public.scheduled_run_locks', 'UPDATE')
+     or has_table_privilege('anon', 'public.scheduled_run_locks', 'DELETE')
+     or has_table_privilege('authenticated', 'public.scheduled_run_locks', 'SELECT')
+     or has_table_privilege('authenticated', 'public.scheduled_run_locks', 'INSERT')
+     or has_table_privilege('authenticated', 'public.scheduled_run_locks', 'UPDATE')
+     or has_table_privilege('authenticated', 'public.scheduled_run_locks', 'DELETE') then
+    raise exception 'Untrusted roles have direct access to a protected queue or lease table';
+  end if;
+
+  if not has_table_privilege('service_role', 'public.execution_jobs', 'SELECT')
+     or not has_table_privilege('service_role', 'public.execution_jobs', 'INSERT')
+     or not has_table_privilege('service_role', 'public.execution_jobs', 'UPDATE')
+     or not has_table_privilege('service_role', 'public.execution_jobs', 'DELETE')
+     or not has_table_privilege('service_role', 'public.scheduled_run_locks', 'SELECT')
+     or not has_table_privilege('service_role', 'public.scheduled_run_locks', 'INSERT')
+     or not has_table_privilege('service_role', 'public.scheduled_run_locks', 'UPDATE')
+     or not has_table_privilege('service_role', 'public.scheduled_run_locks', 'DELETE') then
+    raise exception 'Service role is missing required queue or lease table privileges';
+  end if;
+
   select * into expired_job
     from public.enqueue_execution_job(
       '00000000-0000-4000-8000-000000000002',
