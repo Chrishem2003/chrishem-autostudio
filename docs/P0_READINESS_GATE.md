@@ -145,3 +145,9 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Unit tests cover pending-action renewal, lost lease, malformed heartbeat response, action failure propagation, and invalid intervals. Exact-head CI passed both required jobs: [run 38159286868](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38159286868).
 - This does not cancel an already-issued provider request. If lease ownership is lost during a request, the worker treats the result as uncertain and requires review; staging must prove a slow/interrupted provider call does not create duplicate effects.
 - Current gate head has changed since the above CI checkpoint; rerun exact-head CI after the next commit. P0 remains open and queue/outbound flags must remain disabled until staging evidence is recorded.
+
+
+## Recovery scope and terminal audit preservation — 2026-10-11
+
+- Added PostgreSQL regression coverage that recovery changes only unfinished steps in the interrupted run, preserves already-terminal step diagnostics, and leaves unrelated running runs untouched.
+- This is database-smoke evidence only. The live staging interruption/restart rehearsal and provider-side duplicate-effect inspection remain unchecked. Queue/outbound transport remain disabled until all release gates pass.

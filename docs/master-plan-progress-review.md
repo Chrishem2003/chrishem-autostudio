@@ -586,3 +586,10 @@ The queue worker now renews both its durable-job lease and shared automation ove
 - The test now requires every unfinished step in that run to become failed with `outcome_state = uncertain`, and requires the parent run to have a persisted failure status and completion timestamp.
 - A separate running run and its running step are included as isolation controls; recovery must leave both untouched. This guards against broad or incorrectly scoped recovery updates.
 - This is disposable-database CI evidence only. The actual non-production Supabase interruption/restart rehearsal and provider-side duplicate-effect inspection remain open; P0 is not closed.
+
+
+## Terminal-step preservation in expired-worker recovery — 2026-10-11
+
+- Expanded the PostgreSQL recovery fixture with an already-failed step in the same run as unfinished steps.
+- The regression requires recovery to mark all still-running steps uncertain while preserving the pre-existing terminal step's status and diagnostic. This catches over-broad recovery updates that could erase useful audit history.
+- The disposable PostgreSQL smoke suite and exact-head CI must pass after this addition. Actual staging interruption/restart and provider-effect reconciliation remain open; P0 remains open.

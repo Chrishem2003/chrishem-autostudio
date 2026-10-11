@@ -191,8 +191,13 @@ begin
      '00000000-0000-4000-8000-000000000010', 'running', 'uncertain'),
     ('00000000-0000-4000-8000-000000000013',
      '00000000-0000-4000-8000-000000000010', 'running', 'uncertain'),
+    ('00000000-0000-4000-8000-000000000018',
+     '00000000-0000-4000-8000-000000000010', 'failed', 'uncertain'),
     ('00000000-0000-4000-8000-000000000014',
      '00000000-0000-4000-8000-000000000012', 'running', 'uncertain');
+  update public.run_step_logs
+     set error_detail = 'preexisting terminal record'
+   where id = '00000000-0000-4000-8000-000000000018';
 
   if public.attach_execution_job_run(
     expired_job.id, gen_random_uuid(), '00000000-0000-4000-8000-000000000010'
@@ -241,10 +246,18 @@ begin
   if exists (
     select 1 from public.run_step_logs
      where run_id = '00000000-0000-4000-8000-000000000010'
+       and id in ('00000000-0000-4000-8000-000000000011',
+                  '00000000-0000-4000-8000-000000000013')
        and (status <> 'failed' or outcome_state <> 'uncertain')
   ) or (select count(*) from public.run_step_logs
-         where run_id = '00000000-0000-4000-8000-000000000010') <> 2 then
+         where run_id = '00000000-0000-4000-8000-000000000010') <> 3 then
     raise exception 'Expired queue lease did not preserve every in-flight step as uncertain';
+  end if;
+  if (select status from public.run_step_logs
+       where id = '00000000-0000-4000-8000-000000000018') <> 'failed'
+     or (select error_detail from public.run_step_logs
+          where id = '00000000-0000-4000-8000-000000000018') <> 'preexisting terminal record' then
+    raise exception 'Expired queue recovery overwrote a step that was already terminal';
   end if;
   if (select status from public.run_logs where id = '00000000-0000-4000-8000-000000000012') <> 'running'
      or (select status from public.run_step_logs where id = '00000000-0000-4000-8000-000000000014') <> 'running' then
