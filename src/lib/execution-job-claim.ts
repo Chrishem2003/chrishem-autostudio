@@ -23,10 +23,10 @@ export function parseClaimedExecutionJob(value: unknown): ClaimedExecutionJob {
 
   const row = value as ClaimedJobRow;
   if (
-    typeof row.id !== "string" || row.id.trim().length === 0 ||
-    typeof row.automation_id !== "string" || row.automation_id.trim().length === 0 ||
+    typeof row.id !== "string" || row.id.trim().length === 0 || row.id.length > 200 ||
+    typeof row.automation_id !== "string" || row.automation_id.trim().length === 0 || row.automation_id.length > 200 ||
     !["manual", "scheduled", "webhook"].includes(row.trigger_type as string) ||
-    typeof row.worker_token !== "string" || row.worker_token.trim().length === 0 ||
+    typeof row.worker_token !== "string" || row.worker_token.trim().length === 0 || row.worker_token.length > 200 ||
     typeof row.idempotency_key !== "string" ||
     row.idempotency_key.trim().length === 0 || row.idempotency_key.length > 200
   ) {

@@ -62,6 +62,14 @@ describe("parseClaimedExecutionJob", () => {
     }
   });
 
+  test("rejects oversized job, automation, and lease identifiers", () => {
+    for (const field of ["id", "automation_id", "worker_token"]) {
+      const row = validRow();
+      row[field] = "x".repeat(201);
+      expect(() => parseClaimedExecutionJob(row)).toThrow("missing required fields");
+    }
+  });
+
   test("rejects oversized idempotency keys", () => {
     const row = validRow();
     row.idempotency_key = "x".repeat(201);

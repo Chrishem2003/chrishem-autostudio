@@ -74,3 +74,10 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Regression tests cover malformed rows, missing fields, unknown status values, and valid statuses.
 - Exact-head CI passed on commit `347e4123336cc12c3fefc861bf4ea37227261093`: typecheck, unit tests, production build and the disposable PostgreSQL queue migration/concurrency smoke test. See [CI run 38144857528](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38144857528).
 - Optional enqueue timestamps are now bounded to 100 characters before date parsing, with a regression test for oversized input. This remains application-level validation; database/provider staging gates remain open.
+
+
+## Exact-head payload boundary verification — 2026-10-11
+
+- Commit `e321d897bc0bb5d2dedcc792bd49d06b3fe96f2b` passed exact-head CI: [run 38145487142](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38145487142).
+- The enqueue/claim payload validator now verifies the parsed JSON value remains a non-null object, not merely that the original input was object-shaped before serialization. Regression tests cover `Date` serialization and custom `toJSON()` results.
+- This is code/CI evidence only; it does not satisfy the open staging gates or authorize P1.
