@@ -25,7 +25,7 @@ describe("sanitizeExecutionError", () => {
     expect(result).not.toContain("raw-token");
     expect(result).not.toContain("private-material");
     expect(result).not.toContain("signing-material");
-    expect(result.match(/\\[REDACTED_SECRET\\]/g)).toHaveLength(3);
+    expect(result.split("[REDACTED_SECRET]").length - 1).toBe(3);
   });
 
   test("uses fallback for empty and non-string errors", () => {
