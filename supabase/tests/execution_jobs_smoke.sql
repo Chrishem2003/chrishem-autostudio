@@ -544,6 +544,75 @@ begin
     raise exception 'Untrusted roles can invoke stale-run reconciliation RPC';
   end if;
 
+  -- Reject invalid worker lease bounds before any queue state can change.
+  begin
+    perform * from public.claim_execution_job(29);
+    raise exception 'Claim accepted a lease below the minimum';
+  exception when others then
+    if sqlerrm <> 'Invalid execution worker lease duration' then raise; end if;
+  end;
+  begin
+    perform * from public.claim_execution_job(901);
+    raise exception 'Claim accepted a lease above the maximum';
+  exception when others then
+    if sqlerrm <> 'Invalid execution worker lease duration' then raise; end if;
+  end;
+  begin
+    perform public.heartbeat_execution_job(
+      '00000000-0000-4000-8000-000000000099',
+      gen_random_uuid(),
+      29
+    );
+    raise exception 'Heartbeat accepted a lease below the minimum';
+  exception when others then
+    if sqlerrm <> 'Invalid execution worker lease duration' then raise; end if;
+  end;
+
+  -- Invalid trigger types, retry limits, and oversized payloads must not
+  -- create queue rows or bypass the database's enqueue contract.
+  begin
+    perform * from public.enqueue_execution_job(
+      '00000000-0000-4000-8000-000000000002',
+      'unknown',
+      'smoke-invalid-trigger',
+      '{}'::jsonb,
+      null,
+      3,
+      now()
+    );
+    raise exception 'Unsupported trigger unexpectedly enqueued';
+  exception when others then
+    if sqlerrm <> 'Unsupported execution trigger' then raise; end if;
+  end;
+  begin
+    perform * from public.enqueue_execution_job(
+      '00000000-0000-4000-8000-000000000002',
+      'manual',
+      'smoke-invalid-retry-limit',
+      '{}'::jsonb,
+      null,
+      11,
+      now()
+    );
+    raise exception 'Out-of-range retry limit unexpectedly enqueued';
+  exception when others then
+    if sqlerrm <> 'Invalid maximum attempt count' then raise; end if;
+  end;
+  begin
+    perform * from public.enqueue_execution_job(
+      '00000000-0000-4000-8000-000000000002',
+      'manual',
+      'smoke-oversized-payload',
+      jsonb_build_object('payload', repeat('x', 65537)),
+      null,
+      3,
+      now()
+    );
+    raise exception 'Oversized payload unexpectedly enqueued';
+  exception when others then
+    if sqlerrm <> 'Execution payload exceeds 64 KiB' then raise; end if;
+  end;
+
   select * into dead_job
     from public.enqueue_execution_job(
       '00000000-0000-4000-8000-000000000002',
