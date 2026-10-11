@@ -246,7 +246,7 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
           if (finalization.status === "failed") failed++;
           const finishedAt = finalization.finishedAt;
           leaseCursor = finishedAt;
-          const { error: finishError } = await supabaseAdmin
+          const { data: finalizedRun, error: finishError } = await supabaseAdmin
             .from("run_logs")
             .update({
               status: finalization.status,
@@ -254,9 +254,12 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
               duration_ms: finalization.durationMs,
               error_summary: finalization.errorSummary,
             })
-            .eq("id", run.id);
+            .eq("id", run.id)
+            .eq("status", "running")
+            .select("id")
+            .maybeSingle();
 
-          if (finishError) {
+          if (finishError || !finalizedRun) {
             console.error("[AutoStudio scheduler] Could not persist run summary; attempting a failed-state fallback.", {
               automationId: row.id,
               runId: run.id,
