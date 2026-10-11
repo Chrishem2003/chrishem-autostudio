@@ -19,7 +19,8 @@ create table if not exists public.run_logs (
   finished_at timestamptz,
   duration_ms integer,
   error_summary text,
-  execution_job_id uuid
+  execution_job_id uuid,
+  queue_review_required boolean not null default false
 );
 
 create table if not exists public.run_step_logs (
