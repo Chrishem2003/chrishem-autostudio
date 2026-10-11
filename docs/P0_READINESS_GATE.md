@@ -13,13 +13,14 @@ This checklist is the release gate for P0 execution-integrity hardening. A code 
 - [x] Report non-success queue states linked to a successful audit run.
 - [x] Report a running queue job linked to failed, succeeded, cancelled, canceled, timed-out, or abandoned audit runs.
 - [x] Add focused regression cases for the added diagnostic conditions.
-- [ ] Run the focused test file in the repository environment and record the result.
-- [ ] Run the complete test suite and record the result.
-- [ ] Run typecheck, lint, and production build and record the results.
+- [x] Latest full test suite, typecheck, and production build passed on commit `f78cc7fae0e74f08a1c32fd7ec056866da0323ea`; rerun is required after subsequent CI changes.
+- [ ] Focused test output and complete test-suite result are recorded against the final P0 head.
+- [ ] Typecheck, targeted execution-integrity lint, and production build pass on the final P0 head.
+- [ ] Repository-wide lint baseline is remediated separately: the first full-repo run reported 2,683 errors (mostly Prettier formatting plus test-file `@ts-nocheck` violations). Do not mass-format unrelated application files as part of this safety patch.
 
 ## B. Execution lifecycle and recovery
 
-- [x] Worker rejects a `succeeded` result unless the executor reports `effect_confirmed`; contradictory results go to `needs_review` rather than false success or automatic replay. Regression tests added; current-head CI result remains pending.
+- [x] Worker rejects a `succeeded` result unless the executor reports `effect_confirmed`; contradictory or malformed executor results go to `needs_review` rather than false success or automatic replay. Regression tests added.
 - [ ] Verify run creation and queue claiming failures leave no false-success state.
 - [ ] Verify missing or invalid job-to-run links cannot lead to success.
 - [ ] Verify finalization failures remain visible and recoverable.
