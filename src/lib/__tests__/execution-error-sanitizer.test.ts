@@ -17,6 +17,17 @@ describe("sanitizeExecutionError", () => {
     expect(result).toContain("[REDACTED_EMAIL]");
   });
 
+  test("redacts generic token and key assignments", () => {
+    const result = sanitizeExecutionError(
+      "token=raw-token private_key=private-material signing_key=signing-material",
+      "safe fallback",
+    );
+    expect(result).not.toContain("raw-token");
+    expect(result).not.toContain("private-material");
+    expect(result).not.toContain("signing-material");
+    expect(result.match(/\\[REDACTED_SECRET\\]/g)).toHaveLength(3);
+  });
+
   test("uses fallback for empty and non-string errors", () => {
     expect(sanitizeExecutionError("", "safe fallback")).toBe("safe fallback");
     expect(sanitizeExecutionError({ message: "secret" }, "safe fallback")).toBe("safe fallback");
@@ -48,6 +59,25 @@ describe("sanitizeExecutionAuditValue", () => {
     expect(serialized).toContain("[REDACTED_SECRET]");
     expect(serialized).toContain("[REDACTED_URL]");
     expect(serialized).toContain("[REDACTED_EMAIL]");
+  });
+
+  test("redacts generic token, private key, and signing key properties", () => {
+    const result = sanitizeExecutionAuditValue({
+      token: "raw-token",
+      private_key: "private-material",
+      signing_key: "signing-material",
+      safe: "visible",
+    });
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("raw-token");
+    expect(serialized).not.toContain("private-material");
+    expect(serialized).not.toContain("signing-material");
+    expect(result).toMatchObject({
+      token: "[REDACTED_SECRET]",
+      private_key: "[REDACTED_SECRET]",
+      signing_key: "[REDACTED_SECRET]",
+      safe: "visible",
+    });
   });
 
   test("bounds nested arrays, object entries, depth, and circular references", () => {
