@@ -1,4 +1,4 @@
-const SECRET_ASSIGNMENT = /\b(?:authorization|access[_-]?token|refresh[_-]?token|api[_-]?key|client[_-]?secret|password|passwd|secret|credential)\b\s*[:=]\s*[^\s,;]+/gi;
+const SECRET_ASSIGNMENT = /\\b(?:authorization|access[_-]?token|refresh[_-]?token|token|api[_-]?key|private[_-]?key|signing[_-]?key|client[_-]?secret|password|passwd|secret|credential|session[_-]?id|cookie)\\b\\s*[:=]\\s*[^\\s,;]+/gi;
 const BEARER_TOKEN = /\b(?:Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+/gi;
 const URL_WITH_QUERY = /https?:\/\/[^\s"'<>]+/gi;
 const JWT = /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g;
@@ -27,7 +27,7 @@ export function sanitizeExecutionError(value: unknown, fallback: string): string
 }
 
 
-const SENSITIVE_OUTPUT_KEY = /(?:authorization|access[_-]?token|refresh[_-]?token|api[_-]?key|client[_-]?secret|password|passwd|secret|credential|cookie)/i;
+const SENSITIVE_OUTPUT_KEY = /(?:authorization|access[_-]?token|refresh[_-]?token|token|api[_-]?key|private[_-]?key|signing[_-]?key|client[_-]?secret|password|passwd|secret|credential|session[_-]?id|cookie)/i;
 
 /**
  * Redacts sensitive fields in persisted workflow output snapshots. Output data
