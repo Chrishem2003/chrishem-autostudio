@@ -118,6 +118,17 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
           }
           activeRunId = run.id;
 
+          // Bind the durable job to its audit run before any external workflow action.
+          // If the lease was lost or the association fails, stop without executing steps.
+          const { data: attached, error: attachError } = await supabaseAdmin.rpc("attach_execution_job_run", {
+            _job_id: job.id,
+            _worker_token: job.workerToken,
+            _run_id: run.id,
+          });
+          if (attachError || attached !== true) {
+            throw new Error("Could not associate queued job with its audit run; execution halted.");
+          }
+
           const execution = await executeFlowSteps({
             nodes: plan.nodes,
             flowName: workflow.name || automation.name,
