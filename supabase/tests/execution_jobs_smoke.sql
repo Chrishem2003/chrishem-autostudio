@@ -183,6 +183,7 @@ begin
     select 1 from public.run_logs
      where id = interrupted_run_id
        and status = 'failed'
+       and queue_review_required
        and finished_at is not null
        and error_summary like 'Worker lease expired%'
   ) then
