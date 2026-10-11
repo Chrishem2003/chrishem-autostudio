@@ -7,6 +7,7 @@ import type { RunStep, WorkflowNode } from "@/lib/workflow";
 import { buildRunFinalization } from "@/lib/run-finalization";
 import { enqueueExecutionJob } from "@/lib/execution-job-queue.server";
 import { isDurableQueueEnabled } from "@/lib/runtime-feature-gates";
+import { parsePersistedWorkflow } from "@/lib/persisted-workflow";
 import { preparePersistedExecutionPlan } from "@/lib/prepare-execution-plan";
 
 const MAX_FLOW_RUNTIME_MS = 4 * 60 * 1000;
