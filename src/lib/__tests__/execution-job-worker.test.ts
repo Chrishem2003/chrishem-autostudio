@@ -107,7 +107,7 @@ describe("processOneExecutionJob", () => {
     expect(calls.finished[0].retryAt).toBe(retryAt);
   });
 
-  test("passes the stable idempotency key through the retry policy", async () => {
+  test("does not trust executor-asserted provider idempotency for uncertain effects", async () => {
     const { deps, calls } = dependencies({
       execute: async () => ({
         status: "failed",
@@ -117,8 +117,8 @@ describe("processOneExecutionJob", () => {
       }),
     });
     const result = await processOneExecutionJob(deps);
-    expect(result.status).toBe("queued");
-    expect(calls.finished[0].status).toBe("queued");
+    expect(result.status).toBe("needs_review");
+    expect(calls.finished[0].status).toBe("needs_review");
   });
 
   test("does not finalize after heartbeat detects a lost lease", async () => {
