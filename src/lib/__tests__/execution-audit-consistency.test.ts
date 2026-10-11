@@ -39,10 +39,11 @@ describe("findExecutionAuditConsistencyIssues", () => {
     ]);
   });
 
-  test("detects terminal job/run mismatches without treating review as a terminal mismatch", () => {
+  test("detects terminal mismatches and queued jobs linked to a still-running audit run", () => {
     expect(findExecutionAuditConsistencyIssues(
       [
         { id: "finished-job", status: "succeeded", run_id: "still-running" },
+        { id: "queued-job", status: "queued", run_id: "still-running" },
         { id: "active-job", status: "running", run_id: "failed-run" },
       ],
       [
@@ -50,7 +51,8 @@ describe("findExecutionAuditConsistencyIssues", () => {
         { id: "failed-run", status: "failed" },
       ],
     )).toEqual([
-      { issue: "terminal_job_with_running_audit_run", jobId: "finished-job", runId: "still-running" },
+      { issue: "nonrunning_job_with_running_audit_run", jobId: "finished-job", runId: "still-running" },
+      { issue: "nonrunning_job_with_running_audit_run", jobId: "queued-job", runId: "still-running" },
       { issue: "running_job_with_terminal_audit_run", jobId: "active-job", runId: "failed-run" },
     ]);
   });
