@@ -18,7 +18,7 @@ begin
     raise exception 'Invalid execution job final status';
   end if;
 
-  update public.execution_jobs
+  update public.execution_jobs j
      set status = case
            when _status in ('queued', 'failed') and attempts >= max_attempts then 'dead_letter'
            else _status
@@ -29,10 +29,23 @@ begin
          available_at = case when _status = 'queued' and attempts < max_attempts then coalesce(_retry_at, now()) else available_at end,
          last_error = left(_error, 2000),
          updated_at = now()
-   where id = _job_id
-     and status = 'running'
-     and worker_token = _worker_token
-     and locked_until > now();
+   where j.id = _job_id
+     and j.status = 'running'
+     and j.worker_token = _worker_token
+     and j.locked_until > now()
+     and (
+       _status <> 'succeeded'
+       or (
+         j.run_id is not null
+         and exists (
+           select 1
+             from public.run_logs r
+            where r.id = j.run_id
+              and r.status = 'succeeded'
+              and r.finished_at is not null
+         )
+       )
+     );
 
   return found;
 end;
@@ -42,4 +55,4 @@ revoke all on function public.finish_execution_job(uuid, uuid, text, text, times
 grant execute on function public.finish_execution_job(uuid, uuid, text, text, timestamptz) to service_role;
 
 comment on function public.finish_execution_job(uuid, uuid, text, text, timestamptz) is
-  'Finalizes only the current unexpired worker lease and rejects NULL or unsupported terminal states.';
+  'Fenced queue finalization; rejects NULL/unsupported states and requires a linked, persisted successful audit run before queue success.';
