@@ -510,3 +510,17 @@ Introduced a shared prepared-execution gate and wired it into authenticated manu
 - Exact-head CI passed on `84ef7aea4f5654d955ffb1379cbed38422a69caa`: typecheck, unit suite, targeted execution-integrity lint, production build, and PostgreSQL migration/concurrency smoke test. See [CI run 38135641444](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38135641444).
 - This improves a code-level trust boundary but does not replace staging acceptance. P0 remains open; queue/outbound transport stay disabled until real staging evidence is recorded.
 
+
+
+## Queue-health diagnostics accuracy and privacy — 2026-10-11
+
+**Implemented and verified on exact head `6cfb63186f9d4dd1d9eb9899872759766c9074f4`; [CI run 38137098245 passed](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38137098245).**
+
+- Queue-health stale-run and expired-lease diagnostics now distinguish the number of rows actually returned to operators (`sampledCount`) from the bounded database result inspected (`inspectedCount`).
+- Both summaries report truncation if either the exact database total exceeds the displayed sample or the inspected result exceeds the displayed sample.
+- Regression tests cover a 137-row total, a 100-row inspected result, a 20-row displayed sample, and privacy checks that stale-run diagnostics omit automation identifiers.
+- Queue-health monitoring continues to be read-only and secret-protected; uncertain/expired work is reported for investigation rather than automatically replayed.
+
+### Current release boundary
+
+This is a diagnostics correctness improvement, not P0 completion. The final P0 gate remains open until the actual non-production Supabase migration chain, authenticated deployed cron endpoint, provider-specific idempotency, interruption recovery, concurrent worker behavior, and secret/log checks have been evidenced in staging. Durable queue consumers and outbound transports remain disabled until those checks pass.

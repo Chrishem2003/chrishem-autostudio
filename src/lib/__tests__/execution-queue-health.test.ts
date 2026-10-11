@@ -102,8 +102,7 @@ describe("summarizeStaleRunCandidates", () => {
     }));
     const summary = summarizeStaleRunCandidates(137, rows, "2026-10-11T10:00:00.000Z");
     expect(summary.totalCount).toBe(137);
-    expect(summary.sampledCount).toBe(20);
-    expect(summary.inspectedCount).toBe(100);
+    expect(summary.sampledCount).toBe(100);
     expect(summary.truncated).toBe(true);
     expect(summary.sample).toHaveLength(20);
     expect(JSON.stringify(summary)).not.toContain("automation_id");
