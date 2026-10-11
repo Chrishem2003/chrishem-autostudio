@@ -322,7 +322,8 @@ begin
   insert into public.run_step_logs (id, run_id, status, outcome_state, error_detail)
   values ('00000000-0000-4000-8000-000000000021','00000000-0000-4000-8000-000000000020','running','uncertain',null),
          ('00000000-0000-4000-8000-000000000023','00000000-0000-4000-8000-000000000022','running','uncertain',null),
-         ('00000000-0000-4000-8000-000000000025','00000000-0000-4000-8000-000000000020','succeeded','confirmed','preexisting successful step');
+         ('00000000-0000-4000-8000-000000000025','00000000-0000-4000-8000-000000000020','succeeded','confirmed','preexisting successful step'),
+         ('00000000-0000-4000-8000-000000000029','00000000-0000-4000-8000-000000000024','running','uncertain','young run must remain untouched');
   -- Old webhook-triggered runs are outside this recovery contract. Do not
   -- accidentally sweep non-manual/non-scheduled execution types into it.
   insert into public.run_logs (id, automation_id, status, started_at, trigger_type)
@@ -357,6 +358,13 @@ begin
   end if;
   if public.reconcile_stale_execution_run('00000000-0000-4000-8000-000000000024', null) <> 'not_stale' then
     raise exception 'Stale-run reconciliation accepted a run inside the safety window';
+  end if;
+  if (select status from public.run_logs where id = '00000000-0000-4000-8000-000000000024') <> 'running'
+     or (select finished_at from public.run_logs where id = '00000000-0000-4000-8000-000000000024') is not null
+     or (select status from public.run_step_logs where id = '00000000-0000-4000-8000-000000000029') <> 'running'
+     or (select outcome_state from public.run_step_logs where id = '00000000-0000-4000-8000-000000000029') <> 'uncertain'
+     or (select error_detail from public.run_step_logs where id = '00000000-0000-4000-8000-000000000029') <> 'young run must remain untouched' then
+    raise exception 'Not-stale result modified parent or in-flight step history';
   end if;
   if public.reconcile_stale_execution_run('00000000-0000-4000-8000-000000000020','00000000-0000-4000-8000-000000000099') <> 'reconciled' then
     raise exception 'Lease owner could not atomically reconcile a stale manual run';
