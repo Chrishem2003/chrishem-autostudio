@@ -31,6 +31,15 @@ export interface AuditConsistencyFinding {
   runId: string | null;
 }
 
+const TERMINAL_AUDIT_RUN_STATUSES = new Set([
+  "succeeded",
+  "failed",
+  "cancelled",
+  "canceled",
+  "timed_out",
+  "abandoned",
+]);
+
 /**
  * Compares a bounded snapshot of queue jobs and their linked audit runs.
  * Findings are advisory: this function never mutates jobs or audit history.
@@ -88,7 +97,7 @@ export function findExecutionAuditConsistencyIssues(
       findings.push({ issue: "nonrunning_job_with_running_audit_run", jobId: job.id, runId: run.id });
     } else if (
       job.status === "running" &&
-      ["succeeded", "failed"].includes(run.status)
+      TERMINAL_AUDIT_RUN_STATUSES.has(run.status)
     ) {
       findings.push({ issue: "running_job_with_terminal_audit_run", jobId: job.id, runId: run.id });
     }
