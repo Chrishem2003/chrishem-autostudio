@@ -145,7 +145,6 @@ export async function processOneExecutionJob(
       sideEffectCertainty: result.sideEffectCertainty,
       attempts: job.attempts,
       maxAttempts: job.maxAttempts,
-      stableIdempotencyKey: job.idempotencyKey,
     });
     finalStatus = decision.status;
     if (finalStatus === "queued" && !finalRetryAt) {
