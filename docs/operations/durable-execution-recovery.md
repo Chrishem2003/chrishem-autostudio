@@ -100,7 +100,9 @@ The database smoke test validates migrations, permissions, idempotency, lease fe
 
 ## Interrupted manual and scheduled runs
 
-Manual and scheduled execution paths also preserve an open `run_logs` record when the database refuses to reconcile an in-flight step intent. This is deliberate: a terminal parent run must not hide a step whose external effect is still uncertain. Unlike expired durable-queue leases, these paths do not currently have an automatic general-purpose stale-run repairer. Treat such records as an operator review item, not as proof that execution is still active or safe to replay.
+The authenticated `/api/public/cron/run-scheduled` task scans up to 100 open manual and scheduled runs older than 20 minutes on each invocation. It calls the transactional `reconcile_stale_execution_run` RPC, which serializes against the per-automation lease and leaves a run untouched while another worker owns an active lease. Reconciliation closes the parent run as failed and marks only still-running step intents as failed/uncertain; it never replays provider actions.
+
+If the scheduler is stopped or the stale-run query/RPC fails, open records may remain for later inspection. The read-only queue-health endpoint reports stale manual/scheduled candidates. Treat those candidates as review signals, not proof that execution is active or safe to replay. Inspect provider history before any manual retry.
 
 ### Find open audit runs that are not attached to an active queue job
 
