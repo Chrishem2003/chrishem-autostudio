@@ -211,8 +211,10 @@ function Runs() {
           {open === r.id && (
             <ol className="mt-2 space-y-1 border-t border-border pt-2 text-xs">
               {r.steps.map((s) => (
-                <li key={s.id}>
-                  <span className="font-medium">{s.label}</span> — {s.status} ({s.durationMs ?? 0}ms){s.errorDetail ? ` · ${s.errorDetail}` : ""}
+                <li key={s.id} className={s.outcomeState === "uncertain" ? "rounded-md border border-amber-500/40 bg-amber-500/5 p-2" : ""}>
+                  <span className="font-medium">{s.label}</span> — {s.status} ({s.durationMs ?? 0}ms)
+                  {s.outcomeState === "uncertain" && <span className="ml-2 font-semibold text-amber-700 dark:text-amber-300">Outcome uncertain</span>}
+                  {s.errorDetail ? ` · ${s.errorDetail}` : ""}
                 </li>
               ))}
             </ol>
