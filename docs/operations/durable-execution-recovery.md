@@ -66,7 +66,7 @@ order by locked_until;
 
 The next successful claim operation reconciles expired leases to `needs_review`. When a job has a linked run, the reconciliation trigger marks still-running step records failed with `outcome_state = 'uncertain'` and closes the run summary.
 
-The cron-secret-protected `/api/public/cron/execution-queue-health` endpoint also returns a bounded sample of expired leases (up to 100), plus queue/audit consistency findings. These are read-only observations; the endpoint does not renew leases, replay jobs, or repair audit rows. A sample count is not a global total when more than 100 expired leases exist.
+The cron-secret-protected `/api/public/cron/execution-queue-health` endpoint returns the exact `totalCount` of expired leases plus a bounded diagnostic sample (`sampledCount`, at most 100 rows queried and 20 included in the response) and a `truncated` flag, alongside queue/audit consistency findings. Treat the total as the incident count and the sample as a triage aid. These are read-only observations; the endpoint does not renew leases, replay jobs, or repair audit rows.
 
 ### Running audit records not linked to a running job
 
