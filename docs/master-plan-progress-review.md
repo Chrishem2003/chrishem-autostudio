@@ -483,3 +483,11 @@ Introduced a shared prepared-execution gate and wired it into authenticated manu
 - Added unit regressions for those contradictory states and PostgreSQL smoke coverage proving success is rejected before association and while the audit run is still open, then accepted only after the successful run summary is persisted.
 - This is a durable database invariant, not merely a worker convention. Existing failed/review/retry transitions remain available and do not auto-replay external effects.
 - CI must verify the new migration and tests on the exact resulting commit. Live Supabase migration application, scheduler configuration, and controlled provider-side staging remain separate rollout gates; queue and outbound transport flags stay disabled until they pass.
+
+
+## Audit consistency diagnostics — queue completion and contradictory success — 2026-10-11
+
+- Expanded the authenticated read-only queue health snapshot to include the queue row's own `finished_at` value, so a `succeeded` queue row without its completion timestamp is explicitly reported.
+- Added detection for non-successful queue states (`queued`, `failed`, `needs_review`, or `dead_letter`) linked to a successfully finalized audit run. This is especially important because a queued state paired with a successful audit can signal a dangerous replay boundary.
+- Added unit regressions for missing queue completion timestamps and successful audit runs paired with review/retry states. Diagnostics remain read-only and do not repair or replay work automatically.
+- The preceding database smoke-test batch passed both CI jobs on commit `ebea47368689fe56d1d62dda8a7d61869c51a737`. This new diagnostics expansion requires its own exact-head CI before it is considered verified; staging evidence remains outstanding.

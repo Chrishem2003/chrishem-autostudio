@@ -8,7 +8,7 @@ describe("findExecutionAuditConsistencyIssues", () => {
       [
         { id: "queued", status: "queued", run_id: null },
         { id: "running", status: "running", run_id: "run-active" },
-        { id: "done", status: "succeeded", run_id: "run-done" },
+        { id: "done", status: "succeeded", run_id: "run-done", finished_at: "2026-10-11T10:00:01Z" },
       ],
       [
         { id: "run-active", status: "running" },
@@ -33,10 +33,10 @@ describe("findExecutionAuditConsistencyIssues", () => {
   test("requires a confirmed successful audit run before accepting queue success", () => {
     expect(findExecutionAuditConsistencyIssues(
       [
-        { id: "no-run", status: "succeeded", run_id: null },
-        { id: "failed-run", status: "succeeded", run_id: "run-failed" },
-        { id: "unfinished-run", status: "succeeded", run_id: "run-open" },
-        { id: "missing-run", status: "succeeded", run_id: "deleted-run" },
+        { id: "no-run", status: "succeeded", run_id: null, finished_at: "2026-10-11T10:00:01Z" },
+        { id: "failed-run", status: "succeeded", run_id: "run-failed", finished_at: "2026-10-11T10:00:01Z" },
+        { id: "unfinished-run", status: "succeeded", run_id: "run-open", finished_at: "2026-10-11T10:00:01Z" },
+        { id: "missing-run", status: "succeeded", run_id: "deleted-run", finished_at: "2026-10-11T10:00:01Z" },
       ],
       [
         { id: "run-failed", status: "failed", finished_at: "2026-10-11T10:00:00Z" },
@@ -48,6 +48,21 @@ describe("findExecutionAuditConsistencyIssues", () => {
       { issue: "succeeded_job_without_confirmed_successful_run", jobId: "unfinished-run", runId: "run-open" },
       { issue: "linked_run_missing", jobId: "missing-run", runId: "deleted-run" },
       { issue: "succeeded_job_without_confirmed_successful_run", jobId: "missing-run", runId: "deleted-run" },
+    ]);
+  });
+
+  test("detects success without queue completion time and non-success jobs linked to successful runs", () => {
+    expect(findExecutionAuditConsistencyIssues(
+      [
+        { id: "missing-finished-at", status: "succeeded", run_id: "run-ok" },
+        { id: "review-after-success", status: "needs_review", run_id: "run-ok" },
+        { id: "retry-after-success", status: "queued", run_id: "run-ok" },
+      ],
+      [{ id: "run-ok", status: "succeeded", finished_at: "2026-10-11T10:00:00Z" }],
+    )).toEqual([
+      { issue: "succeeded_job_without_queue_completion_timestamp", jobId: "missing-finished-at", runId: "run-ok" },
+      { issue: "non_successful_job_with_successful_audit_run", jobId: "review-after-success", runId: "run-ok" },
+      { issue: "non_successful_job_with_successful_audit_run", jobId: "retry-after-success", runId: "run-ok" },
     ]);
   });
 
@@ -63,7 +78,7 @@ describe("findExecutionAuditConsistencyIssues", () => {
   test("detects terminal mismatches and queued jobs linked to a still-running audit run", () => {
     expect(findExecutionAuditConsistencyIssues(
       [
-        { id: "finished-job", status: "succeeded", run_id: "still-running" },
+        { id: "finished-job", status: "succeeded", run_id: "still-running", finished_at: "2026-10-11T10:00:01Z" },
         { id: "queued-job", status: "queued", run_id: "still-running" },
         { id: "active-job", status: "running", run_id: "failed-run" },
       ],

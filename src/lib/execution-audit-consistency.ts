@@ -5,6 +5,7 @@ export interface AuditConsistencyJob {
   id: string;
   status: AuditConsistencyJobStatus;
   run_id: string | null;
+  finished_at?: string | null;
 }
 
 export interface AuditConsistencyRun {
@@ -19,7 +20,9 @@ export type AuditConsistencyIssue =
   | "running_job_with_terminal_audit_run"
   | "review_job_with_running_audit_run"
   | "linked_run_missing"
-  | "succeeded_job_without_confirmed_successful_run";
+  | "succeeded_job_without_confirmed_successful_run"
+  | "succeeded_job_without_queue_completion_timestamp"
+  | "non_successful_job_with_successful_audit_run";
 
 export interface AuditConsistencyFinding {
   issue: AuditConsistencyIssue;
@@ -39,6 +42,9 @@ export function findExecutionAuditConsistencyIssues(
   const findings: AuditConsistencyFinding[] = [];
 
   for (const job of jobs) {
+    if (job.status === "succeeded" && !job.finished_at) {
+      findings.push({ issue: "succeeded_job_without_queue_completion_timestamp", jobId: job.id, runId: job.run_id });
+    }
     if (job.status === "running" && job.run_id === null) {
       findings.push({ issue: "running_job_without_audit_run", jobId: job.id, runId: null });
       continue;
@@ -60,6 +66,13 @@ export function findExecutionAuditConsistencyIssues(
 
     if (job.status === "succeeded" && (run.status !== "succeeded" || !run.finished_at)) {
       findings.push({ issue: "succeeded_job_without_confirmed_successful_run", jobId: job.id, runId: run.id });
+    }
+    if (
+      ["queued", "failed", "needs_review", "dead_letter"].includes(job.status) &&
+      run.status === "succeeded" &&
+      Boolean(run.finished_at)
+    ) {
+      findings.push({ issue: "non_successful_job_with_successful_audit_run", jobId: job.id, runId: run.id });
     }
 
     if (job.status === "needs_review" && run.status === "running") {

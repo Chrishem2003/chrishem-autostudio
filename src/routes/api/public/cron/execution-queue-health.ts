@@ -102,7 +102,7 @@ export const Route = createFileRoute("/api/public/cron/execution-queue-health")(
           // A bounded, read-only consistency snapshot helps operators spot
           // queue/audit drift without exposing workflow payloads or mutating history.
           const jobsResult = await fromQueue()
-            .select("id, status, run_id")
+            .select("id, status, run_id, finished_at")
             .in("status", [...EXECUTION_QUEUE_STATUSES])
             .order("updated_at", { ascending: false })
             .limit(100);
@@ -112,6 +112,7 @@ export const Route = createFileRoute("/api/public/cron/execution-queue-health")(
             id: string;
             status: (typeof EXECUTION_QUEUE_STATUSES)[number];
             run_id: string | null;
+            finished_at: string | null;
           }>;
           const runIds = [...new Set(jobs.flatMap((job) => job.run_id ? [job.run_id] : []))];
           let auditRuns: Array<{ id: string; status: string; finished_at: string | null }> = [];
