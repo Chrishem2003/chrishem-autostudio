@@ -239,6 +239,11 @@ begin
 
 
   -- The shared automation lease can be renewed only by its live owner.
+  insert into public.scheduled_run_locks (automation_id, lock_token, locked_until)
+  values ('00000000-0000-4000-8000-000000000002',
+          '00000000-0000-4000-8000-000000000099', now() + interval '5 minutes')
+  on conflict (automation_id) do update
+    set lock_token = excluded.lock_token, locked_until = excluded.locked_until;
   if not public.heartbeat_manual_automation(
     '00000000-0000-4000-8000-000000000002',
     '00000000-0000-4000-8000-000000000099',
