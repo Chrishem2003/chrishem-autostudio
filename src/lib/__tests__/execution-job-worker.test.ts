@@ -35,6 +35,32 @@ describe("processOneExecutionJob", () => {
     expect(await processOneExecutionJob(deps)).toEqual({ outcome: "empty" });
   });
 
+  test("does not let executor mutation change the claimed identity used for heartbeat/finalization", async () => {
+    const seen = { heartbeat: [], finish: [] };
+    const { deps, calls } = dependencies({
+      heartbeat: async (claimed) => {
+        seen.heartbeat.push({ id: claimed.id, workerToken: claimed.workerToken });
+        return true;
+      },
+      execute: async (claimed, context) => {
+        expect(Reflect.set(claimed, "id", "spoofed-job")).toBe(false);
+        expect(Reflect.set(claimed, "workerToken", "spoofed-token")).toBe(false);
+        await context.heartbeat();
+        return { status: "succeeded", sideEffectCertainty: "effect_confirmed" };
+      },
+      finish: async (claimed, status, error, retryAt) => {
+        seen.finish.push({ id: claimed.id, workerToken: claimed.workerToken });
+        calls.finished.push({ status, error, retryAt });
+        return true;
+      },
+    });
+
+    const result = await processOneExecutionJob(deps);
+    expect(result).toEqual({ outcome: "finished", jobId: "job-1", status: "succeeded" });
+    expect(seen.heartbeat).toEqual([{ id: "job-1", workerToken: "token-1" }]);
+    expect(seen.finish).toEqual([{ id: "job-1", workerToken: "token-1" }]);
+  });
+
   test("finalizes successful execution", async () => {
     const { deps, calls } = dependencies();
     const result = await processOneExecutionJob(deps);

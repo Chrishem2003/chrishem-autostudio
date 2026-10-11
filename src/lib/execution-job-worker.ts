@@ -57,8 +57,13 @@ export type ProcessOneJobResult =
 export async function processOneExecutionJob(
   dependencies: ExecutionJobWorkerDependencies,
 ): Promise<ProcessOneJobResult> {
-  const job = await dependencies.claim();
-  if (!job) return { outcome: "empty" };
+  const claimedJob = await dependencies.claim();
+  if (!claimedJob) return { outcome: "empty" };
+
+  // The executor receives the job object. Snapshot and freeze its identity so
+  // an adapter cannot mutate the job ID or fencing token before heartbeat or
+  // finalization; those RPCs must refer to the exact claim originally returned.
+  const job: ClaimedExecutionJob = Object.freeze({ ...claimedJob });
 
   let leaseLost = false;
   const heartbeat = async (): Promise<boolean> => {
