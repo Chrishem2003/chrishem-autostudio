@@ -90,6 +90,29 @@ export async function processOneExecutionJob(
 
   if (leaseLost) return { outcome: "lease_lost", jobId: job.id };
 
+  // TypeScript types do not validate provider/adapter values at runtime. Treat
+  // malformed executor results as uncertain so an invalid status cannot make
+  // a possibly completed external action eligible for automatic retry.
+  const validStatuses = new Set(["succeeded", "failed"]);
+  const validCertainties = new Set<SideEffectCertainty>([
+    "not_attempted",
+    "confirmed_no_effect",
+    "uncertain",
+    "effect_confirmed",
+  ]);
+  if (
+    !result ||
+    typeof result !== "object" ||
+    !validStatuses.has(result.status) ||
+    !validCertainties.has(result.sideEffectCertainty)
+  ) {
+    result = {
+      status: "failed",
+      sideEffectCertainty: "uncertain",
+      error: "Executor returned an invalid result. Verify the external outcome before retrying.",
+    };
+  }
+
   let finalStatus: Exclude<ExecutionJobStatus, "running">;
   let finalRetryAt = result.retryAt ?? null;
   let error = result.error
