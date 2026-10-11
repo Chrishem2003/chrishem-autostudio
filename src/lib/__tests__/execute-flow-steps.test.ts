@@ -18,6 +18,8 @@ const baseInput = (overrides = {}) => ({
   persistIntent: async (_node, index) => ({ id: `intent-${index}` }),
   persistOutcome: async () => true,
   ...overrides,
+});
+
 describe("shared flow-step engine", () => {
   it("executes in order and persists each step outcome", async () => {
     const calls = [];
