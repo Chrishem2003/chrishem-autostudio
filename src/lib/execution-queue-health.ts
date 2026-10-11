@@ -110,7 +110,6 @@ export function summarizeExpiredExecutionLeases(
 
 export interface StaleRunCandidateRow {
   id: string;
-  automation_id: string;
   trigger_type: string;
   started_at: string;
 }
@@ -132,7 +131,6 @@ export function summarizeStaleRunCandidates(
     truncated: safeTotal > rows.length,
     sample: rows.slice(0, 20).map((run) => ({
       runId: run.id,
-      automationId: run.automation_id,
       triggerType: run.trigger_type,
       startedAt: run.started_at,
     })),
