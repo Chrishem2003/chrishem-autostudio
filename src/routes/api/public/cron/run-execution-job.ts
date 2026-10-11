@@ -96,10 +96,9 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
           const started = Date.now();
           runStartedMs = started;
           const startedAt = new Date(started).toISOString();
-          const payload = job.payload && typeof job.payload === "object" && !Array.isArray(job.payload)
-            ? job.payload as Record<string, unknown>
-            : {};
-          const triggerType = payload["triggerType"] === "manual" ? "manual" : "schedule";
+          // Use the authoritative trigger type returned by the database claim, not
+          // caller payload metadata. The run log uses "schedule" for scheduled jobs.
+          const triggerType = job.triggerType === "scheduled" ? "schedule" : job.triggerType;
 
           const { data: run, error: runError } = await supabaseAdmin
             .from("run_logs")
