@@ -11,6 +11,7 @@ import { buildRunFinalization } from "@/lib/run-finalization";
 import { preparePersistedExecutionPlan } from "@/lib/prepare-execution-plan";
 import { executeStep, livePreflightError } from "@/lib/execute-step.server";
 import type { Workflow } from "@/lib/workflow";
+import { createAndAttachExecutionJobRun } from "@/lib/execution-run-association";
 
 const MAX_JOB_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -100,34 +101,37 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
           // caller payload metadata. The run log uses "schedule" for scheduled jobs.
           const triggerType = job.triggerType === "scheduled" ? "schedule" : job.triggerType;
 
-          const { data: run, error: runError } = await supabaseAdmin
-            .from("run_logs")
-            .insert({
-              automation_id: automation.id,
-              workspace_id: automation.workspace_id,
-              trigger_type: triggerType,
-              is_dry_run: false,
-              status: "running",
-              started_at: startedAt,
-            })
-            .select("id")
-            .single();
-
-          if (runError || !run) {
-            throw new Error("Could not persist the queued run before execution; no workflow steps were started.");
-          }
-          activeRunId = run.id;
-
-          // Bind the durable job to its audit run before any external workflow action.
-          // If the lease was lost or the association fails, stop without executing steps.
-          const { data: attached, error: attachError } = await supabaseAdmin.rpc("attach_execution_job_run", {
-            _job_id: job.id,
-            _worker_token: job.workerToken,
-            _run_id: run.id,
+          const runId = await createAndAttachExecutionJobRun({
+            createRun: async () => {
+              const { data: run, error: runError } = await supabaseAdmin
+                .from("run_logs")
+                .insert({
+                  automation_id: automation.id,
+                  workspace_id: automation.workspace_id,
+                  trigger_type: triggerType,
+                  is_dry_run: false,
+                  status: "running",
+                  started_at: startedAt,
+                })
+                .select("id")
+                .single();
+              return { runId: run?.id ?? null, failed: Boolean(runError || !run) };
+            },
+            attachRun: async (createdRunId) => {
+              const { data: attached, error: attachError } = await supabaseAdmin.rpc("attach_execution_job_run", {
+                _job_id: job.id,
+                _worker_token: job.workerToken,
+                _run_id: createdRunId,
+              });
+              return { attached: !attachError && attached === true };
+            },
+            onRunCreated: (createdRunId) => {
+              // Preserve the run ID for uncertainty-aware recovery even if the
+              // subsequent durable-job association fails.
+              activeRunId = createdRunId;
+            },
           });
-          if (attachError || attached !== true) {
-            throw new Error("Could not associate queued job with its audit run; execution halted.");
-          }
+          const run = { id: runId };
 
           const execution = await executeFlowSteps({
             nodes: plan.nodes,

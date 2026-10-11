@@ -429,3 +429,10 @@ Hardened recovery paths so they do not treat a no-error database response as pro
 - Scheduled finalization fallback also checks for a returned row and records a diagnostic if fallback recovery cannot be confirmed.
 
 These checks improve diagnosability and avoid false confidence in PostgREST zero-row updates. They do not make provider actions and audit writes transactional; controlled staging fault-injection is still required before enabling durable queue or outbound transport.
+
+
+## Queue run-association fail-closed boundary — 2026-10-11
+
+Extracted durable queue run creation and job-to-run association into a small, testable boundary. The queue route now records the run ID for recovery, confirms the durable job association, and only then continues to step execution. Run creation failure or association failure throws before the caller can enter workflow execution; if association fails after a run is created, the run ID remains available to the existing recovery path.
+
+Unit tests cover run-creation failure, association rejection/transport error, and successful association. These tests validate the orchestration boundary; they do not emulate the full authenticated route or a real Supabase transaction. Exact-head CI and staging fault-injection remain required.
