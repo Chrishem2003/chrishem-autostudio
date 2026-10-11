@@ -64,7 +64,9 @@ export const CONNECTOR_MANIFESTS: readonly ConnectorManifest[] = [
       requiredConfig: ["to"],
       optionalConfig: ["subject", "body"],
       sideEffect: "external-message",
-      idempotency: "provider-managed",
+      // Gmail send does not expose a provider-enforced idempotency key in this adapter.
+      // A timeout after acceptance is therefore uncertain and must not be replayed automatically.
+      idempotency: "not-guaranteed",
       timeoutSeconds: 30,
       output: { fields: ["accepted", "providerMessageId"], description: "Provider acceptance result and optional provider message ID; does not guarantee recipient delivery." },
     }],
@@ -76,9 +78,9 @@ export const CONNECTOR_MANIFESTS: readonly ConnectorManifest[] = [
       "The verification is younger than 30 days",
       "The Gmail send scope is present",
     ],
-    retryPolicy: "provider-contract",
+    retryPolicy: "never-without-idempotency",
     truthLabel: "Test email required",
-    notes: "Send-only OAuth scope. A successful OAuth handshake alone is not verification.",
+    notes: "Send-only OAuth scope. A successful OAuth handshake alone is not verification. Gmail send has no adapter-level provider idempotency key; uncertain outcomes require review."
   },
   {
     id: "chat_webhooks",
