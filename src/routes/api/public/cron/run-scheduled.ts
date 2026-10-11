@@ -21,13 +21,13 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-        // Reconcile stale scheduled runs through one transactional RPC. It
-        // checks the automation lease before closing the audit record and marks
+        // Reconcile stale manual and scheduled runs through one transactional RPC.
+        // It checks the automation lease before closing the audit record and marks
         // unfinished steps uncertain rather than replaying external effects.
         const staleBefore = new Date(Date.now() - 20 * 60 * 1000).toISOString();
         const { data: staleRuns, error: staleQueryError } = await supabaseAdmin
           .from("run_logs").select("id").eq("status", "running")
-          .eq("trigger_type", "schedule").lt("started_at", staleBefore).limit(100);
+          .in("trigger_type", ["manual", "schedule"]).lt("started_at", staleBefore).limit(100);
         if (staleQueryError) {
           console.error("[AutoStudio scheduler] Could not inspect stale runs; refusing to schedule new work.", { errorCode: staleQueryError.code });
           return new Response("stale-run reconciliation failed", { status: 500 });
