@@ -189,6 +189,48 @@ describe("processOneExecutionJob", () => {
     expect(persistedError).toContain("[REDACTED_SECRET]");
   });
 
+  test("never re-executes a confirmed provider action when finalization is rejected", async () => {
+    let executeCalls = 0;
+    let finishCalls = 0;
+    const { deps } = dependencies({
+      execute: async () => {
+        executeCalls++;
+        return { status: "succeeded", sideEffectCertainty: "effect_confirmed" };
+      },
+      finish: async () => {
+        finishCalls++;
+        return false;
+      },
+    });
+
+    expect(await processOneExecutionJob(deps)).toEqual({
+      outcome: "finalization_rejected",
+      jobId: "job-1",
+    });
+    expect(executeCalls).toBe(1);
+    expect(finishCalls).toBe(1);
+  });
+
+  test("does not retry execution in-process after finalization transport failure", async () => {
+    let executeCalls = 0;
+    let finishCalls = 0;
+    const { deps } = dependencies({
+      execute: async () => {
+        executeCalls++;
+        return { status: "succeeded", sideEffectCertainty: "effect_confirmed" };
+      },
+      finish: async () => {
+        finishCalls++;
+        throw new Error("database connection lost");
+      },
+    });
+
+    const result = await processOneExecutionJob(deps);
+    expect(result).toEqual({ outcome: "finalization_rejected", jobId: "job-1" });
+    expect(executeCalls).toBe(1);
+    expect(finishCalls).toBe(1);
+  });
+
   test("reports rejected finalization instead of claiming success", async () => {
     const { deps } = dependencies({ finish: async () => false });
     expect(await processOneExecutionJob(deps)).toEqual({

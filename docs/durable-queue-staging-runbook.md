@@ -67,6 +67,8 @@ Before turning on the flag, ensure only a deliberately prepared staging test aut
 - [ ] Test a busy per-automation lease; the job must be deferred without executing steps.
 - [ ] Test scheduled enqueue in staging and confirm the scheduler only enqueues while the worker performs execution.
 - [ ] Inspect expired worker leases and verify uncertain work moves to `needs_review`, never to automatic replay.
+- [ ] Simulate a provider action that succeeds while queue finalization returns false or times out. The worker must return a finalization-rejected outcome, must not invoke the provider again in the same processing attempt, and operators must reconcile queue/run history against provider-side evidence before any retry.
+- [ ] Verify an expired worker cannot heartbeat or finalize after lease recovery. A stale worker response must not overwrite the newer queue state; any provider action whose outcome cannot be confirmed remains a manual-review case.
 
 Do not use production mailboxes, public webhook targets, or customer-connected accounts for these tests.
 
