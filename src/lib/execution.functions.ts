@@ -9,6 +9,7 @@ import { enqueueExecutionJob } from "@/lib/execution-job-queue.server";
 import { isDurableQueueEnabled } from "@/lib/runtime-feature-gates";
 import { parsePersistedWorkflow } from "@/lib/persisted-workflow";
 import { preparePersistedExecutionPlan } from "@/lib/prepare-execution-plan";
+import { firstLivePreflightError } from "@/lib/live-execution-preflight";
 
 const MAX_FLOW_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -99,10 +100,12 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
 
     if (data.mode === "live") {
       if (row.status !== "live") throw new Error("This automation is not live in the cloud. No external action was taken.");
-      for (const node of flow.nodes) {
-        const reason = await (await import("@/lib/execute-step.server")).livePreflightError(node, context.userId);
-        if (reason) throw new Error(reason);
-      }
+      const reason = await firstLivePreflightError(
+        flow.nodes,
+        context.userId,
+        async (node, userId) => (await import("@/lib/execute-step.server")).livePreflightError(node, userId),
+      );
+      if (reason) throw new Error(reason);
     }
 
     // Use the shared saved-workflow trust boundary for manual, scheduled and

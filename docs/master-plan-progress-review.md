@@ -436,3 +436,10 @@ These checks improve diagnosability and avoid false confidence in PostgREST zero
 Extracted durable queue run creation and job-to-run association into a small, testable boundary. The queue route now records the run ID for recovery, confirms the durable job association, and only then continues to step execution. Run creation failure or association failure throws before the caller can enter workflow execution; if association fails after a run is created, the run ID remains available to the existing recovery path.
 
 Unit tests cover run-creation failure, association rejection/transport error, and successful association. These tests validate the orchestration boundary; they do not emulate the full authenticated route or a real Supabase transaction. Exact-head CI and staging fault-injection remain required.
+
+
+## Live capability preflight parity — 2026-10-11
+
+Added one shared sequential live-capability preflight helper and applied it to authenticated manual runs, durable queue workers, and scheduled execution. The scheduled direct-execution path previously validated saved workflow structure/mappings but did not re-check each step's live connector capability before taking a scheduler lease and creating a run. It now checks after confirming the schedule is due and before lease acquisition, durable enqueue, audit-run creation, or provider invocation.
+
+Regression tests verify that preflight stops at the first failing node and that a clean plan checks each node. These tests validate shared sequencing; they do not emulate live connector credentials or provider behavior. Exact-head CI and controlled staging checks remain required. Durable queue and outbound transport remain disabled until the documented staging gates pass.

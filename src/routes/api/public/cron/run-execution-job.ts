@@ -12,6 +12,7 @@ import { preparePersistedExecutionPlan } from "@/lib/prepare-execution-plan";
 import { executeStep, livePreflightError } from "@/lib/execute-step.server";
 import type { Workflow } from "@/lib/workflow";
 import { createAndAttachExecutionJobRun } from "@/lib/execution-run-association";
+import { firstLivePreflightError } from "@/lib/live-execution-preflight";
 
 const MAX_JOB_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -60,16 +61,14 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
           // Re-run live capability checks in the worker. The workflow or its
           // credentials may have changed after enqueue, so producer-side preflight
           // alone is not a sufficient authorization/safety boundary.
-          for (const node of plan.nodes) {
-            const preflightError = await livePreflightError(node, automation.user_id);
-            if (preflightError) {
-              return {
-                status: "failed" as const,
-                sideEffectCertainty: "not_attempted" as const,
-                error: preflightError,
-                retryable: false,
-              };
-            }
+          const preflightError = await firstLivePreflightError(plan.nodes, automation.user_id, livePreflightError);
+          if (preflightError) {
+            return {
+              status: "failed" as const,
+              sideEffectCertainty: "not_attempted" as const,
+              error: preflightError,
+              retryable: false,
+            };
           }
 
           // Serialize queue jobs per automation with the same lease used by

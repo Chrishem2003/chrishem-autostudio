@@ -7,6 +7,8 @@ import { preparePersistedExecutionPlan } from "@/lib/prepare-execution-plan";
 import { buildRunFinalization } from "@/lib/run-finalization";
 import { enqueueExecutionJob } from "@/lib/execution-job-queue.server";
 import { isDurableQueueEnabled } from "@/lib/runtime-feature-gates";
+import { livePreflightError } from "@/lib/execute-step.server";
+import { firstLivePreflightError } from "@/lib/live-execution-preflight";
 
 const MAX_SCHEDULED_FLOW_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -91,6 +93,18 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
           if (!trigger) continue;
           const cadence = trigger.config?.["cadence"] || "Hourly";
           if (!isDue(cadence, row.last_run_at ? new Date(row.last_run_at) : null, now, trigger.config?.["timezone"])) continue;
+
+          // Scheduled execution must re-check live capabilities before taking a
+          // lease, enqueuing a durable job, creating an audit run, or calling a provider.
+          const preflightError = await firstLivePreflightError(executionPlan.nodes, row.user_id, livePreflightError);
+          if (preflightError) {
+            console.warn("[AutoStudio scheduler] Scheduled workflow failed live capability preflight; no run was started.", {
+              automationId: row.id,
+              reason: preflightError,
+            });
+            failed++;
+            continue;
+          }
 
           // Roll out durable queue consumption explicitly. Until the worker cron is
           // configured and runtime-validated, the legacy direct path remains the
