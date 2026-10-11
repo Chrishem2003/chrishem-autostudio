@@ -8,6 +8,7 @@ import {
   type ExecutionQueueHealthRow,
   type ExecutionQueueStatus,
 } from "@/lib/execution-queue-health";
+import { findExecutionAuditConsistencyIssues } from "@/lib/execution-audit-consistency";
 
 interface CountResult {
   count: number | null;
@@ -16,6 +17,12 @@ interface CountResult {
 interface RowsResult {
   data: unknown[] | null;
   error: { message: string } | null;
+}
+interface AuditQuery {
+  select(columns: string, options?: { count?: "exact"; head?: boolean }): AuditQuery;
+  in(column: string, values: string[]): AuditQuery;
+  order(column: string, options: { ascending: boolean }): AuditQuery;
+  limit(value: number): Promise<RowsResult>;
 }
 interface QueueQuery {
   select(columns: string, options?: { count?: "exact"; head?: boolean }): QueueQuery;
@@ -76,7 +83,46 @@ export const Route = createFileRoute("/api/public/cron/execution-queue-health")(
             new Date().toISOString(),
             sanitizeExecutionError,
           );
-          return Response.json(summary, {
+
+          // A bounded, read-only consistency snapshot helps operators spot
+          // queue/audit drift without exposing workflow payloads or mutating history.
+          const jobsResult = await fromQueue()
+            .select("id, status, run_id")
+            .in("status", [...EXECUTION_QUEUE_STATUSES])
+            .order("updated_at", { ascending: false })
+            .limit(100);
+          if (jobsResult.error) throw new Error("Audit consistency snapshot unavailable.");
+
+          const jobs = (jobsResult.data ?? []) as Array<{
+            id: string;
+            status: (typeof EXECUTION_QUEUE_STATUSES)[number];
+            run_id: string | null;
+          }>;
+          const runIds = [...new Set(jobs.flatMap((job) => job.run_id ? [job.run_id] : []))];
+          let auditRuns: Array<{ id: string; status: string }> = [];
+          if (runIds.length > 0) {
+            const auditClient = supabaseAdmin.from("run_logs" as never) as unknown as AuditQuery;
+            const runsResult = await auditClient
+              .select("id, status")
+              .in("id", runIds)
+              .limit(100);
+            if (runsResult.error) throw new Error("Audit run snapshot unavailable.");
+            auditRuns = (runsResult.data ?? []) as Array<{ id: string; status: string }>;
+          }
+
+          const findings = findExecutionAuditConsistencyIssues(jobs, auditRuns);
+          const consistency = {
+            sampledJobs: jobs.length,
+            findingCount: findings.length,
+            countsByIssue: Object.fromEntries(
+              [...new Set(findings.map((finding) => finding.issue))].map((issue) => [
+                issue,
+                findings.filter((finding) => finding.issue === issue).length,
+              ]),
+            ),
+            sample: findings.slice(0, 20),
+          };
+          return Response.json({ ...summary, consistency }, {
             headers: {
               "Cache-Control": "no-store",
               "X-Content-Type-Options": "nosniff",
