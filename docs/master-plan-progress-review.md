@@ -536,3 +536,9 @@ This is a diagnostics correctness improvement, not P0 completion. The final P0 g
 - It also distinguishes findings discovered in that inspected snapshot from the 20 findings returned in the response, and exposes separate and combined truncation flags. Existing `sampledJobs` and `findingCount` fields remain for compatibility; `findingCount` is explicitly the count found within inspected rows, not a claim about the entire queue.
 - This avoids an operator mistaking a bounded diagnostic sample for a complete audit of every queued job. It does not mutate or repair queue/audit state, and it does not close the staging requirements in the P0 readiness gate.
 - Exact-head CI is required for this batch before it is considered verified.
+
+## Queue finding truncation semantics — 2026-10-11
+
+- Tightened the protected health endpoint's consistency metadata so operators can distinguish findings computed from the inspected newest-first job snapshot from the 20-finding response sample.
+- Added explicit findingScanTruncated and findingSampleTruncated fields. The compatibility field findingsTruncated now signals either kind of truncation, preventing a small finding sample from being mistaken for a queue-wide clean bill of health when more than 100 jobs exist.
+- The endpoint remains read-only. This improves diagnostic honesty only; it does not replace staging concurrency checks or authorize automatic repair/replay. Exact-head CI is required for this change.

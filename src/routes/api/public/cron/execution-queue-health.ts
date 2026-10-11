@@ -166,14 +166,19 @@ export const Route = createFileRoute("/api/public/cron/execution-queue-health")(
             sampledJobs: jobs.length,
             inspectedJobCount: jobs.length,
             totalJobCount: totalQueueJobs,
+            // Findings are computed only from the bounded newest-first job snapshot.
+            // Keep the scan limit distinct from the response's 20-finding sample limit.
             findingCount: findings.length,
+            inspectedFindingCount: findings.length,
             sampledFindingCount: sampledFindings.length,
+            findingScanTruncated: totalQueueJobs > jobs.length,
+            findingSampleTruncated: findings.length > sampledFindings.length,
             // Counts and rows are read in separate database statements, not
             // one transaction. Expose a mismatch instead of implying the count
             // and inspected snapshot represent the same instant.
             jobsTruncated: totalQueueJobs > jobs.length,
             jobCountMismatch: totalQueueJobs !== jobs.length,
-            findingsTruncated: findings.length > sampledFindings.length,
+            findingsTruncated: totalQueueJobs > jobs.length || findings.length > sampledFindings.length,
             truncated: totalQueueJobs > jobs.length || findings.length > sampledFindings.length,
             countsByIssue: Object.fromEntries(
               [...new Set(findings.map((finding) => finding.issue))].map((issue) => [
