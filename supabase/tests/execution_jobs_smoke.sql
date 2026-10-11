@@ -46,6 +46,43 @@ begin
     if sqlerrm <> 'Invalid automation lease duration' then raise; end if;
   end;
 
+  -- Scheduled release must reject a NULL cadence cursor before releasing
+  -- the lease; otherwise a caller could clear last_run_at and reset schedule progress.
+  declare
+    scheduled_token uuid;
+  begin
+    scheduled_token := public.claim_scheduled_automation(
+      '00000000-0000-4000-8000-000000000002', 900
+    );
+    if scheduled_token is null then
+      raise exception 'Could not claim scheduled lease fixture';
+    end if;
+
+    begin
+      perform public.release_scheduled_automation(
+        '00000000-0000-4000-8000-000000000002', scheduled_token, null
+      );
+      raise exception 'Scheduled release accepted NULL cadence cursor';
+    exception when others then
+      if sqlerrm <> 'Scheduled run cursor timestamp is required' then raise; end if;
+    end;
+
+    if not exists (
+      select 1 from public.scheduled_run_locks
+       where automation_id = '00000000-0000-4000-8000-000000000002'
+         and lock_token = scheduled_token
+         and locked_until > now()
+    ) then
+      raise exception 'NULL scheduled cursor release unexpectedly removed the lease';
+    end if;
+
+    if not public.release_scheduled_automation(
+      '00000000-0000-4000-8000-000000000002', scheduled_token, now()
+    ) then
+      raise exception 'Scheduled release rejected a valid cursor timestamp';
+    end if;
+  end;
+
   -- Required scalar parameters must reject explicit NULL, not fall through
   -- PostgreSQL's three-valued IF logic and fail later with a constraint error.
   begin
