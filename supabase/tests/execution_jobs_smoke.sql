@@ -234,6 +234,18 @@ begin
   if expired_job.status <> 'needs_review' or expired_job.worker_token is not null then
     raise exception 'Expired lease was not safely moved to needs_review';
   end if;
+
+  -- needs_review is a terminal safety hold, not a retry queue. Repeated
+  -- claims must not replay a job whose external side effect may be uncertain.
+  if exists (
+    select 1 from public.claim_execution_job(300) where id = expired_job.id
+  ) then
+    raise exception 'needs_review job was automatically claimed again';
+  end if;
+  if (select status from public.execution_jobs where id = expired_job.id) <> 'needs_review'
+     or (select attempts from public.execution_jobs where id = expired_job.id) <> expired_job.attempts then
+    raise exception 'Repeated claim changed a needs_review job or its attempt count';
+  end if;
   if public.attach_execution_job_run(
     expired_job.id, claimed.worker_token, '00000000-0000-4000-8000-000000000012'
   ) then
