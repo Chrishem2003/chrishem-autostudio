@@ -691,6 +691,24 @@ begin
     if sqlerrm <> 'Invalid execution worker lease duration' then raise; end if;
   end;
 
+  -- Explicit NULL values must not bypass trigger and retry-limit validation.
+  begin
+    perform * from public.enqueue_execution_job(
+      '00000000-0000-4000-8000-000000000002', null, 'smoke-null-trigger', '{}'::jsonb, null, 3, now()
+    );
+    raise exception 'NULL trigger unexpectedly enqueued';
+  exception when others then
+    if sqlerrm <> 'Unsupported execution trigger' then raise; end if;
+  end;
+  begin
+    perform * from public.enqueue_execution_job(
+      '00000000-0000-4000-8000-000000000002', 'manual', 'smoke-null-retry-limit', '{}'::jsonb, null, null, now()
+    );
+    raise exception 'NULL retry limit unexpectedly enqueued';
+  exception when others then
+    if sqlerrm <> 'Invalid maximum attempt count' then raise; end if;
+  end;
+
   -- Invalid trigger types, retry limits, and oversized payloads must not
   -- create queue rows or bypass the database's enqueue contract.
   begin
