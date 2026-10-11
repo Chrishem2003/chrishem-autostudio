@@ -367,6 +367,7 @@ export type Database = {
       run_logs: {
         Row: {
           automation_id: string
+          execution_job_id: string | null
           created_at: string
           duration_ms: number | null
           error_summary: string | null
@@ -380,6 +381,7 @@ export type Database = {
         }
         Insert: {
           automation_id: string
+          execution_job_id?: string | null
           created_at?: string
           duration_ms?: number | null
           error_summary?: string | null
@@ -393,6 +395,7 @@ export type Database = {
         }
         Update: {
           automation_id?: string
+          execution_job_id?: string | null
           created_at?: string
           duration_ms?: number | null
           error_summary?: string | null
