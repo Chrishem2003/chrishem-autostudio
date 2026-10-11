@@ -319,9 +319,10 @@ begin
   values ('00000000-0000-4000-8000-000000000020','00000000-0000-4000-8000-000000000002','running',now()-interval '30 minutes','manual'),
          ('00000000-0000-4000-8000-000000000022','00000000-0000-4000-8000-000000000002','running',now()-interval '30 minutes','schedule'),
          ('00000000-0000-4000-8000-000000000024','00000000-0000-4000-8000-000000000002','running',now()-interval '2 minutes','manual');
-  insert into public.run_step_logs (id, run_id, status, outcome_state)
-  values ('00000000-0000-4000-8000-000000000021','00000000-0000-4000-8000-000000000020','running','uncertain'),
-         ('00000000-0000-4000-8000-000000000023','00000000-0000-4000-8000-000000000022','running','uncertain');
+  insert into public.run_step_logs (id, run_id, status, outcome_state, error_detail)
+  values ('00000000-0000-4000-8000-000000000021','00000000-0000-4000-8000-000000000020','running','uncertain',null),
+         ('00000000-0000-4000-8000-000000000023','00000000-0000-4000-8000-000000000022','running','uncertain',null),
+         ('00000000-0000-4000-8000-000000000025','00000000-0000-4000-8000-000000000020','succeeded','confirmed','preexisting successful step');
   if public.reconcile_stale_execution_run('00000000-0000-4000-8000-000000000020', null) <> 'active_lease' then
     raise exception 'Stale-run reconciliation ignored an active automation lease';
   end if;
@@ -339,6 +340,11 @@ begin
   if (select status from public.run_logs where id = '00000000-0000-4000-8000-000000000020') <> 'failed'
      or (select outcome_state from public.run_step_logs where id = '00000000-0000-4000-8000-000000000021') <> 'uncertain' then
     raise exception 'Stale-run reconciliation failed to preserve uncertain outcomes';
+  end if;
+  if (select status from public.run_step_logs where id = '00000000-0000-4000-8000-000000000025') <> 'succeeded'
+     or (select outcome_state from public.run_step_logs where id = '00000000-0000-4000-8000-000000000025') <> 'confirmed'
+     or (select error_detail from public.run_step_logs where id = '00000000-0000-4000-8000-000000000025') <> 'preexisting successful step' then
+    raise exception 'Stale-run reconciliation overwrote an already-terminal step';
   end if;
   if public.reconcile_stale_execution_run('00000000-0000-4000-8000-000000000022', null) <> 'active_lease' then
     raise exception 'Scheduled stale-run reconciliation ignored the active lease';
