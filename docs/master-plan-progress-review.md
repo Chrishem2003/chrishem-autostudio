@@ -491,3 +491,12 @@ Introduced a shared prepared-execution gate and wired it into authenticated manu
 - Added detection for non-successful queue states (`queued`, `failed`, `needs_review`, or `dead_letter`) linked to a successfully finalized audit run. This is especially important because a queued state paired with a successful audit can signal a dangerous replay boundary.
 - Added unit regressions for missing queue completion timestamps and successful audit runs paired with review/retry states. Diagnostics remain read-only and do not repair or replay work automatically.
 - The preceding database smoke-test batch passed both CI jobs on commit `ebea47368689fe56d1d62dda8a7d61869c51a737`. This new diagnostics expansion requires its own exact-head CI before it is considered verified; staging evidence remains outstanding.
+
+
+## Exact-head P0 verification checkpoint — 2026-10-11
+
+- Commit `968e074a704892f908dac0eef628cffd76b1660b` passed GitHub Actions run [38134763618](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38134763618).
+- The passing run includes typecheck, the complete unit test suite, targeted execution-integrity lint, production build, disposable PostgreSQL migration smoke tests, idempotency and lease-fencing checks, RPC permission checks, and concurrent distinct-job claims.
+- This closes the immediate exact-head CI check for that commit. It does **not** close P0: real staging migration application, authenticated cron endpoint checks, runtime transport validation, interruption/recovery rehearsal, and provider-side no-duplicate-effect evidence remain unchecked in `docs/P0_READINESS_GATE.md` and `docs/durable-queue-staging-runbook.md`.
+- Keep `AUTOSTUDIO_DURABLE_QUEUE_ENABLED=false` and `AUTOSTUDIO_OUTBOUND_TRANSPORT_READY` unset/false until the non-production staging acceptance gates pass. The platform is not yet production-ready, and P1 is not authorized.
+
