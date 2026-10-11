@@ -106,7 +106,7 @@ race_job_id="$(psql -X -A -t -v ON_ERROR_STOP=1 -c "
   select id from public.execution_jobs
    where idempotency_key = 'expired-finalize-recovery-race'
 ")"
-race_claim="$(psql -X -A -t -v ON_ERROR_STOP=1 -c "select id || ':' || worker_token from public.claim_execution_job(300)" | tr -d '[:space:]')"
+race_claim="$(psql -X -A -t -v ON_ERROR_STOP=1 -c "select id::text || ':' || worker_token::text from public.claim_execution_job(300)" | tr -d '[:space:]')"
 if [[ -z "$race_claim" ]]; then
   echo "Could not claim expired-finalization race fixture" >&2
   exit 1
