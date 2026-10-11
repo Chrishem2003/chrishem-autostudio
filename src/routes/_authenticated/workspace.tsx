@@ -19,7 +19,6 @@ import { explainFailure } from "@/lib/assist.functions";
 import { detectConflicts } from "@/lib/conflicts";
 import { cn } from "@/lib/utils";
 import { setPublished } from "@/lib/gallery.functions";
-import { listMyExecutionQueue } from "@/lib/execution-queue.functions";
 import { ExecutionQueuePanel } from "@/components/studio/ExecutionQueuePanel";
 
 export const Route = createFileRoute("/_authenticated/workspace")({
