@@ -79,11 +79,20 @@ export async function processOneExecutionJob(
     result = await dependencies.execute(job, { heartbeat });
   } catch (error) {
     if (leaseLost) return { outcome: "lease_lost", jobId: job.id };
+    // Rejected values are untrusted at runtime too. Even an Error-shaped object
+    // can expose a throwing or non-string message getter; never let diagnostic
+    // extraction escape and strand the claimed job outside the worker's policy.
+    let thrownMessage: unknown;
+    try {
+      if (error instanceof Error) thrownMessage = error.message;
+    } catch {
+      thrownMessage = undefined;
+    }
     result = {
       status: "failed",
       sideEffectCertainty: "uncertain",
-      error: error instanceof Error
-        ? sanitizeExecutionError(error.message, "Execution failed unexpectedly; verify the external outcome before retrying.")
+      error: typeof thrownMessage === "string"
+        ? sanitizeExecutionError(thrownMessage, "Execution failed unexpectedly; verify the external outcome before retrying.")
         : "Worker execution threw an unknown error.",
     };
   }

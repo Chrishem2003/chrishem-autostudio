@@ -312,6 +312,22 @@ describe("processOneExecutionJob", () => {
     expect(calls.finished[0].error).toContain("network timeout");
   });
 
+  test("fails closed when a thrown Error exposes a hostile message getter", async () => {
+    const hostile = Object.create(Error.prototype);
+    Object.defineProperty(hostile, "message", {
+      get() { throw new Error("message getter must not escape"); },
+    });
+    const { deps, calls } = dependencies({
+      execute: async () => { throw hostile; },
+    });
+
+    const result = await processOneExecutionJob(deps);
+    expect(result).toEqual({ outcome: "finished", jobId: "job-1", status: "needs_review" });
+    expect(calls.finished).toHaveLength(1);
+    expect(calls.finished[0].status).toBe("needs_review");
+    expect(calls.finished[0].error).toContain("unknown error");
+  });
+
   test("redacts provider secrets before durable job finalization", async () => {
     const { deps, calls } = dependencies({
       execute: async () => ({
