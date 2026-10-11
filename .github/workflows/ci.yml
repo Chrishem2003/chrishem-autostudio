@@ -105,6 +105,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261011180000_finish_job_null_status_guard.sql
       - name: Apply enqueue NULL-contract guard
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261011190000_enqueue_null_contract.sql
+      - name: Apply scheduler lease NULL-contract guard
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261011200000_scheduler_lease_null_contract.sql
       - name: Verify idempotency, lease fencing and RPC permissions
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/execution_jobs_smoke.sql
       - name: Verify concurrent workers claim distinct jobs
