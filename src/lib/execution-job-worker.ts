@@ -4,6 +4,7 @@ import {
   type SideEffectCertainty,
 } from "@/lib/execution-job-policy";
 import { sanitizeExecutionError } from "@/lib/execution-error-sanitizer";
+import { executionRetryAt } from "@/lib/execution-retry-schedule";
 
 export interface ClaimedExecutionJob {
   id: string;
@@ -88,6 +89,7 @@ export async function processOneExecutionJob(
   if (leaseLost) return { outcome: "lease_lost", jobId: job.id };
 
   let finalStatus: Exclude<ExecutionJobStatus, "running">;
+  let finalRetryAt = result.retryAt ?? null;
   let error = result.error
     ? sanitizeExecutionError(result.error, "Execution failed; inspect the run details and verify external outcome before retrying.")
     : null;
@@ -109,6 +111,9 @@ export async function processOneExecutionJob(
       stableIdempotencyKey: job.idempotencyKey,
     });
     finalStatus = decision.status;
+    if (finalStatus === "queued" && !finalRetryAt) {
+      finalRetryAt = executionRetryAt(job.attempts);
+    }
     error = sanitizeExecutionError(
       [error, decision.reason].filter(Boolean).join(" "),
       "Execution failed; inspect the run details and verify external outcome before retrying.",
@@ -117,7 +122,7 @@ export async function processOneExecutionJob(
 
   let finalized: boolean;
   try {
-    finalized = await dependencies.finish(job, finalStatus, error, result.retryAt ?? null);
+    finalized = await dependencies.finish(job, finalStatus, error, finalRetryAt);
   } catch {
     // A database/network error means finalization is unknown, not successful.
     return { outcome: "finalization_rejected", jobId: job.id };
