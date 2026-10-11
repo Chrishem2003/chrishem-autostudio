@@ -249,18 +249,26 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
                 .eq("run_id", activeRunId)
                 .eq("status", "running")
                 .select("id");
-              const { data: recoveredRun, error: runRecoveryError } = await supabaseAdmin
-                .from("run_logs")
-                .update({
-                  status: "failed",
-                  finished_at: finishedAt,
-                  duration_ms: Math.max(0, Date.now() - runStartedMs),
-                  error_summary: "Queued execution stopped unexpectedly. Verify uncertain step outcomes before retrying.",
-                })
-                .eq("id", activeRunId)
-                .eq("status", "running")
-                .select("id")
-                .maybeSingle();
+              // Never finalize the parent run if its in-flight step intents could
+              // not be reconciled. Leave it open for the stale-run recovery pass.
+              let recoveredRun: { id: string } | null = null;
+              let runRecoveryError: { code?: string } | null = null;
+              if (!stepRecoveryError) {
+                const recovery = await supabaseAdmin
+                  .from("run_logs")
+                  .update({
+                    status: "failed",
+                    finished_at: finishedAt,
+                    duration_ms: Math.max(0, Date.now() - runStartedMs),
+                    error_summary: "Queued execution stopped unexpectedly. Verify uncertain step outcomes before retrying.",
+                  })
+                  .eq("id", activeRunId)
+                  .eq("status", "running")
+                  .select("id")
+                  .maybeSingle();
+                recoveredRun = recovery.data;
+                runRecoveryError = recovery.error;
+              }
               if (stepRecoveryError || runRecoveryError || !recoveredRun) {
                 console.error("[AutoStudio queue worker] Interrupted run recovery was incomplete.", {
                   jobId: job.id,
