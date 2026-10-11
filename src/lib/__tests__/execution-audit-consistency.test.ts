@@ -72,7 +72,7 @@ describe("findExecutionAuditConsistencyIssues", () => {
         { id: "failed-run", status: "failed" },
       ],
     )).toEqual([
-      { issue: "nonrunning_job_with_running_audit_run", jobId: "finished-job", runId: "still-running" },
+      { issue: "succeeded_job_without_confirmed_successful_run", jobId: "finished-job", runId: "still-running" },
       { issue: "nonrunning_job_with_running_audit_run", jobId: "queued-job", runId: "still-running" },
       { issue: "running_job_with_terminal_audit_run", jobId: "active-job", runId: "failed-run" },
     ]);
