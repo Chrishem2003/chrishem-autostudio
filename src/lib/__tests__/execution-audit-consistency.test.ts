@@ -106,4 +106,20 @@ describe("findExecutionAuditConsistencyIssues", () => {
       },
     ]);
   });
+
+  test("treats cancelled and timed-out audit runs as terminal for running-job diagnostics", () => {
+    expect(findExecutionAuditConsistencyIssues(
+      [
+        { id: "cancelled-job", status: "running", run_id: "run-cancelled" },
+        { id: "timed-out-job", status: "running", run_id: "run-timeout" },
+      ],
+      [
+        { id: "run-cancelled", status: "cancelled", finished_at: "2026-10-11T10:00:00Z" },
+        { id: "run-timeout", status: "timed_out", finished_at: "2026-10-11T10:00:00Z" },
+      ],
+    )).toEqual([
+      { issue: "running_job_with_terminal_audit_run", jobId: "cancelled-job", runId: "run-cancelled" },
+      { issue: "running_job_with_terminal_audit_run", jobId: "timed-out-job", runId: "run-timeout" },
+    ]);
+  });
 });
