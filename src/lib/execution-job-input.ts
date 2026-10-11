@@ -41,7 +41,7 @@ export function validateExecutionJobEnqueueMetadata(value: unknown): ExecutionJo
   if (typeof maxAttempts !== "number" || !Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 10) {
     return { success: false, error: "Maximum attempts must be an integer from 1 to 10." };
   }
-  if (input["availableAt"] !== undefined && (typeof input["availableAt"] !== "string" || Number.isNaN(Date.parse(input["availableAt"])))) {
+  if (input["availableAt"] !== undefined && (typeof input["availableAt"] !== "string" || input["availableAt"].length > 100 || Number.isNaN(Date.parse(input["availableAt"])))) {
     return { success: false, error: "Available-at timestamp must be a valid date." };
   }
   return {

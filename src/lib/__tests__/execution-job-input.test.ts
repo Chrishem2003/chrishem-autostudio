@@ -32,6 +32,7 @@ describe("durable execution job enqueue metadata validation", () => {
       { ...valid(), maxAttempts: 11 },
       { ...valid(), availableAt: { toString: () => "2030-01-01" } },
       { ...valid(), availableAt: "not-a-date" },
+      { ...valid(), availableAt: "2".repeat(101) },
     ];
     for (const request of invalidRequests) {
       expect(validateExecutionJobEnqueueMetadata(request).success).toBe(false);

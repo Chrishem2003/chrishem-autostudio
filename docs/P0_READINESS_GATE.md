@@ -66,3 +66,11 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Uncertain effects now always enter `needs_review` until a trusted, reviewed adapter capability is explicitly integrated. Malformed side-effect certainty also fails closed to manual review rather than falling through to a retry path.
 - Regression tests cover legacy caller-supplied idempotency claims and malformed certainty. This is deliberately conservative: no provider-specific automatic retry is enabled by this change.
 - Exact-head CI and the PostgreSQL smoke test are required for this batch. P0 still requires real staging verification of provider behavior, interruption recovery, concurrency, authentication, and migration rollout; keep durable queue and outbound transport disabled until acceptance evidence is recorded.
+
+
+## Enqueue RPC response contract — 2026-10-11
+
+- The enqueue adapter validates the database RPC response as untrusted data: the returned job identifier must be non-empty and bounded, and status must be one of the database-supported queue states.
+- Regression tests cover malformed rows, missing fields, unknown status values, and valid statuses.
+- Exact-head CI passed on commit `347e4123336cc12c3fefc861bf4ea37227261093`: typecheck, unit tests, production build and the disposable PostgreSQL queue migration/concurrency smoke test. See [CI run 38144857528](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38144857528).
+- The next small hardening step bounds the optional enqueue timestamp string before date parsing. This remains application-level validation; database/provider staging gates remain open.
