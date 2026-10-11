@@ -4,11 +4,10 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { executeStep, type ExecutionMode } from "@/lib/execute-step.server";
 import { executeFlowSteps } from "@/lib/execute-flow-steps.server";
 import type { RunStep, WorkflowNode } from "@/lib/workflow";
-import { planLinearExecution } from "@/lib/execution-plan";
 import { buildRunFinalization } from "@/lib/run-finalization";
 import { enqueueExecutionJob } from "@/lib/execution-job-queue.server";
-import { parsePersistedWorkflow } from "@/lib/persisted-workflow";
 import { isDurableQueueEnabled } from "@/lib/runtime-feature-gates";
+import { preparePersistedExecutionPlan } from "@/lib/prepare-execution-plan";
 
 const MAX_FLOW_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -81,17 +80,17 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
     if (error) throw new Error("Could not load the saved automation.");
     if (!row) throw new Error("Automation not found.");
 
-    const parsed = parsePersistedWorkflow(row.flow_json);
-    if (!parsed.success) throw new Error("The saved automation is invalid. Open it in the builder and save a corrected version.");
+    const prepared = preparePersistedExecutionPlan(row.flow_json);
+    if (!prepared.success) throw new Error(prepared.error);
 
     const flow = {
       id: row.id,
-      name: parsed.data.name || row.name,
+      name: prepared.workflow.name || row.name,
       vertical: "general",
       live: row.status === "live",
       updatedAt: Date.now(),
-      nodes: parsed.data.nodes as WorkflowNode[],
-      edges: parsed.data.edges,
+      nodes: prepared.workflow.nodes as WorkflowNode[],
+      edges: prepared.workflow.edges,
     };
     const issues = (await import("@/lib/workflow")).validate(flow);
     const blocking = issues.filter((issue) => issue.level === "error" || issue.level === "warn");
@@ -105,9 +104,10 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
       }
     }
 
-    const executionPlan = planLinearExecution(flow);
-    if (executionPlan.error) throw new Error(executionPlan.error);
-    const connectedOrder = executionPlan.nodes;
+    // Use the shared saved-workflow trust boundary for manual, scheduled and
+    // queued execution. This includes whole-flow mapping validation before
+    // enqueueing, audit creation, or any provider call.
+    const connectedOrder = prepared.plan.nodes;
 
     // Queue only authenticated, owner-scoped live runs after all workflow and
     // provider preflight checks have passed. Preview remains synchronous.
