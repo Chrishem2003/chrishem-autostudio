@@ -22,7 +22,7 @@ export interface EnqueueExecutionJobInput {
 /** Server-only enqueue adapter. Duplicate keys return the existing queue row. */
 export async function enqueueExecutionJob(input: EnqueueExecutionJobInput): Promise<{ id: string; status: string }> {
   if (!input.automationId.trim()) throw new Error("An automation ID is required.");
-  if (!input.idempotencyKey || input.idempotencyKey.length > 200) {
+  if (typeof input.idempotencyKey !== "string" || !input.idempotencyKey.trim() || input.idempotencyKey.length > 200) {
     throw new Error("Idempotency key must contain between 1 and 200 characters.");
   }
   const payloadValidation = validateExecutionJobPayload(input.payload);
@@ -44,7 +44,7 @@ export async function enqueueExecutionJob(input: EnqueueExecutionJobInput): Prom
     _max_attempts: maxAttempts,
     _available_at: input.availableAt ?? new Date().toISOString(),
   });
-  if (error) throw new Error(`Unable to enqueue execution job: ${error.message}`);
+  if (error) throw new Error("Unable to enqueue execution job.");
   const row = Array.isArray(data) ? data[0] : null;
   if (!row || typeof row !== "object" || Array.isArray(row)) {
     throw new Error("Queue enqueue returned no valid job.");
@@ -68,7 +68,7 @@ export function createSupabaseExecutionJobDependencies(
       const { data, error } = await supabaseAdmin.rpc("claim_execution_job", {
         _lease_seconds: 300,
       });
-      if (error) throw new Error(`Unable to claim execution job: ${error.message}`);
+      if (error) throw new Error("Unable to claim execution job.");
       if (data === null) return null;
       if (!Array.isArray(data)) throw new Error("Queue claim returned an unexpected response.");
       if (data.length === 0) return null;
@@ -80,7 +80,7 @@ export function createSupabaseExecutionJobDependencies(
         _worker_token: job.workerToken,
         _lease_seconds: 300,
       });
-      if (error) throw new Error(`Unable to renew execution lease: ${error.message}`);
+      if (error) throw new Error("Unable to renew execution lease.");
       return data === true;
     },
     execute,
@@ -93,7 +93,7 @@ export function createSupabaseExecutionJobDependencies(
         _error: errorMessage ?? null,
         _retry_at: retryAt ?? null,
       });
-      if (error) throw new Error(`Unable to finalize execution job: ${error.message}`);
+      if (error) throw new Error("Unable to finalize execution job.");
       return data === true;
     },
   };
