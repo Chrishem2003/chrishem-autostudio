@@ -23,7 +23,8 @@ export type AuditConsistencyIssue =
   | "succeeded_job_without_confirmed_successful_run"
   | "succeeded_job_without_queue_completion_timestamp"
   | "non_successful_job_with_successful_audit_run"
-  | "successful_audit_run_without_completion_timestamp";
+  | "successful_audit_run_without_completion_timestamp"
+  | "duplicate_audit_run_snapshot_id";
 
 export interface AuditConsistencyFinding {
   issue: AuditConsistencyIssue;
@@ -48,7 +49,14 @@ export function findExecutionAuditConsistencyIssues(
   jobs: AuditConsistencyJob[],
   runs: AuditConsistencyRun[],
 ): AuditConsistencyFinding[] {
-  const runsById = new Map(runs.map((run) => [run.id, run]));
+  const runCounts = new Map<string, number>();
+  for (const run of runs) runCounts.set(run.id, (runCounts.get(run.id) ?? 0) + 1);
+  // A duplicate primary key should be impossible in a consistent database
+  // snapshot. Never let arbitrary row ordering decide whether a linked job
+  // appears healthy if the diagnostic input contains conflicting duplicates.
+  const runsById = new Map(
+    runs.filter((run) => runCounts.get(run.id) === 1).map((run) => [run.id, run]),
+  );
   const findings: AuditConsistencyFinding[] = [];
 
   for (const job of jobs) {
@@ -64,6 +72,14 @@ export function findExecutionAuditConsistencyIssues(
       continue;
     }
     if (job.run_id === null) continue;
+
+    if ((runCounts.get(job.run_id) ?? 0) > 1) {
+      findings.push({ issue: "duplicate_audit_run_snapshot_id", jobId: job.id, runId: job.run_id });
+      if (job.status === "succeeded") {
+        findings.push({ issue: "succeeded_job_without_confirmed_successful_run", jobId: job.id, runId: job.run_id });
+      }
+      continue;
+    }
 
     const run = runsById.get(job.run_id);
     if (!run) {

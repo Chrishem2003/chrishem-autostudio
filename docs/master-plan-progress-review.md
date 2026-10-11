@@ -571,3 +571,10 @@ The queue worker now renews both its durable-job lease and shared automation ove
 - Added regression coverage for a heartbeat transport rejection while a provider action is still in flight. Even if the provider action later rejects, the lease-loss signal takes precedence and the worker requires review rather than assuming retry is safe.
 - Added a concurrency assertion that slow heartbeat requests never overlap when the interval fires faster than a heartbeat can complete.
 - These are deterministic behavior checks for the in-process keepalive helper; they do not replace the staging rehearsal of actual scheduler timing, provider history, lease expiry, or restart behavior.
+
+
+## Ambiguous audit-run snapshot handling — 2026-10-11
+
+- Queue/audit consistency diagnostics now detect duplicate audit-run IDs in their supplied snapshot. Rather than letting row ordering choose a potentially misleading status, linked jobs are reported as ambiguous; a queue job marked succeeded is also flagged as lacking a confirmed successful audit run.
+- Added a focused regression test with conflicting succeeded/failed rows sharing one run ID. This is defensive diagnostic behavior; the database primary key should prevent such duplicates in normal operation, and the monitor remains read-only.
+- Exact-head CI and the PostgreSQL migration smoke test are required after this change. Staging rollout, provider idempotency, interrupted-worker recovery, and concurrent-worker rehearsal remain open.

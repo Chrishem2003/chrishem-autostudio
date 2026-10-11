@@ -17,6 +17,19 @@ describe("findExecutionAuditConsistencyIssues", () => {
     )).toEqual([]);
   });
 
+  test("fails closed when a linked audit run ID appears more than once in the diagnostic snapshot", () => {
+    expect(findExecutionAuditConsistencyIssues(
+      [{ id: "succeeded-job", status: "succeeded", run_id: "ambiguous-run", finished_at: "2026-10-11T10:00:01Z" }],
+      [
+        { id: "ambiguous-run", status: "succeeded", finished_at: "2026-10-11T10:00:00Z" },
+        { id: "ambiguous-run", status: "failed", finished_at: "2026-10-11T10:00:00Z" },
+      ],
+    )).toEqual([
+      { issue: "duplicate_audit_run_snapshot_id", jobId: "succeeded-job", runId: "ambiguous-run" },
+      { issue: "succeeded_job_without_confirmed_successful_run", jobId: "succeeded-job", runId: "ambiguous-run" },
+    ]);
+  });
+
   test("detects queue jobs without an audit run and missing linked runs", () => {
     expect(findExecutionAuditConsistencyIssues(
       [
