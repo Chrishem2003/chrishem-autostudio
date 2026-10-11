@@ -323,6 +323,18 @@ begin
   values ('00000000-0000-4000-8000-000000000021','00000000-0000-4000-8000-000000000020','running','uncertain',null),
          ('00000000-0000-4000-8000-000000000023','00000000-0000-4000-8000-000000000022','running','uncertain',null),
          ('00000000-0000-4000-8000-000000000025','00000000-0000-4000-8000-000000000020','succeeded','confirmed','preexisting successful step');
+  insert into public.run_logs (id, automation_id, status, started_at, finished_at, trigger_type)
+  values ('00000000-0000-4000-8000-000000000026','00000000-0000-4000-8000-000000000002','succeeded',now()-interval '30 minutes',now()-interval '29 minutes','manual');
+  insert into public.run_step_logs (id, run_id, status, outcome_state, error_detail)
+  values ('00000000-0000-4000-8000-000000000027','00000000-0000-4000-8000-000000000026','succeeded','confirmed','terminal successful run');
+  if public.reconcile_stale_execution_run('00000000-0000-4000-8000-000000000026', null) <> 'not_running' then
+    raise exception 'Stale-run reconciliation accepted a parent run that was already successful';
+  end if;
+  if (select status from public.run_logs where id = '00000000-0000-4000-8000-000000000026') <> 'succeeded'
+     or (select status from public.run_step_logs where id = '00000000-0000-4000-8000-000000000027') <> 'succeeded'
+     or (select error_detail from public.run_step_logs where id = '00000000-0000-4000-8000-000000000027') <> 'terminal successful run' then
+    raise exception 'Stale-run reconciliation mutated a terminal successful run or its history';
+  end if;
   if public.reconcile_stale_execution_run('00000000-0000-4000-8000-000000000020', null) <> 'active_lease' then
     raise exception 'Stale-run reconciliation ignored an active automation lease';
   end if;
