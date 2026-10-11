@@ -180,7 +180,7 @@ export const Route = createFileRoute("/api/public/cron/execution-queue-health")(
             .lte("started_at", staleRunCutoff);
           if (staleRunCountResult.error) throw new Error("Stale run count unavailable.");
           const staleRunRowsResult = await fromRuns()
-            .select("id, automation_id, trigger_type, started_at")
+            .select("id, trigger_type, started_at")
             .eq("status", "running")
             .in("trigger_type", ["manual", "schedule"])
             .lte("started_at", staleRunCutoff)
@@ -191,7 +191,6 @@ export const Route = createFileRoute("/api/public/cron/execution-queue-health")(
             staleRunCountResult.count ?? staleRunRowsResult.data?.length ?? 0,
             (staleRunRowsResult.data ?? []) as Array<{
               id: string;
-              automation_id: string;
               trigger_type: string;
               started_at: string;
             }>,
