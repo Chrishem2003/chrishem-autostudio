@@ -78,6 +78,30 @@ describe("processOneExecutionJob", () => {
     expect(calls.finished[0].error).toContain("invalid result");
   });
 
+  test("fails closed when executor result getters throw", async () => {
+    const malformed = Object.defineProperties({}, {
+      status: { enumerable: true, get() { throw new Error("untrusted status getter"); } },
+      sideEffectCertainty: { enumerable: true, value: "effect_confirmed" },
+    });
+    const { deps, calls } = dependencies({ execute: async () => malformed as any });
+    const result = await processOneExecutionJob(deps);
+    expect(result.status).toBe("needs_review");
+    expect(calls.finished[0].status).toBe("needs_review");
+    expect(calls.finished[0].error).toContain("invalid result");
+  });
+
+  test("snapshots changing executor result getters only once", async () => {
+    let reads = 0;
+    const mutable = {
+      get status() { reads++; return reads === 1 ? "succeeded" : "failed"; },
+      get sideEffectCertainty() { return "effect_confirmed"; },
+    };
+    const { deps, calls } = dependencies({ execute: async () => mutable as any });
+    const result = await processOneExecutionJob(deps);
+    expect(result.status).toBe("succeeded");
+    expect(calls.finished[0].status).toBe("succeeded");
+  });
+
   test("routes uncertain failures to manual review", async () => {
     const { deps, calls } = dependencies({
       execute: async () => ({ status: "failed", sideEffectCertainty: "uncertain", error: "Timed out" }),

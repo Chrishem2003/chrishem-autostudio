@@ -81,3 +81,10 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Commit `e321d897bc0bb5d2dedcc792bd49d06b3fe96f2b` passed exact-head CI: [run 38145487142](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38145487142).
 - The enqueue/claim payload validator now verifies the parsed JSON value remains a non-null object, not merely that the original input was object-shaped before serialization. Regression tests cover `Date` serialization and custom `toJSON()` results.
 - This is code/CI evidence only; it does not satisfy the open staging gates or authorize P1.
+
+
+## Executor result runtime-boundary hardening — 2026-10-11
+
+- Worker result validation snapshots adapter output into a plain object and routes thrown property access or malformed runtime values to `needs_review`.
+- Regression coverage includes a throwing status getter and a changing getter, preventing malformed adapter values from escaping the worker's uncertain-outcome policy.
+- This remains code-level hardening; exact-head CI and all staging acceptance gates are still required before P0 closure.

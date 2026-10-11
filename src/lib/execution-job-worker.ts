@@ -93,6 +93,11 @@ export async function processOneExecutionJob(
   // TypeScript types do not validate provider/adapter values at runtime. Treat
   // malformed executor results as uncertain so an invalid status cannot make
   // a possibly completed external action eligible for automatic retry.
+  const invalidExecutorResult: ExecutionJobResult = {
+    status: "failed",
+    sideEffectCertainty: "uncertain",
+    error: "Executor returned an invalid result. Verify the external outcome before retrying.",
+  };
   const validStatuses = new Set(["succeeded", "failed"]);
   const validCertainties = new Set<SideEffectCertainty>([
     "not_attempted",
@@ -100,17 +105,36 @@ export async function processOneExecutionJob(
     "uncertain",
     "effect_confirmed",
   ]);
-  if (
-    !result ||
-    typeof result !== "object" ||
-    !validStatuses.has(result.status) ||
-    !validCertainties.has(result.sideEffectCertainty)
-  ) {
-    result = {
-      status: "failed",
-      sideEffectCertainty: "uncertain",
-      error: "Executor returned an invalid result. Verify the external outcome before retrying.",
-    };
+  try {
+    if (!result || typeof result !== "object") {
+      result = invalidExecutorResult;
+    } else {
+      // Read adapter fields once and snapshot them: getters/proxies can throw
+      // or return different values between accesses at this runtime boundary.
+      const candidate = result as unknown as Record<string, unknown>;
+      const status = candidate["status"];
+      const certainty = candidate["sideEffectCertainty"];
+      if (
+        !validStatuses.has(status as string) ||
+        !validCertainties.has(certainty as SideEffectCertainty)
+      ) {
+        result = invalidExecutorResult;
+      } else {
+        const errorValue = candidate["error"];
+        const retryAtValue = candidate["retryAt"];
+        const retryableValue = candidate["retryable"];
+        result = {
+          status: status as ExecutionJobResult["status"],
+          sideEffectCertainty: certainty as SideEffectCertainty,
+          error: typeof errorValue === "string" || errorValue === null ? errorValue : undefined,
+          retryAt: typeof retryAtValue === "string" || retryAtValue === null ? retryAtValue : undefined,
+          retryable: typeof retryableValue === "boolean" ? retryableValue : undefined,
+        };
+      }
+    }
+  } catch {
+    // A malformed adapter result is an uncertain external outcome.
+    result = invalidExecutorResult;
   }
 
   let finalStatus: Exclude<ExecutionJobStatus, "running">;
