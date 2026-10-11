@@ -164,7 +164,7 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
               return { id: intent.id };
             },
             persistOutcome: async (intentId, step, outcomeState) => {
-              const { error } = await supabaseAdmin
+              const { data: persistedStep, error } = await supabaseAdmin
                 .from("run_step_logs")
                 .update({
                   status: step.status,
@@ -180,8 +180,10 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
                   },
                 })
                 .eq("id", intentId)
-                .eq("run_id", run.id);
-              return !error;
+                .eq("run_id", run.id)
+                .select("id")
+                .maybeSingle();
+              return !error && Boolean(persistedStep);
             },
             onUnexpectedError: (node, error) => {
               console.error("[AutoStudio queue worker] Step execution failed.", {
