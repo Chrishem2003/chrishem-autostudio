@@ -19,7 +19,7 @@ describe("sanitizeExecutionError", () => {
 
   test("redacts generic token and key assignments", () => {
     const result = sanitizeExecutionError(
-      "token=raw-token private_key=private-material signing_key=signing-material",
+      "Provider rejected request: token=raw-token private_key=private-material signing_key=signing-material",
       "safe fallback",
     );
     expect(result).not.toContain("raw-token");
