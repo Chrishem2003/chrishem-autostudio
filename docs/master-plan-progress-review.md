@@ -578,3 +578,11 @@ The queue worker now renews both its durable-job lease and shared automation ove
 - Queue/audit consistency diagnostics now detect duplicate audit-run IDs in their supplied snapshot. Rather than letting row ordering choose a potentially misleading status, linked jobs are reported as ambiguous; a queue job marked succeeded is also flagged as lacking a confirmed successful audit run.
 - Added a focused regression test with conflicting succeeded/failed rows sharing one run ID. This is defensive diagnostic behavior; the database primary key should prevent such duplicates in normal operation, and the monitor remains read-only.
 - Exact-head CI and the PostgreSQL migration smoke test are required after this change. Staging rollout, provider idempotency, interrupted-worker recovery, and concurrent-worker rehearsal remain open.
+
+
+## Expired-worker recovery scope regression — 2026-10-11
+
+- Expanded the disposable PostgreSQL queue smoke test so the expired-lease recovery trigger is exercised against multiple in-flight step rows in the associated run.
+- The test now requires every unfinished step in that run to become failed with `outcome_state = uncertain`, and requires the parent run to have a persisted failure status and completion timestamp.
+- A separate running run and its running step are included as isolation controls; recovery must leave both untouched. This guards against broad or incorrectly scoped recovery updates.
+- This is disposable-database CI evidence only. The actual non-production Supabase interruption/restart rehearsal and provider-side duplicate-effect inspection remain open; P0 is not closed.

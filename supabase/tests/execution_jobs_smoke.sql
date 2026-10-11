@@ -186,8 +186,13 @@ begin
     ('00000000-0000-4000-8000-000000000012',
      '00000000-0000-4000-8000-000000000002', 'running', now() - interval '2 minutes');
   insert into public.run_step_logs (id, run_id, status, outcome_state)
-  values ('00000000-0000-4000-8000-000000000011',
-          '00000000-0000-4000-8000-000000000010', 'running', 'uncertain');
+  values
+    ('00000000-0000-4000-8000-000000000011',
+     '00000000-0000-4000-8000-000000000010', 'running', 'uncertain'),
+    ('00000000-0000-4000-8000-000000000013',
+     '00000000-0000-4000-8000-000000000010', 'running', 'uncertain'),
+    ('00000000-0000-4000-8000-000000000014',
+     '00000000-0000-4000-8000-000000000012', 'running', 'uncertain');
 
   if public.attach_execution_job_run(
     expired_job.id, gen_random_uuid(), '00000000-0000-4000-8000-000000000010'
@@ -229,12 +234,21 @@ begin
   ) then
     raise exception 'Audit run attachment accepted a job after lease expiration';
   end if;
-  if (select status from public.run_logs where id = '00000000-0000-4000-8000-000000000010') <> 'failed' then
-    raise exception 'Expired queue lease left its audit run stuck as running';
+  if (select status from public.run_logs where id = '00000000-0000-4000-8000-000000000010') <> 'failed'
+     or (select finished_at from public.run_logs where id = '00000000-0000-4000-8000-000000000010') is null then
+    raise exception 'Expired queue lease did not close its associated audit run';
   end if;
-  if (select status from public.run_step_logs where id = '00000000-0000-4000-8000-000000000011') <> 'failed'
-     or (select outcome_state from public.run_step_logs where id = '00000000-0000-4000-8000-000000000011') <> 'uncertain' then
-    raise exception 'Expired queue lease did not preserve uncertain step outcome for review';
+  if exists (
+    select 1 from public.run_step_logs
+     where run_id = '00000000-0000-4000-8000-000000000010'
+       and (status <> 'failed' or outcome_state <> 'uncertain')
+  ) or (select count(*) from public.run_step_logs
+         where run_id = '00000000-0000-4000-8000-000000000010') <> 2 then
+    raise exception 'Expired queue lease did not preserve every in-flight step as uncertain';
+  end if;
+  if (select status from public.run_logs where id = '00000000-0000-4000-8000-000000000012') <> 'running'
+     or (select status from public.run_step_logs where id = '00000000-0000-4000-8000-000000000014') <> 'running' then
+    raise exception 'Expired queue lease modified an unrelated run or its step';
   end if;
 
 

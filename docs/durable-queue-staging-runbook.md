@@ -108,3 +108,12 @@ GitHub CI currently validates the worker code and the migration against a dispos
 - [ ] Simulate a failed or rejected heartbeat during an in-flight provider request; verify the run is marked uncertain/needs review and is not blindly replayed.
 - [ ] Inspect provider-side history after the request settles and confirm no duplicate side effect is created during lease expiry or worker restart.
 - [ ] Confirm the behavior under the actual staging runtime and scheduler; unit tests and disposable PostgreSQL CI do not prove timer execution or provider semantics in deployment.
+
+
+### Expired-worker recovery scope check
+
+- [ ] In non-production staging, interrupt a worker after at least one step intent is persisted; confirm every still-running step in the associated run is marked failed/uncertain and the parent run is finalized with a recovery hint.
+- [ ] Confirm recovery does not modify a separate automation run or unrelated step records.
+- [ ] Inspect provider-side history before any manual retry. Do not replay an uncertain action until its effect has been reconciled.
+
+The disposable PostgreSQL smoke suite now checks multi-step recovery and unrelated-run isolation. That is useful regression coverage, not a substitute for this deployed staging rehearsal.
