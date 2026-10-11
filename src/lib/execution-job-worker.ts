@@ -9,6 +9,7 @@ import { executionRetryAt } from "@/lib/execution-retry-schedule";
 export interface ClaimedExecutionJob {
   id: string;
   automationId: string;
+  triggerType: "manual" | "scheduled" | "webhook";
   payload: unknown;
   attempts: number;
   maxAttempts: number;
