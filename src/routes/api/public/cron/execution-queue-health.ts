@@ -205,8 +205,10 @@ export const Route = createFileRoute("/api/public/cron/execution-queue-health")(
             },
           });
         } catch (error) {
+          // Database/client exceptions may embed request URLs or other sensitive
+          // transport details. Keep operational logs to a non-sensitive error class.
           console.error("[AutoStudio queue health] Monitoring query failed.", {
-            message: error instanceof Error ? error.message : "unknown",
+            errorName: error instanceof Error ? error.name : "UnknownError",
           });
           return Response.json({ error: "Execution queue health is temporarily unavailable." }, {
             status: 503,
