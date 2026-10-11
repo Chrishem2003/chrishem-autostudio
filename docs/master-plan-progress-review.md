@@ -445,3 +445,17 @@ These are database-level regression checks, not a substitute for staging rehears
 - Expanded string redaction to cover credential assignments (for example `api_key=` and `client_secret:`), JWT-like tokens, and Basic/Bearer authorization values, in addition to URLs and email addresses. Added regression coverage for credentials embedded in otherwise ordinary strings.
 
 **Acceptance boundary:** CI must pass at the exact commit. Redaction remains defense in depth; connector implementations should still emit allowlisted, minimal outputs instead of raw provider payloads.
+
+
+## Latest verified reliability batch — 2026-10-11
+
+- Commit `cd0b6b905fa19363c7128bf7960c7d6d61c2fa48` passed both CI jobs: application typecheck/unit tests/production build and PostgreSQL 16 queue migration/concurrency smoke tests.
+- Added worker regression tests proving a confirmed provider action is not repeated in-process when queue finalization is rejected or its transport fails. The result is reported as `finalization_rejected`; eventual lease expiry and the reconciliation migration are expected to mark the linked run for review.
+- Added staging-runbook checks for finalization failure and stale-worker fencing.
+- The SQL smoke test already covers duplicate idempotent enqueue, conflicting payload/trigger/retry-budget reuse, stale heartbeat/finalization, expired-lease reconciliation, preservation of terminal run outcomes, and dead-letter behavior.
+
+## Next batch and master-plan alignment
+
+The next repository batch strengthens the shared persisted-workflow execution boundary with negative-path regression tests for branching graphs, duplicate step IDs, and disconnected cycles. This supports P2's reliability-first rule: unsupported graph semantics must be rejected before enqueueing or executing external side effects.
+
+Still not complete: full graph execution (branches/parallel paths), provider-agnostic AI gateway and conversational refinement, additional genuinely live connectors, workspace roles/approvals, measured accessibility/onboarding acceptance, full operational analytics/API, Autopilot, Watch Mode, and rewind simulation. Production rollout remains blocked on staging Supabase, protected cron, deployed transport, and real sandbox-provider verification. Green CI is repository-level evidence only.
