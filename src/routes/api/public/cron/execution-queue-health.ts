@@ -28,6 +28,7 @@ interface QueueQuery {
   select(columns: string, options?: { count?: "exact"; head?: boolean }): QueueQuery;
   eq(column: string, value: string): QueueQuery;
   in(column: string, values: string[]): QueueQuery;
+  lte(column: string, value: string): QueueQuery;
   order(column: string, options: { ascending: boolean }): QueueQuery;
   limit(value: number): Promise<RowsResult>;
   then<TResult1 = CountResult, TResult2 = never>(
@@ -111,6 +112,34 @@ export const Route = createFileRoute("/api/public/cron/execution-queue-health")(
           }
 
           const findings = findExecutionAuditConsistencyIssues(jobs, auditRuns);
+
+          // Expired leases are reported, never reset here: a lease timeout can
+          // mean an external side effect happened but its acknowledgement was lost.
+          const expiredLeaseResult = await fromQueue()
+            .select("id, locked_until, updated_at, attempts, max_attempts")
+            .eq("status", "running")
+            .lte("locked_until", new Date().toISOString())
+            .order("locked_until", { ascending: true })
+            .limit(100);
+          if (expiredLeaseResult.error) throw new Error("Expired lease snapshot unavailable.");
+          const expiredLeases = (expiredLeaseResult.data ?? []) as Array<{
+            id: string;
+            locked_until: string;
+            updated_at: string;
+            attempts: number;
+            max_attempts: number;
+          }>;
+          const expiredLeaseSummary = {
+            sampledCount: expiredLeases.length,
+            sample: expiredLeases.slice(0, 20).map((job) => ({
+              jobId: job.id,
+              lockedUntil: job.locked_until,
+              updatedAt: job.updated_at,
+              attempts: job.attempts,
+              maxAttempts: job.max_attempts,
+            })),
+          };
+
           const consistency = {
             sampledJobs: jobs.length,
             findingCount: findings.length,
@@ -122,7 +151,7 @@ export const Route = createFileRoute("/api/public/cron/execution-queue-health")(
             ),
             sample: findings.slice(0, 20),
           };
-          return Response.json({ ...summary, consistency }, {
+          return Response.json({ ...summary, consistency, expiredLeases: expiredLeaseSummary }, {
             headers: {
               "Cache-Control": "no-store",
               "X-Content-Type-Options": "nosniff",
