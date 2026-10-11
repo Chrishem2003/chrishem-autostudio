@@ -36,6 +36,43 @@ fi
 
 echo "Concurrent claim safety passed: 8 workers claimed 8 distinct jobs."
 
+# Concurrent duplicate deliveries with the same idempotency key must converge
+# on one durable job, even when every caller races through the unique constraint.
+for i in $(seq 1 8); do
+  (
+    psql -X -A -t -v ON_ERROR_STOP=1 -c "
+      select id from public.enqueue_execution_job(
+        '00000000-0000-4000-8000-000000000002',
+        'webhook',
+        'concurrent-idempotency-race',
+        '{\"same\":true}'::jsonb,
+        null,
+        3,
+        now()
+      );
+    " > "$tmp_dir/enqueue-raw-$i"
+    tr -d '[:space:]' < "$tmp_dir/enqueue-raw-$i" > "$tmp_dir/enqueue-id-$i"
+    printf '\\n' >> "$tmp_dir/enqueue-id-$i"
+  ) &
+done
+wait
+
+cat "$tmp_dir"/enqueue-id-* | sed '/^$/d' > "$tmp_dir/enqueued-ids"
+enqueue_total="$(wc -l < "$tmp_dir/enqueued-ids" | tr -d '[:space:]')"
+enqueue_unique="$(sort -u "$tmp_dir/enqueued-ids" | wc -l | tr -d '[:space:]')"
+enqueue_rows="$(psql -X -A -t -v ON_ERROR_STOP=1 -c "
+  select count(*) from public.execution_jobs
+   where idempotency_key = 'concurrent-idempotency-race'
+")"
+if [[ "$enqueue_total" != "8" || "$enqueue_unique" != "1" || "$enqueue_rows" != "1" ]]; then
+  echo "Concurrent idempotent enqueue failed: responses=$enqueue_total unique_ids=$enqueue_unique durable_rows=$enqueue_rows (expected 8/1/1)" >&2
+  cat "$tmp_dir/enqueued-ids" >&2
+  psql -X -c "select id, idempotency_key, payload, status from public.execution_jobs where idempotency_key = 'concurrent-idempotency-race'" >&2
+  exit 1
+fi
+
+echo "Concurrent idempotency safety passed: 8 duplicate deliveries converged on one job."
+
 # Race stale-run reconciliation against a fresh scheduler lease claim. The
 # claimant first owns the automation row; reconciliation must wait, then see
 # the newly committed lease and leave the stale run open for a later review.
