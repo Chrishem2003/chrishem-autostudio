@@ -325,6 +325,11 @@ begin
   if public.reconcile_stale_execution_run('00000000-0000-4000-8000-000000000020', null) <> 'active_lease' then
     raise exception 'Stale-run reconciliation ignored an active automation lease';
   end if;
+  if public.reconcile_stale_execution_run(
+    '00000000-0000-4000-8000-000000000020', '00000000-0000-4000-8000-000000000098'
+  ) <> 'active_lease' then
+    raise exception 'Stale-run reconciliation accepted a wrong token while a lease was active';
+  end if;
   if public.reconcile_stale_execution_run('00000000-0000-4000-8000-000000000024', null) <> 'not_stale' then
     raise exception 'Stale-run reconciliation accepted a run inside the safety window';
   end if;
@@ -340,6 +345,11 @@ begin
   end if;
   update public.scheduled_run_locks set locked_until = now() - interval '1 second'
    where automation_id = '00000000-0000-4000-8000-000000000002';
+  if public.reconcile_stale_execution_run(
+    '00000000-0000-4000-8000-000000000022', '00000000-0000-4000-8000-000000000099'
+  ) <> 'lease_not_owned' then
+    raise exception 'Expired lease token was accepted for stale-run reconciliation';
+  end if;
   if public.reconcile_stale_execution_run('00000000-0000-4000-8000-000000000022', null) <> 'reconciled' then
     raise exception 'Expired lease did not permit safe stale-run reconciliation';
   end if;
