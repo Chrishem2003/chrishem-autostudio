@@ -9,14 +9,8 @@ create table if not exists public.automations (
   status text not null
 );
 
-do $
-begin
-  create type public.run_status as enum ('queued', 'running', 'success', 'failed', 'dry_run', 'halted');
-exception when duplicate_object then null;
-end
-$;
+create type public.run_status as enum ('queued', 'running', 'success', 'failed', 'dry_run', 'halted');
 
--- Minimal run-audit tables needed to exercise lease-expiry reconciliation in CI.
 create table if not exists public.run_logs (
   id uuid primary key default gen_random_uuid(),
   automation_id uuid not null references public.automations(id) on delete cascade,
