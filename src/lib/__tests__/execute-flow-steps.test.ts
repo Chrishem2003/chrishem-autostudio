@@ -203,7 +203,7 @@ describe("shared flow-step engine", () => {
 
   it("passes mapped fields directly to later steps", async () => {
     const receivedConfigs = [];
-    const mapper = { id: "mapper", defId: "logic.map", name: "Map lead", x: 1, y: 0, config: { mapping: "full_name = Ada\\nstatus = ready" } };
+    const mapper = { id: "mapper", defId: "logic.map", name: "Map lead", x: 1, y: 0, config: { mapping: "full_name = Ada\nstatus = ready" } };
     const target = { ...nodes[2], defId: "action.gmail", config: { body: "Hello {{steps.mapper.full_name}} ({{steps.mapper.status}})" } };
     const result = await executeFlowSteps(baseInput({
       nodes: [nodes[0], mapper, target],

@@ -53,7 +53,7 @@ describe("whole-flow mapping preflight", () => {
 
   it("accepts direct references to declared mapped fields", () => {
     const result = validateStepMappings([
-      node("mapper", "logic.map", { mapping: "full_name = Ada\\nstatus = ready" }),
+      node("mapper", "logic.map", { mapping: "full_name = Ada\nstatus = ready" }),
       node("email", "action.gmail", { body: "Hello {{steps.mapper.full_name}} — {{steps.mapper.status}}" }),
     ]);
     expect(result).toBeNull();
