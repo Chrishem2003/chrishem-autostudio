@@ -119,4 +119,28 @@ describe("persisted workflow runtime validation", () => {
     }).success).toBe(false);
   });
 
+  it("rejects empty configuration keys at the persisted-data boundary", () => {
+    expect(parsePersistedWorkflow({
+      ...valid,
+      nodes: [{ ...valid.nodes[0], config: { "": "unexpected" } }],
+      edges: [],
+    }).success).toBe(false);
+  });
+
+  it("rejects aggregate configuration payloads above the safety budget", () => {
+    const oversized = {
+      ...valid,
+      nodes: Array.from({ length: 40 }, (_, index) => ({
+        id: `node-${index}`,
+        defId: index === 0 ? "trigger.manual" : "action.http",
+        x: index * 100,
+        y: 0,
+        name: `Node ${index}`,
+        config: { body: "x".repeat(7_000) },
+      })),
+      edges: [],
+    };
+    expect(parsePersistedWorkflow(oversized).success).toBe(false);
+  });
+
 });
