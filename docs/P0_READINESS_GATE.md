@@ -52,6 +52,13 @@ P0 is complete only when all applicable A, B, and C gates are evidenced by actua
 Do not mark any unchecked item as passed based on code inspection alone.
 
 
+## Enqueue NULL-parameter hardening — 2026-10-11
+
+- Extended the same SQL three-valued-logic review to `enqueue_execution_job`: explicit NULL trigger type and NULL retry limit could bypass their range/membership IF checks and fail later at table constraints.
+- Added a forward-only migration `20261011160000_enqueue_null_validation.sql` so already-migrated environments receive the correction without rewriting migration history.
+- Added smoke assertions for the exact validation errors and wired the migration into the PostgreSQL CI chain. Verify the exact-head workflow before treating this as accepted.
+- Staging deployment and real provider-side duplicate-effect evidence remain open; do not enable production queue or outbound transport.
+
 ## SQL NULL lease-boundary hardening — 2026-10-11
 
 - Review found that PostgreSQL comparisons against explicit `NULL` evaluate to unknown, so range-only checks could be bypassed by a caller passing `NULL` to queue claim/heartbeat RPCs. A claim could then attempt to create a running job with no valid expiry.
