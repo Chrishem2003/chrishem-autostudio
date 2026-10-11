@@ -197,7 +197,7 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
           .maybeSingle();
         if (runRecoveryError || !runRecovery) {
           console.error("[AutoStudio executor] Could not finalize stale manual run; refusing to start another live run.", {
-            runId: stale.id, errorCode: runRecoveryError.code,
+            runId: stale.id, errorCode: runRecoveryError?.code ?? "NO_ROW_UPDATED",
           });
           throw new Error("Could not safely finalize an earlier run. No new live run was started; inspect run history and try again.");
         }
@@ -328,7 +328,7 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
             console.error("[AutoStudio executor] Could not mark interrupted manual run failed.", {
               automationId: row.id,
               runId: activeRunId,
-              errorCode: auditError.code,
+              errorCode: auditError?.code ?? "NO_ROW_UPDATED",
             });
           }
         } catch {

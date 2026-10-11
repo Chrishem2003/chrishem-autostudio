@@ -281,7 +281,7 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
               console.error("[AutoStudio scheduler] Failed-state fallback also failed.", {
                 automationId: row.id,
                 runId: run.id,
-                errorCode: fallbackError.code,
+                errorCode: fallbackError?.code ?? "NO_ROW_UPDATED",
               });
             }
           }
@@ -311,7 +311,7 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
                   console.error("[AutoStudio scheduler] Could not mark interrupted run failed.", {
                     automationId: row.id,
                     runId: activeRunId,
-                    errorCode: auditError.code,
+                    errorCode: auditError?.code ?? "NO_ROW_UPDATED",
                   });
                 }
               } catch {
