@@ -500,3 +500,13 @@ Introduced a shared prepared-execution gate and wired it into authenticated manu
 - This closes the immediate exact-head CI check for that commit. It does **not** close P0: real staging migration application, authenticated cron endpoint checks, runtime transport validation, interruption/recovery rehearsal, and provider-side no-duplicate-effect evidence remain unchecked in `docs/P0_READINESS_GATE.md` and `docs/durable-queue-staging-runbook.md`.
 - Keep `AUTOSTUDIO_DURABLE_QUEUE_ENABLED=false` and `AUTOSTUDIO_OUTBOUND_TRANSPORT_READY` unset/false until the non-production staging acceptance gates pass. The platform is not yet production-ready, and P1 is not authorized.
 
+
+
+## Persisted workflow payload-boundary hardening — 2026-10-11
+
+- The persisted workflow parser now enforces a total serialized workflow budget (512,000 characters) in addition to the existing aggregate configuration budget (256,000 characters). This closes a size-limit bypass through compatibility-preserved passthrough metadata.
+- Non-serializable values, including cyclic objects and BigInt-containing payloads, are rejected safely before schema parsing or execution planning.
+- Regression coverage was added for oversized metadata, cyclic input, and non-JSON values.
+- Exact-head CI passed on `84ef7aea4f5654d955ffb1379cbed38422a69caa`: typecheck, unit suite, targeted execution-integrity lint, production build, and PostgreSQL migration/concurrency smoke test. See [CI run 38135641444](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38135641444).
+- This improves a code-level trust boundary but does not replace staging acceptance. P0 remains open; queue/outbound transport stay disabled until real staging evidence is recorded.
+
