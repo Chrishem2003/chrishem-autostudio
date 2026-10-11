@@ -69,8 +69,8 @@ export const Route = createFileRoute("/api/public/cron/execution-queue-health")(
           const fromQueue = () => supabaseAdmin.from("execution_jobs" as never) as unknown as QueueQuery;
           const countEntries = await Promise.all(EXECUTION_QUEUE_STATUSES.map(async (status) => {
             const result = await fromQueue().select("id", { count: "exact", head: true }).eq("status", status);
-            if (result.error) throw new Error("Queue status counts unavailable.");
-            return [status, result.count ?? 0] as const;
+            if (result.error || result.count == null) throw new Error("Queue status counts unavailable.");
+            return [status, result.count] as const;
           }));
           const counts = Object.fromEntries(countEntries) as Record<ExecutionQueueStatus, number>;
 
@@ -135,7 +135,9 @@ export const Route = createFileRoute("/api/public/cron/execution-queue-health")(
             .select("id", { count: "exact", head: true })
             .eq("status", "running")
             .lte("locked_until", expiredLeaseCutoff);
-          if (expiredLeaseCountResult.error) throw new Error("Expired lease count unavailable.");
+          if (expiredLeaseCountResult.error || expiredLeaseCountResult.count == null) {
+            throw new Error("Expired lease count unavailable.");
+          }
 
           const expiredLeaseResult = await fromQueue()
             .select("id, locked_until, updated_at, attempts, max_attempts")
@@ -152,7 +154,7 @@ export const Route = createFileRoute("/api/public/cron/execution-queue-health")(
             max_attempts: number;
           }>;
           const expiredLeaseSummary = summarizeExpiredExecutionLeases(
-            expiredLeaseCountResult.count ?? expiredLeases.length,
+            expiredLeaseCountResult.count,
             expiredLeases,
           );
 
@@ -188,7 +190,9 @@ export const Route = createFileRoute("/api/public/cron/execution-queue-health")(
             .eq("status", "running")
             .in("trigger_type", ["manual", "schedule"])
             .lte("started_at", staleRunCutoff);
-          if (staleRunCountResult.error) throw new Error("Stale run count unavailable.");
+          if (staleRunCountResult.error || staleRunCountResult.count == null) {
+            throw new Error("Stale run count unavailable.");
+          }
           const staleRunRowsResult = await fromRuns()
             .select("id, trigger_type, started_at")
             .eq("status", "running")
@@ -198,7 +202,7 @@ export const Route = createFileRoute("/api/public/cron/execution-queue-health")(
             .limit(100);
           if (staleRunRowsResult.error) throw new Error("Stale run sample unavailable.");
           const staleRuns = summarizeStaleRunCandidates(
-            staleRunCountResult.count ?? staleRunRowsResult.data?.length ?? 0,
+            staleRunCountResult.count,
             (staleRunRowsResult.data ?? []) as Array<{
               id: string;
               trigger_type: string;
