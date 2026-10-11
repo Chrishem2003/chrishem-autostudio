@@ -99,6 +99,7 @@ export async function executeFlowSteps(input: ExecuteFlowStepsInput): Promise<Ex
     }
     steps.push(step);
     if (step.status === "success" && step.outputs) priorOutputs[node.id] = step.outputs;
+    if (step.status === "success" && node.defId === "logic.filter" && step.outputs?.["passed"] === false) break;
   }
 
   return { steps, failed: steps.some((step) => step.status === "failed") };

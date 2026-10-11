@@ -18,6 +18,30 @@ const baseInput = (overrides = {}) => ({
   persistIntent: async (_node, index) => ({ id: `intent-${index}` }),
   persistOutcome: async () => true,
   ...overrides,
+  it("stops the linear flow cleanly when a filter output is false", async () => {
+    const executed = [];
+    const filter = { id: "filter-1", defId: "logic.filter", name: "Only urgent", x: 2, y: 0, config: { condition: 'message contains "urgent"' } };
+    const result = await executeFlowSteps(baseInput({
+      nodes: [nodes[0], filter, nodes[2]],
+      execute: async ({ node }) => {
+        executed.push(node.id);
+        return { nodeId: node.id, label: node.name, status: "success", ms: 0, detail: "ok", ...(node.defId === "logic.filter" ? { outputs: { passed: false } } : {}) };
+      },
+    }));
+    expect(result.failed).toBe(false);
+    expect(executed).toEqual(["trigger-1", "filter-1"]);
+  });
+
+  it("allows only the declared passed output from a filter step", async () => {
+    const filter = { id: "filter-1", defId: "logic.filter", name: "Filter", x: 2, y: 0, config: { condition: "score >= 70" } };
+    const target = { ...nodes[2], defId: "action.http", config: { body: "{{steps.filter-1.passed}}" } };
+    const result = await executeFlowSteps(baseInput({
+      nodes: [nodes[0], filter, target],
+      execute: async ({ node }) => ({ nodeId: node.id, label: node.name, status: "success", ms: 0, detail: "ok", ...(node.defId === "logic.filter" ? { outputs: { passed: true } } : {}) }),
+    }));
+    expect(result.failed).toBe(false);
+  });
+
 });
 
 describe("shared flow-step engine", () => {

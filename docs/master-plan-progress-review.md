@@ -474,3 +474,10 @@ Still not complete: full graph execution (branches/parallel paths), provider-agn
 - Implemented `logic.map` as a deterministic server-side transformation in the shared step executor. It parses `field_name = value` lines after the shared prior-step token resolver has run, and emits a JSON string plus a field count for downstream mapping.
 - Added fail-closed validation for duplicate/invalid keys, malformed lines, empty mappings, more than 50 fields, values over 2,000 characters, and serialized output over 8 KB. The output sanitizer has a dedicated allowlist for this local node; arbitrary fields are not persisted or exposed to later steps.
 - This is a real local capability, not a new third-party connector. It does not make branching, loops, or currently unsupported catalog actions executable. Live provider transport and durable queue flags remain gated pending staging acceptance.
+
+
+## Deterministic local filter node — 2026-10-11
+
+- Implemented a real `logic.filter` evaluator with a constrained grammar (text equality/inequality, case-insensitive contains/not-contains, finite numeric comparisons, and empty checks). It does not use `eval` and enforces a 2,000-character condition limit.
+- Filter outcomes are allowlisted as a single boolean `passed` output. In the current linear executor, a false result cleanly stops later steps without marking the run failed; branching remains unsupported and is not implied by this behavior.
+- Added evaluator and flow-engine regression coverage for comparisons, unsupported expressions, output references, and short-circuit behavior.

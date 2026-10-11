@@ -5,6 +5,7 @@ import { buildGmailMessage, isGmailSendStep, toRawEmail } from "@/lib/gmail-step
 import { callWeb, isBlockedHost, resolvePublicTarget, type WebInput } from "@/lib/web-steps.server";
 import { NODES } from "@/lib/automation-catalog";
 import { mapFields } from "@/lib/field-mapping";
+import { evaluateFilterCondition } from "@/lib/logic-filter";
 import { getConnectorManifestForNode, validateConnectorActionConfig } from "@/lib/connector-manifests";
 import type { WorkflowNode } from "@/lib/workflow";
 
@@ -27,6 +28,10 @@ export type ExecutedStep = {
 export function liveCapabilityError(node: WorkflowNode): string | null {
   const tool = NODES[node.defId]?.tool;
   if (node.defId === "trigger.schedule" || node.defId === "trigger.manual") return null;
+  if (node.defId === "logic.filter") {
+    const evaluated = evaluateFilterCondition(node.config["condition"] ?? "");
+    return evaluated.ok ? null : evaluated.error;
+  }
   if (node.defId === "logic.map") {
     const mapped = mapFields(node.config["mapping"] ?? "");
     return mapped.ok ? null : mapped.error;
@@ -121,6 +126,13 @@ export async function executeStep(args: {
 
   if (Object.values(node.config).some((value) => typeof value === "string" && (value.includes("{{") || value.includes("}}")))) {
     return result("failed", "Unresolved data tokens reached the executor. No external action was taken.", 0);
+  }
+
+  // Local logic nodes execute deterministically without network calls or credentials.
+  if (node.defId === "logic.filter") {
+    const evaluated = evaluateFilterCondition(node.config["condition"] ?? "");
+    if (!evaluated.ok) return result("failed", evaluated.error, 0);
+    return result("success", evaluated.passed ? "Filter condition matched; the flow continues." : "Filter condition did not match; remaining steps are skipped.", 0, { passed: evaluated.passed });
   }
 
   // This is a local transformation: it never calls a provider or needs a connector.

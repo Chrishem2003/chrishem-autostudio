@@ -8,6 +8,12 @@ export function sanitizeStepOutputs(node: WorkflowNode, step: ExecutedStep): Exe
   if (!step.outputs) return step;
   const tool = NODES[node.defId]?.tool;
   const action = getConnectorActionForNode(node.defId, tool)?.action;
+  if (node.defId === "logic.filter") {
+    const safe: Record<string, string | number | boolean> = Object.create(null) as Record<string, string | number | boolean>;
+    if (typeof step.outputs["passed"] === "boolean") safe["passed"] = step.outputs["passed"];
+    const { outputs: _discarded, ...rest } = step;
+    return Object.keys(safe).length ? { ...rest, outputs: safe } : rest;
+  }
   if (node.defId === "logic.map") {
     const safe: Record<string, string | number | boolean> = Object.create(null) as Record<string, string | number | boolean>;
     if (typeof step.outputs["mapped"] === "string" && step.outputs["mapped"].length <= 8_000) safe["mapped"] = step.outputs["mapped"];

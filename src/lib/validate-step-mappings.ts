@@ -11,6 +11,7 @@ export interface StepMappingValidationError {
 
 function allowedMappingKeys(node: WorkflowNode): ReadonlySet<string> {
   if (node.defId === "logic.map") return new Set(["mapping"]);
+  if (node.defId === "logic.filter") return new Set(["condition"]);
   if (node.defId === "action.gmail") return new Set(["subject", "body"]);
   if (node.defId === "action.http") return new Set(["body"]);
   if (node.defId === "action.slack" ||
@@ -45,7 +46,7 @@ export function validateStepMappings(nodes: readonly WorkflowNode[]): StepMappin
         }
         const sourceTool = NODES[source.defId]?.tool;
         const sourceAction = getConnectorActionForNode(source.defId, sourceTool)?.action;
-        const declaredOutputs = source.defId === "logic.map" ? ["mapped", "mappedCount"] : sourceAction?.output.fields;
+        const declaredOutputs = source.defId === "logic.map" ? ["mapped", "mappedCount"] : source.defId === "logic.filter" ? ["passed"] : sourceAction?.output.fields;
         if (!declaredOutputs?.includes(field)) {
           invalidReference = `steps.${sourceId}.${field} is not a declared output`;
           return "";
