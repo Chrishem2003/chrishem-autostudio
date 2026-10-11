@@ -127,6 +127,37 @@ describe("processOneExecutionJob", () => {
     expect(retryAt).toBeLessThanOrEqual(Date.now() + 6_000);
   });
 
+  test("falls back to bounded backoff when executor retry time is invalid", async () => {
+    const { deps, calls } = dependencies({
+      execute: async () => ({
+        status: "failed",
+        sideEffectCertainty: "not_attempted",
+        retryAt: "not-a-date",
+        error: "Temporary failure",
+      }),
+    });
+    const before = Date.now();
+    const result = await processOneExecutionJob(deps);
+    const retryAt = Date.parse(calls.finished[0].retryAt);
+    expect(result.status).toBe("queued");
+    expect(retryAt).toBeGreaterThanOrEqual(before + 4_000);
+    expect(retryAt).toBeLessThanOrEqual(Date.now() + 6_000);
+  });
+
+  test("ignores non-string retry times from malformed executor results", async () => {
+    const { deps, calls } = dependencies({
+      execute: async () => ({
+        status: "failed",
+        sideEffectCertainty: "not_attempted",
+        retryAt: { toString: () => "not-a-date" },
+        error: "Temporary failure",
+      } as any),
+    });
+    const result = await processOneExecutionJob(deps);
+    expect(result.status).toBe("queued");
+    expect(Number.isFinite(Date.parse(calls.finished[0].retryAt))).toBe(true);
+  });
+
   test("preserves scheduled retry time for transient lock contention", async () => {
     const retryAt = new Date(Date.now() + 30_000).toISOString();
     const { deps, calls } = dependencies({
