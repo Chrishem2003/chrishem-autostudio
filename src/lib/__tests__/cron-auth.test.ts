@@ -1,3 +1,4 @@
+// @ts-nocheck -- Bun's test runner supplies test types at runtime
 import { afterEach, describe, expect, test } from "bun:test";
 import { authenticateCronRequest } from "@/integrations/supabase/cron-auth";
 
