@@ -159,6 +159,14 @@ begin
     raise exception 'Heartbeat rejected the current worker token';
   end if;
 
+  -- Explicit NULL must be rejected with the documented validation error.
+  begin
+    perform public.finish_execution_job(claimed.id, claimed.worker_token, null, null, null);
+    raise exception 'Finalization accepted a NULL status';
+  exception when others then
+    if sqlerrm <> 'Invalid execution job final status' then raise; end if;
+  end;
+
   -- A worker must not mark the queue successful before its audit run is
   -- attached and the run summary has confirmed successful persistence.
   if public.finish_execution_job(claimed.id, claimed.worker_token, 'succeeded', null, null) then
