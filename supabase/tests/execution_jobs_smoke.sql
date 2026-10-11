@@ -74,8 +74,26 @@ begin
     raise exception 'Heartbeat rejected the current worker token';
   end if;
 
+  -- A worker must not mark the queue successful before its audit run is
+  -- attached and the run summary has confirmed successful persistence.
+  if public.finish_execution_job(claimed.id, claimed.worker_token, 'succeeded', null, null) then
+    raise exception 'Queue job succeeded without an associated audit run';
+  end if;
+  insert into public.run_logs (id, automation_id, status, started_at)
+  values ('00000000-0000-4000-8000-000000000015',
+          '00000000-0000-4000-8000-000000000002', 'running', now());
+  if not public.attach_execution_job_run(
+    claimed.id, claimed.worker_token, '00000000-0000-4000-8000-000000000015'
+  ) then
+    raise exception 'Could not attach success-path audit run';
+  end if;
+  if public.finish_execution_job(claimed.id, claimed.worker_token, 'succeeded', null, null) then
+    raise exception 'Queue job succeeded while its audit run was still running';
+  end if;
+  update public.run_logs set status = 'succeeded', finished_at = now()
+   where id = '00000000-0000-4000-8000-000000000015' and status = 'running';
   if not public.finish_execution_job(claimed.id, claimed.worker_token, 'succeeded', null, null) then
-    raise exception 'Current worker could not finalize job';
+    raise exception 'Current worker could not finalize after confirmed audit success';
   end if;
   if public.finish_execution_job(claimed.id, claimed.worker_token, 'succeeded', null, null) then
     raise exception 'Finalization accepted a stale/reused worker token';

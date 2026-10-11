@@ -114,15 +114,15 @@ export const Route = createFileRoute("/api/public/cron/execution-queue-health")(
             run_id: string | null;
           }>;
           const runIds = [...new Set(jobs.flatMap((job) => job.run_id ? [job.run_id] : []))];
-          let auditRuns: Array<{ id: string; status: string }> = [];
+          let auditRuns: Array<{ id: string; status: string; finished_at: string | null }> = [];
           if (runIds.length > 0) {
             const auditClient = supabaseAdmin.from("run_logs" as never) as unknown as AuditQuery;
             const runsResult = await auditClient
-              .select("id, status")
+              .select("id, status, finished_at")
               .in("id", runIds)
               .limit(100);
             if (runsResult.error) throw new Error("Audit run snapshot unavailable.");
-            auditRuns = (runsResult.data ?? []) as Array<{ id: string; status: string }>;
+            auditRuns = (runsResult.data ?? []) as Array<{ id: string; status: string; finished_at: string | null }>;
           }
 
           const findings = findExecutionAuditConsistencyIssues(jobs, auditRuns);

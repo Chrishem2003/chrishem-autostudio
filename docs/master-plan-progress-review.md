@@ -474,3 +474,12 @@ Introduced a shared prepared-execution gate and wired it into authenticated manu
 | P8 — differentiators | Roadmap | Autopilot, Watch Mode, rewind simulation, approve/undo, multilingual/voice input |
 
 **Phase decision:** stay in reliability hardening / P0 exit-gate work while closing staging evidence and route-boundary coverage. Do not jump to connector-count expansion or declare production readiness. Keep `AUTOSTUDIO_DURABLE_QUEUE_ENABLED=false` and `AUTOSTUDIO_OUTBOUND_TRANSPORT_READY` unset/false until the documented staging gates pass.
+
+
+## Queue success requires confirmed audit success — 2026-10-11
+
+- Added a database-level fence to `finish_execution_job`: `succeeded` is accepted only when the job has a linked `run_logs` row whose status is `succeeded` and whose `finished_at` is present. A missing, open, failed, or otherwise unconfirmed audit run causes finalization to return false; the worker cannot silently convert that into queue success.
+- Expanded the read-only queue health consistency detector to report succeeded jobs without a linked, terminal-success audit run, including absent links, missing linked rows, failed runs, and missing completion timestamps.
+- Added unit regressions for those contradictory states and PostgreSQL smoke coverage proving success is rejected before association and while the audit run is still open, then accepted only after the successful run summary is persisted.
+- This is a durable database invariant, not merely a worker convention. Existing failed/review/retry transitions remain available and do not auto-replay external effects.
+- CI must verify the new migration and tests on the exact resulting commit. Live Supabase migration application, scheduler configuration, and controlled provider-side staging remain separate rollout gates; queue and outbound transport flags stay disabled until they pass.
