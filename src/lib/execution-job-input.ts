@@ -25,34 +25,34 @@ export function validateExecutionJobEnqueueMetadata(value: unknown): ExecutionJo
     return { success: false, error: "Execution job request must be an object." };
   }
   const input = value as Record<string, unknown>;
-  if (typeof input.automationId !== "string" || !input.automationId.trim()) {
+  if (typeof input["automationId"] !== "string" || !input["automationId"].trim()) {
     return { success: false, error: "An automation ID is required." };
   }
-  if (!["manual", "scheduled", "webhook"].includes(input.triggerType as string)) {
+  if (!["manual", "scheduled", "webhook"].includes(input["triggerType"] as string)) {
     return { success: false, error: "Execution trigger type is unsupported." };
   }
-  if (typeof input.idempotencyKey !== "string" || !input.idempotencyKey.trim() || input.idempotencyKey.length > 200) {
+  if (typeof input["idempotencyKey"] !== "string" || !input["idempotencyKey"].trim() || input["idempotencyKey"].length > 200) {
     return { success: false, error: "Idempotency key must contain between 1 and 200 characters." };
   }
-  if (input.requestedBy !== undefined && input.requestedBy !== null && typeof input.requestedBy !== "string") {
+  if (input["requestedBy"] !== undefined && input["requestedBy"] !== null && typeof input["requestedBy"] !== "string") {
     return { success: false, error: "Requesting user ID must be a string or null." };
   }
-  const maxAttempts = input.maxAttempts === undefined ? 3 : input.maxAttempts;
+  const maxAttempts = input["maxAttempts"] === undefined ? 3 : input["maxAttempts"];
   if (typeof maxAttempts !== "number" || !Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 10) {
     return { success: false, error: "Maximum attempts must be an integer from 1 to 10." };
   }
-  if (input.availableAt !== undefined && (typeof input.availableAt !== "string" || Number.isNaN(Date.parse(input.availableAt)))) {
+  if (input["availableAt"] !== undefined && (typeof input["availableAt"] !== "string" || Number.isNaN(Date.parse(input["availableAt"])))) {
     return { success: false, error: "Available-at timestamp must be a valid date." };
   }
   return {
     success: true,
     value: {
-      automationId: input.automationId,
-      triggerType: input.triggerType as "manual" | "scheduled" | "webhook",
-      idempotencyKey: input.idempotencyKey,
-      ...(input.requestedBy !== undefined ? { requestedBy: input.requestedBy as string | null } : {}),
+      automationId: input["automationId"],
+      triggerType: input["triggerType"] as "manual" | "scheduled" | "webhook",
+      idempotencyKey: input["idempotencyKey"],
+      ...(input["requestedBy"] !== undefined ? { requestedBy: input["requestedBy"] as string | null } : {}),
       maxAttempts,
-      ...(input.availableAt !== undefined ? { availableAt: input.availableAt as string } : {}),
+      ...(input["availableAt"] !== undefined ? { availableAt: input["availableAt"] as string } : {}),
     },
   };
 }
