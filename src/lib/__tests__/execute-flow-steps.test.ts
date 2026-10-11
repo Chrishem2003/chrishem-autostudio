@@ -165,4 +165,76 @@ describe("shared flow-step engine", () => {
     expect(intents).toBe(1);
     expect(result.steps[0].detail).toMatch(/verify external effects/i);
   });
+  it("never executes later steps when an earlier outcome cannot be persisted", async () => {
+    const executedNodes = [];
+    const persistedIntents = [];
+    const outcomeAttempts = [];
+    const result = await executeFlowSteps(baseInput({
+      persistIntent: async (_node, index) => {
+        persistedIntents.push(index);
+        return { id: `i-${index}` };
+      },
+      persistOutcome: async (id, step) => {
+        outcomeAttempts.push({ id, status: step.status });
+        return false;
+      },
+      execute: async ({ node }) => {
+        executedNodes.push(node.id);
+        return { nodeId: node.id, label: node.name, status: "success", ms: 1, detail: "provider action returned success" };
+      },
+    }));
+
+    expect(result.failed).toBe(true);
+    expect(executedNodes).toEqual(["trigger-1"]);
+    expect(persistedIntents).toEqual([0]);
+    expect(outcomeAttempts).toEqual([{ id: "i-0", status: "success" }]);
+    expect(result.steps).toHaveLength(1);
+    expect(result.steps[0].status).toBe("failed");
+    expect(result.steps[0].detail).toMatch(/Verify external effects before retrying/i);
+  });
+
+  it("stops when a thrown intent persistence error prevents the audit intent", async () => {
+    const executedNodes = [];
+    const intentAttempts = [];
+    const result = await executeFlowSteps(baseInput({
+      persistIntent: async (_node, index) => {
+        intentAttempts.push(index);
+        if (index === 0) throw new Error("database unavailable");
+        return { id: `i-${index}` };
+      },
+      execute: async ({ node }) => {
+        executedNodes.push(node.id);
+        return { nodeId: node.id, label: node.name, status: "success", ms: 1, detail: "unexpected" };
+      },
+    }));
+
+    expect(result.failed).toBe(true);
+    expect(intentAttempts).toEqual([0]);
+    expect(executedNodes).toEqual([]);
+    expect(result.steps).toHaveLength(1);
+    expect(result.steps[0].detail).toMatch(/No action was attempted/i);
+  });
+
+  it("records mapping-preflight audit failure without running any provider step", async () => {
+    let executions = 0;
+    const result = await executeFlowSteps(baseInput({
+      nodes: [
+        nodes[0],
+        { ...nodes[1], defId: "action.http", config: {} },
+        { ...nodes[2], defId: "action.gmail", config: { subject: "{{steps.trigger-1.httpStatus}}" } },
+      ],
+      persistIntent: async () => { throw new Error("audit store unavailable"); },
+      persistOutcome: async () => { throw new Error("must not persist outcome without intent"); },
+      execute: async () => {
+        executions++;
+        return { nodeId: "unexpected", label: "unexpected", status: "success", ms: 1, detail: "unexpected" };
+      },
+    }));
+
+    expect(result.failed).toBe(true);
+    expect(executions).toBe(0);
+    expect(result.steps).toHaveLength(1);
+    expect(result.steps[0].detail).toMatch(/No external action was attempted/i);
+  });
+
 });
