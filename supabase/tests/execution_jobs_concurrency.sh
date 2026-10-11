@@ -52,7 +52,7 @@ for i in $(seq 1 8); do
       );
     " > "$tmp_dir/enqueue-raw-$i"
     tr -d '[:space:]' < "$tmp_dir/enqueue-raw-$i" > "$tmp_dir/enqueue-id-$i"
-    printf '\\n' >> "$tmp_dir/enqueue-id-$i"
+    printf '\n' >> "$tmp_dir/enqueue-id-$i"
   ) &
 done
 wait
