@@ -341,3 +341,21 @@ The build remains aligned with the plan's reliability-first sequence: execution 
 - The scheduled queue producer now uses a stable payload for a deterministic idempotency key. Previously, a fresh `scheduledAt` timestamp could make a recovery enqueue look like a different request when enqueue succeeded but scheduler-lease release failed. The payload no longer changes across retries for that logical scheduled request.
 - Queue RPC adapter exceptions no longer interpolate raw database error messages into thrown errors, and whitespace-only idempotency keys are rejected.
 - The latest completed CI baseline before these newest reliability changes passed 190 tests across 27 files, typecheck, production build, and both disposable-PostgreSQL migration/concurrency checks. The newest reliability changes must pass their own exact-commit CI run before being considered verified.
+
+## Durable execution trigger integrity — 2026-10-11
+
+**Implemented and verified on commit `1c7699a1112d30dc1692d28aa23c92e95abd18d4`; both CI jobs passed.**
+
+- The worker now preserves the database claim's authoritative `trigger_type` instead of inferring the run-log trigger from payload metadata.
+- Scheduled jobs map the queue's `scheduled` value to the existing run-log label `schedule`; manual and webhook jobs retain their own trigger labels.
+- Claim parsing rejects missing or unsupported trigger types before an automation can be executed, and tests cover all three supported queue trigger types plus invalid values.
+- This prevents webhook-origin jobs from being silently mislabeled as scheduled runs and removes trust in caller-controlled payload metadata for audit classification.
+
+**Verified:** typecheck, unit tests, production build, and PostgreSQL migration/idempotency/lease/concurrency smoke tests passed on the exact code commit. [GitHub Actions](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38117976533)
+
+### Next technical batch
+
+1. Extract shared run-audit lifecycle safeguards and test that audit creation/association/persistence failures stop execution before a provider call.
+2. Add route-level regression coverage for malformed persisted workflows at the real enqueue/run boundaries.
+3. Continue the provider reliability contract: per-adapter capability declarations and only verified idempotency claims; no speculative retries of uncertain effects.
+
