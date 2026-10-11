@@ -402,3 +402,12 @@ Added deterministic regression tests at the shared ordered step-execution bounda
 
 These tests strengthen the step-level fail-closed contract without pretending to test database transactions or provider behavior. They do not yet constitute server-function/route integration tests for run-log creation, durable-job association, or final run finalization. Those boundaries remain rollout acceptance items and must be verified against a controlled staging database before enabling the durable queue.
 
+## Run-finalization write confirmation — 2026-10-11
+
+Hardened all three live run-summary finalization paths (authenticated manual runs, durable queue workers, and scheduled runs). Each update now filters to a run still in `running` state, requests the updated row back, and treats either a database error **or a zero-row result** as an unconfirmed finalization.
+
+- Manual execution throws an explicit recovery-oriented error rather than proceeding to update automation health or returning a successful run response when the summary write cannot be confirmed.
+- The durable worker does not return a successful execution result to queue finalization unless the run-summary update returned the row it expected. A missing row or a row no longer in `running` is treated as an audit failure.
+- Scheduled execution enters its existing failed-state fallback when the summary update errors or updates no row; it does not assume that a no-error response means a row was changed.
+
+This closes the Supabase/PostgREST distinction between a successful request and a confirmed row mutation. It does not make run-step writes transactional with external provider actions, and it does not replace staging failure-injection tests against a real database. Keep durable queue and outbound transport gates disabled until those staging checks pass.
