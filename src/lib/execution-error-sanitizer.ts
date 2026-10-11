@@ -25,3 +25,43 @@ export function sanitizeExecutionError(value: unknown, fallback: string): string
   }
   return sanitized;
 }
+
+
+const SENSITIVE_OUTPUT_KEY = /(?:authorization|access[_-]?token|refresh[_-]?token|api[_-]?key|client[_-]?secret|password|passwd|secret|credential|cookie)/i;
+
+/**
+ * Redacts sensitive fields in persisted workflow output snapshots. Output data
+ * is untrusted and can be nested or unexpectedly large, so traversal is bounded.
+ */
+export function sanitizeExecutionAuditValue(value: unknown): unknown {
+  const seen = new WeakSet<object>();
+  let visited = 0;
+
+  const visit = (item: unknown, depth: number, key?: string): unknown => {
+    visited += 1;
+    if (visited > 500) return "[TRUNCATED]";
+    if (key && SENSITIVE_OUTPUT_KEY.test(key)) return "[REDACTED_SECRET]";
+    if (typeof item === "string") {
+      if (!item.trim()) return item;
+      return sanitizeExecutionError(item, "[REDACTED_VALUE]");
+    }
+    if (item === null || typeof item === "boolean") return item;
+    if (typeof item === "number") return Number.isFinite(item) ? item : null;
+    if (typeof item !== "object") return "[UNSUPPORTED_VALUE]";
+    if (depth >= 6) return "[TRUNCATED]";
+    if (seen.has(item)) return "[CIRCULAR]";
+    seen.add(item);
+
+    if (Array.isArray(item)) {
+      return item.slice(0, 50).map((entry) => visit(entry, depth + 1));
+    }
+
+    const result: Record<string, unknown> = {};
+    for (const [childKey, childValue] of Object.entries(item).slice(0, 50)) {
+      result[childKey.slice(0, 100)] = visit(childValue, depth + 1, childKey);
+    }
+    return result;
+  };
+
+  return visit(value, 0);
+}
