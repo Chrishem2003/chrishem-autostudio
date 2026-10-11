@@ -459,3 +459,11 @@ These are database-level regression checks, not a substitute for staging rehears
 The next repository batch strengthens the shared persisted-workflow execution boundary with negative-path regression tests for branching graphs, duplicate step IDs, and disconnected cycles. This supports P2's reliability-first rule: unsupported graph semantics must be rejected before enqueueing or executing external side effects.
 
 Still not complete: full graph execution (branches/parallel paths), provider-agnostic AI gateway and conversational refinement, additional genuinely live connectors, workspace roles/approvals, measured accessibility/onboarding acceptance, full operational analytics/API, Autopilot, Watch Mode, and rewind simulation. Production rollout remains blocked on staging Supabase, protected cron, deployed transport, and real sandbox-provider verification. Green CI is repository-level evidence only.
+
+
+## Persisted workflow resource-boundary hardening — 2026-10-11
+
+- Added a 512 KiB UTF-8 serialized-size ceiling before persisted workflow schema validation or graph planning. Node, edge, identifier and individual configuration bounds remain in place; the total ceiling also constrains aggregate configuration and passthrough metadata.
+- The boundary fails closed for cyclic objects, BigInt, and other values that cannot be represented as JSON instead of allowing serialization exceptions to escape.
+- Added regression tests for oversized metadata, aggregate configuration payloads, and non-JSON runtime values. This protects the shared workflow parser used by execution paths from disproportionately large persisted payloads.
+- Master-plan alignment: this is P0/P2 execution-boundary hardening, not graph feature completion. Linear-chain-only execution remains intentional; branch and parallel semantics are still rejected. CI success will establish repository-level coverage only; staging checks remain required.
