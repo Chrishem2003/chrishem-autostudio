@@ -334,3 +334,10 @@ This verifies the SQL migration against the disposable PostgreSQL CI schema, not
 ### Master-plan status after this batch
 
 The build remains aligned with the plan's reliability-first sequence: execution boundaries, connector contracts, safe mapping, audit output minimization, and queue recovery precede wider connector coverage and production activation. Still outstanding are staging migration/worker/transport rehearsal, the provider-agnostic AI gateway, full natural-language draft/refine UX, accessibility acceptance, teams/approvals, complete run analytics/API, and the P8 differentiators.
+
+## Reliability advancement — 2026-10-11
+
+- Queue health now reports an exact database count of expired leases separately from the bounded diagnostic sample. The response includes `totalCount`, `sampledCount`, and `truncated`; only up to 20 lease records are returned even though up to 100 are queried for triage.
+- The scheduled queue producer now uses a stable payload for a deterministic idempotency key. Previously, a fresh `scheduledAt` timestamp could make a recovery enqueue look like a different request when enqueue succeeded but scheduler-lease release failed. The payload no longer changes across retries for that logical scheduled request.
+- Queue RPC adapter exceptions no longer interpolate raw database error messages into thrown errors, and whitespace-only idempotency keys are rejected.
+- The latest completed CI baseline before these newest reliability changes passed 190 tests across 27 files, typecheck, production build, and both disposable-PostgreSQL migration/concurrency checks. The newest reliability changes must pass their own exact-commit CI run before being considered verified.
