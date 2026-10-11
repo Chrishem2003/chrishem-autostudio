@@ -3,6 +3,7 @@ import { describe, expect, it } from "bun:test";
 import {
   MAX_EXECUTION_JOB_PAYLOAD_BYTES,
   parseExecutionJobEnqueueResult,
+  parseExecutionJobEnqueueResponse,
   validateExecutionJobEnqueueMetadata,
   validateExecutionJobPayload,
   validateExecutionJobRequestPayload,
@@ -204,6 +205,19 @@ describe("durable execution job enqueue RPC response validation", () => {
       status: { enumerable: true, value: "queued" },
     });
     expect(() => parseExecutionJobEnqueueResult(result)).toThrow("Queue enqueue returned no valid job.");
+  });
+
+  it("accepts exactly one row in the enqueue RPC response envelope", () => {
+    expect(parseExecutionJobEnqueueResponse([{ id: "job-1", status: "queued" }])).toEqual({
+      id: "job-1",
+      status: "queued",
+    });
+  });
+
+  it("rejects empty, multi-row, and non-array enqueue RPC envelopes", () => {
+    for (const value of [null, {}, [], [{ id: "job-1", status: "queued" }, { id: "job-2", status: "queued" }]]) {
+      expect(() => parseExecutionJobEnqueueResponse(value)).toThrow("Queue enqueue returned an unexpected response.");
+    }
   });
 
   it("rejects malformed identifiers and unknown statuses", () => {

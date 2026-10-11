@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import type { Json } from "@/integrations/supabase/types";
-import { parseExecutionJobEnqueueResult, validateExecutionJobEnqueueMetadata, validateExecutionJobRequestPayload } from "@/lib/execution-job-input";
+import { parseExecutionJobEnqueueResponse, validateExecutionJobEnqueueMetadata, validateExecutionJobRequestPayload } from "@/lib/execution-job-input";
 import { parseClaimedExecutionJobResponse } from "@/lib/execution-job-claim";
 import type { ExecutionJobStatus } from "@/lib/execution-job-policy";
 import type {
@@ -37,8 +37,7 @@ export async function enqueueExecutionJob(input: EnqueueExecutionJobInput): Prom
     _available_at: availableAt ?? new Date().toISOString(),
   });
   if (error) throw new Error("Unable to enqueue execution job.");
-  const row = Array.isArray(data) ? data[0] : null;
-  return parseExecutionJobEnqueueResult(row);
+  return parseExecutionJobEnqueueResponse(data);
 }
 
 /**

@@ -135,6 +135,17 @@ export type ExecutionJobEnqueueResult = {
   status: "queued" | "running" | "succeeded" | "failed" | "needs_review" | "dead_letter";
 };
 
+/**
+ * The enqueue RPC contract is exactly one returned row. Do not silently accept
+ * an empty, non-array, or multi-row envelope by selecting its first element.
+ */
+export function parseExecutionJobEnqueueResponse(value: unknown): ExecutionJobEnqueueResult {
+  if (!Array.isArray(value) || value.length !== 1) {
+    throw new Error("Queue enqueue returned an unexpected response.");
+  }
+  return parseExecutionJobEnqueueResult(value[0]);
+}
+
 /** Treat the database RPC result as untrusted data before returning it to callers. */
 export function parseExecutionJobEnqueueResult(value: unknown): ExecutionJobEnqueueResult {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
