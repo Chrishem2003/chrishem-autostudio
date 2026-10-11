@@ -24,35 +24,55 @@ export function validateExecutionJobEnqueueMetadata(value: unknown): ExecutionJo
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return { success: false, error: "Execution job request must be an object." };
   }
-  const input = value as Record<string, unknown>;
-  if (typeof input["automationId"] !== "string" || !input["automationId"].trim() || input["automationId"].length > 200) {
+
+  // Snapshot adapter/caller fields once. Getters and proxies are runtime input
+  // too; a thrown or changing accessor must not alter the validated RPC payload.
+  let automationId: unknown;
+  let triggerType: unknown;
+  let idempotencyKey: unknown;
+  let requestedBy: unknown;
+  let maxAttemptsInput: unknown;
+  let availableAt: unknown;
+  try {
+    const input = value as Record<string, unknown>;
+    automationId = input["automationId"];
+    triggerType = input["triggerType"];
+    idempotencyKey = input["idempotencyKey"];
+    requestedBy = input["requestedBy"];
+    maxAttemptsInput = input["maxAttempts"];
+    availableAt = input["availableAt"];
+  } catch {
+    return { success: false, error: "Execution job request contains invalid fields." };
+  }
+
+  if (typeof automationId !== "string" || !automationId.trim() || automationId.length > 200) {
     return { success: false, error: "An automation ID is required." };
   }
-  if (!["manual", "scheduled", "webhook"].includes(input["triggerType"] as string)) {
+  if (!["manual", "scheduled", "webhook"].includes(triggerType as string)) {
     return { success: false, error: "Execution trigger type is unsupported." };
   }
-  if (typeof input["idempotencyKey"] !== "string" || !input["idempotencyKey"].trim() || input["idempotencyKey"].length > 200) {
+  if (typeof idempotencyKey !== "string" || !idempotencyKey.trim() || idempotencyKey.length > 200) {
     return { success: false, error: "Idempotency key must contain between 1 and 200 characters." };
   }
-  if (input["requestedBy"] !== undefined && input["requestedBy"] !== null && (typeof input["requestedBy"] !== "string" || input["requestedBy"].length > 200)) {
+  if (requestedBy !== undefined && requestedBy !== null && (typeof requestedBy !== "string" || requestedBy.length > 200)) {
     return { success: false, error: "Requesting user ID must be a string or null." };
   }
-  const maxAttempts = input["maxAttempts"] === undefined ? 3 : input["maxAttempts"];
+  const maxAttempts = maxAttemptsInput === undefined ? 3 : maxAttemptsInput;
   if (typeof maxAttempts !== "number" || !Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 10) {
     return { success: false, error: "Maximum attempts must be an integer from 1 to 10." };
   }
-  if (input["availableAt"] !== undefined && (typeof input["availableAt"] !== "string" || input["availableAt"].length > 100 || Number.isNaN(Date.parse(input["availableAt"])))) {
+  if (availableAt !== undefined && (typeof availableAt !== "string" || availableAt.length > 100 || Number.isNaN(Date.parse(availableAt)))) {
     return { success: false, error: "Available-at timestamp must be a valid date." };
   }
   return {
     success: true,
     value: {
-      automationId: input["automationId"],
-      triggerType: input["triggerType"] as "manual" | "scheduled" | "webhook",
-      idempotencyKey: input["idempotencyKey"],
-      ...(input["requestedBy"] !== undefined ? { requestedBy: input["requestedBy"] as string | null } : {}),
+      automationId,
+      triggerType: triggerType as "manual" | "scheduled" | "webhook",
+      idempotencyKey,
+      ...(requestedBy !== undefined ? { requestedBy: requestedBy as string | null } : {}),
       maxAttempts,
-      ...(input["availableAt"] !== undefined ? { availableAt: input["availableAt"] as string } : {}),
+      ...(availableAt !== undefined ? { availableAt: availableAt as string } : {}),
     },
   };
 }

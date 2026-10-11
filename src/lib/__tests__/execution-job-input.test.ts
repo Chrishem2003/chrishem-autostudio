@@ -39,6 +39,28 @@ describe("durable execution job enqueue metadata validation", () => {
     }
   });
 
+  it("fails closed when metadata accessors throw", () => {
+    const request = Object.defineProperties(valid(), {
+      automationId: { enumerable: true, get() { throw new Error("untrusted getter"); } },
+    });
+    expect(validateExecutionJobEnqueueMetadata(request)).toEqual({
+      success: false,
+      error: "Execution job request contains invalid fields.",
+    });
+  });
+
+  it("snapshots metadata accessors once before validating the RPC payload", () => {
+    let reads = 0;
+    const request = {
+      ...valid(),
+      get automationId() { reads++; return reads === 1 ? "automation-1" : "automation-spoofed"; },
+    };
+    const result = validateExecutionJobEnqueueMetadata(request);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.value.automationId).toBe("automation-1");
+    expect(reads).toBe(1);
+  });
+
   it("preserves optional user and schedule metadata when valid", () => {
     const result = validateExecutionJobEnqueueMetadata({
       ...valid(), requestedBy: "user-1", maxAttempts: 5, availableAt: "2030-01-01T00:00:00Z",
