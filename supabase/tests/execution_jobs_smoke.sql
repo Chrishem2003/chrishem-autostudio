@@ -218,6 +218,44 @@ begin
     raise exception 'Untrusted roles can execute the worker claim RPC';
   end if;
 
+  -- Every privileged queue/lease/recovery RPC must remain service-role-only.
+  if has_function_privilege('anon', 'public.enqueue_execution_job(uuid,text,text,jsonb,uuid,integer,timestamptz)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.enqueue_execution_job(uuid,text,text,jsonb,uuid,integer,timestamptz)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.heartbeat_execution_job(uuid,uuid,integer)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.heartbeat_execution_job(uuid,uuid,integer)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.finish_execution_job(uuid,uuid,text,text,timestamptz)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.finish_execution_job(uuid,uuid,text,text,timestamptz)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.attach_execution_job_run(uuid,uuid,uuid)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.attach_execution_job_run(uuid,uuid,uuid)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.claim_manual_automation(uuid,integer)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.claim_manual_automation(uuid,integer)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.claim_scheduled_automation(uuid,integer)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.claim_scheduled_automation(uuid,integer)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.heartbeat_manual_automation(uuid,uuid,integer)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.heartbeat_manual_automation(uuid,uuid,integer)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.release_manual_automation(uuid,uuid)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.release_manual_automation(uuid,uuid)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.release_scheduled_automation(uuid,uuid,timestamptz)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.release_scheduled_automation(uuid,uuid,timestamptz)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.reconcile_stale_execution_run(uuid,uuid)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.reconcile_stale_execution_run(uuid,uuid)', 'EXECUTE') then
+    raise exception 'Untrusted roles can execute a privileged queue, lease, or recovery RPC';
+  end if;
+
+  if not has_function_privilege('service_role', 'public.enqueue_execution_job(uuid,text,text,jsonb,uuid,integer,timestamptz)', 'EXECUTE')
+     or not has_function_privilege('service_role', 'public.claim_execution_job(integer)', 'EXECUTE')
+     or not has_function_privilege('service_role', 'public.heartbeat_execution_job(uuid,uuid,integer)', 'EXECUTE')
+     or not has_function_privilege('service_role', 'public.finish_execution_job(uuid,uuid,text,text,timestamptz)', 'EXECUTE')
+     or not has_function_privilege('service_role', 'public.attach_execution_job_run(uuid,uuid,uuid)', 'EXECUTE')
+     or not has_function_privilege('service_role', 'public.claim_manual_automation(uuid,integer)', 'EXECUTE')
+     or not has_function_privilege('service_role', 'public.claim_scheduled_automation(uuid,integer)', 'EXECUTE')
+     or not has_function_privilege('service_role', 'public.heartbeat_manual_automation(uuid,uuid,integer)', 'EXECUTE')
+     or not has_function_privilege('service_role', 'public.release_manual_automation(uuid,uuid)', 'EXECUTE')
+     or not has_function_privilege('service_role', 'public.release_scheduled_automation(uuid,uuid,timestamptz)', 'EXECUTE')
+     or not has_function_privilege('service_role', 'public.reconcile_stale_execution_run(uuid,uuid)', 'EXECUTE') then
+    raise exception 'Service role cannot execute a required queue, lease, or recovery RPC';
+  end if;
+
   select * into expired_job
     from public.enqueue_execution_job(
       '00000000-0000-4000-8000-000000000002',
