@@ -8,7 +8,7 @@ import { executeFlowSteps } from "@/lib/execute-flow-steps.server";
 import { createSupabaseExecutionJobDependencies } from "@/lib/execution-job-queue.server";
 import { processOneExecutionJob } from "@/lib/execution-job-worker";
 import { buildRunFinalization } from "@/lib/run-finalization";
-import { preparePersistedExecutionPlan } from "@/lib/prepare-execution-plan";
+import { withPreparedExecutionPlan } from "@/lib/prepared-execution-gate";
 import { executeStep, livePreflightError } from "@/lib/execute-step.server";
 import type { Workflow } from "@/lib/workflow";
 import { createAndAttachExecutionJobRun } from "@/lib/execution-run-association";
@@ -46,30 +46,16 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
             };
           }
 
-          const prepared = preparePersistedExecutionPlan(automation.flow_json);
-          if (!prepared.success) {
-            return {
-              status: "failed" as const,
-              sideEffectCertainty: "not_attempted" as const,
-              error: "Saved workflow failed validation; no steps were executed.",
-              retryable: false,
-            };
-          }
+          const gate = await withPreparedExecutionPlan(automation.flow_json, async (prepared) => {
+            // Re-check capabilities because workflow or credentials may have changed after enqueue.
+            const preflightError = await firstLivePreflightError(prepared.plan.nodes, automation.user_id, livePreflightError);
+            return { prepared, preflightError };
+          });
+          if (!gate.success) return { status: "failed" as const, sideEffectCertainty: "not_attempted" as const, error: "Saved workflow failed validation; no steps were executed.", retryable: false };
+          const { prepared, preflightError } = gate.value;
+          if (preflightError) return { status: "failed" as const, sideEffectCertainty: "not_attempted" as const, error: preflightError, retryable: false };
           const workflow = prepared.workflow as unknown as Workflow;
           const plan = prepared.plan;
-
-          // Re-run live capability checks in the worker. The workflow or its
-          // credentials may have changed after enqueue, so producer-side preflight
-          // alone is not a sufficient authorization/safety boundary.
-          const preflightError = await firstLivePreflightError(plan.nodes, automation.user_id, livePreflightError);
-          if (preflightError) {
-            return {
-              status: "failed" as const,
-              sideEffectCertainty: "not_attempted" as const,
-              error: preflightError,
-              retryable: false,
-            };
-          }
 
           // Serialize queue jobs per automation with the same lease used by
           // manual and scheduled entry points. A busy automation is safe to retry.

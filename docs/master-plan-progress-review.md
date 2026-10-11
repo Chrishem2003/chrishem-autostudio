@@ -443,3 +443,8 @@ Unit tests cover run-creation failure, association rejection/transport error, an
 Added one shared sequential live-capability preflight helper and applied it to authenticated manual runs, durable queue workers, and scheduled execution. The scheduled direct-execution path previously validated saved workflow structure/mappings but did not re-check each step's live connector capability before taking a scheduler lease and creating a run. It now checks after confirming the schedule is due and before lease acquisition, durable enqueue, audit-run creation, or provider invocation.
 
 Regression tests verify that preflight stops at the first failing node and that a clean plan checks each node. These tests validate shared sequencing; they do not emulate live connector credentials or provider behavior. Exact-head CI and controlled staging checks remain required. Durable queue and outbound transport remain disabled until the documented staging gates pass.
+
+
+## Execution entry-point regression gate — 2026-10-11
+
+Introduced a shared prepared-execution gate and wired it into authenticated manual runs, scheduled runs, and the durable queue worker. The gate rejects malformed persisted workflows and invalid graph/mapping plans before its capability-preflight callback can run. Added tests for malformed workflow JSON, invalid graph structure, and valid plans entering preflight. These tests exercise the gate used by production entry points; downstream database writes/provider integrations still require staging fault-injection. CI must pass on the exact commit before this batch is considered verified.

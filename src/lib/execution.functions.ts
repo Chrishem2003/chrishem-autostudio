@@ -8,7 +8,7 @@ import { buildRunFinalization } from "@/lib/run-finalization";
 import { enqueueExecutionJob } from "@/lib/execution-job-queue.server";
 import { isDurableQueueEnabled } from "@/lib/runtime-feature-gates";
 import { parsePersistedWorkflow } from "@/lib/persisted-workflow";
-import { preparePersistedExecutionPlan } from "@/lib/prepare-execution-plan";
+import { withPreparedExecutionPlan } from "@/lib/prepared-execution-gate";
 import { firstLivePreflightError } from "@/lib/live-execution-preflight";
 
 const MAX_FLOW_RUNTIME_MS = 4 * 60 * 1000;
@@ -82,31 +82,20 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
     if (error) throw new Error("Could not load the saved automation.");
     if (!row) throw new Error("Automation not found.");
 
-    const prepared = preparePersistedExecutionPlan(row.flow_json);
-    if (!prepared.success) throw new Error(prepared.error);
-
-    const flow = {
-      id: row.id,
-      name: prepared.workflow.name || row.name,
-      vertical: "general",
-      live: row.status === "live",
-      updatedAt: Date.now(),
-      nodes: prepared.workflow.nodes as WorkflowNode[],
-      edges: prepared.workflow.edges,
-    };
-    const issues = (await import("@/lib/workflow")).validate(flow);
-    const blocking = issues.filter((issue) => issue.level === "error" || issue.level === "warn");
-    if (blocking.length) throw new Error(`Fix the flow before running it: ${blocking[0]!.message}`);
-
-    if (data.mode === "live") {
-      if (row.status !== "live") throw new Error("This automation is not live in the cloud. No external action was taken.");
-      const reason = await firstLivePreflightError(
-        flow.nodes,
-        context.userId,
-        async (node, userId) => (await import("@/lib/execute-step.server")).livePreflightError(node, userId),
-      );
-      if (reason) throw new Error(reason);
-    }
+    const gate = await withPreparedExecutionPlan(row.flow_json, async (prepared) => {
+      const flow = { id: row.id, name: prepared.workflow.name || row.name, vertical: "general", live: row.status === "live", updatedAt: Date.now(), nodes: prepared.workflow.nodes as WorkflowNode[], edges: prepared.workflow.edges };
+      const issues = (await import("@/lib/workflow")).validate(flow);
+      const blocking = issues.filter((issue) => issue.level === "error" || issue.level === "warn");
+      if (blocking.length) throw new Error(`Fix the flow before running it: ${blocking[0]!.message}`);
+      if (data.mode === "live") {
+        if (row.status !== "live") throw new Error("This automation is not live in the cloud. No external action was taken.");
+        const reason = await firstLivePreflightError(flow.nodes, context.userId, async (node, userId) => (await import("@/lib/execute-step.server")).livePreflightError(node, userId));
+        if (reason) throw new Error(reason);
+      }
+      return { prepared, flow };
+    });
+    if (!gate.success) throw new Error(gate.error);
+    const { prepared, flow } = gate.value;
 
     // Use the shared saved-workflow trust boundary for manual, scheduled and
     // queued execution. This includes whole-flow mapping validation before

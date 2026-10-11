@@ -3,7 +3,7 @@ import { authenticateCronRequest } from "@/integrations/supabase/cron-auth";
 import { isDue } from "@/lib/schedule";
 import type { Workflow } from "@/lib/workflow";
 import { executeFlowSteps } from "@/lib/execute-flow-steps.server";
-import { preparePersistedExecutionPlan } from "@/lib/prepare-execution-plan";
+import { withPreparedExecutionPlan } from "@/lib/prepared-execution-gate";
 import { buildRunFinalization } from "@/lib/run-finalization";
 import { enqueueExecutionJob } from "@/lib/execution-job-queue.server";
 import { isDurableQueueEnabled } from "@/lib/runtime-feature-gates";
@@ -79,32 +79,22 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
         let ran = 0;
         let failed = 0;
         for (const row of rows ?? []) {
-          const prepared = preparePersistedExecutionPlan(row.flow_json);
-          if (!prepared.success) {
-            console.warn("[AutoStudio scheduler] Saved workflow failed execution preflight.", {
-              automationId: row.id,
-              reason: prepared.error,
-            });
-            continue;
-          }
+          const gate = await withPreparedExecutionPlan(row.flow_json, async (prepared) => {
+            const wf = prepared.workflow as unknown as Workflow;
+            const trigger = wf.nodes.find((node) => node.defId === "trigger.schedule");
+            if (!trigger) return { prepared, trigger: null, cadence: null, due: false, preflightError: null };
+            const cadence = trigger.config?.["cadence"] || "Hourly";
+            const due = isDue(cadence, row.last_run_at ? new Date(row.last_run_at) : null, now, trigger.config?.["timezone"]);
+            if (!due) return { prepared, trigger, cadence, due: false, preflightError: null };
+            const preflightError = await firstLivePreflightError(prepared.plan.nodes, row.user_id, livePreflightError);
+            return { prepared, trigger, cadence, due, preflightError };
+          });
+          if (!gate.success) { console.warn("[AutoStudio scheduler] Saved workflow failed execution preflight.", { automationId: row.id, reason: gate.error }); continue; }
+          const { prepared, trigger, cadence, due, preflightError } = gate.value;
+          if (!trigger || !due) continue;
+          if (preflightError) { console.warn("[AutoStudio scheduler] Scheduled workflow failed live capability preflight; no run was started.", { automationId: row.id, reason: preflightError }); failed++; continue; }
           const wf = prepared.workflow as unknown as Workflow;
           const executionPlan = prepared.plan;
-          const trigger = wf.nodes.find((node) => node.defId === "trigger.schedule");
-          if (!trigger) continue;
-          const cadence = trigger.config?.["cadence"] || "Hourly";
-          if (!isDue(cadence, row.last_run_at ? new Date(row.last_run_at) : null, now, trigger.config?.["timezone"])) continue;
-
-          // Scheduled execution must re-check live capabilities before taking a
-          // lease, enqueuing a durable job, creating an audit run, or calling a provider.
-          const preflightError = await firstLivePreflightError(executionPlan.nodes, row.user_id, livePreflightError);
-          if (preflightError) {
-            console.warn("[AutoStudio scheduler] Scheduled workflow failed live capability preflight; no run was started.", {
-              automationId: row.id,
-              reason: preflightError,
-            });
-            failed++;
-            continue;
-          }
 
           // Roll out durable queue consumption explicitly. Until the worker cron is
           // configured and runtime-validated, the legacy direct path remains the
