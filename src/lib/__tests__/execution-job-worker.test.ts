@@ -53,7 +53,7 @@ describe("processOneExecutionJob", () => {
     const result = await processOneExecutionJob(deps);
     expect(result).toEqual({ outcome: "finished", jobId: "job-1", status: "needs_review" });
     expect(calls.finished[0].status).toBe("needs_review");
-    expect(calls.finished[0].error).toContain("without confirmed side-effect evidence");
+    expect(calls.finished[0].error).toBe("Provider response could not be verified");
   });
 
   test("does not accept success when no side effect was attempted", async () => {
