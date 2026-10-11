@@ -1,7 +1,9 @@
 const SECRETISH_KEY = /(secret|token|key|password|authorization|bearer|credential|cookie|session)/i;
 const URL_PATTERN = /\bhttps?:\/\/[^\s"'<>]+/gi;
 const EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
-const BEARER_PATTERN = /\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi;
+const BEARER_PATTERN = /\b(?:Bearer|Basic)\s+[A-Za-z0-9._~+/-]+=*/gi;
+const SECRET_ASSIGNMENT = /\b(?:authorization|access[_-]?token|refresh[_-]?token|api[_-]?key|client[_-]?secret|password|passwd|secret|credential)\b\s*[:=]\s*[^\s,;]+/gi;
+const JWT_PATTERN = /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g;
 const MAX_DEPTH = 6;
 const MAX_COLLECTION_ITEMS = 50;
 const MAX_STRING_LENGTH = 500;
@@ -15,7 +17,9 @@ export function sanitizeRunOutput(value: unknown, depth = 0): unknown {
   if (typeof value === "string") {
     return value
       .slice(0, MAX_STRING_LENGTH)
-      .replace(BEARER_PATTERN, "Bearer [REDACTED_AUTH]")
+      .replace(BEARER_PATTERN, "[REDACTED_AUTH]")
+      .replace(JWT_PATTERN, "[REDACTED_TOKEN]")
+      .replace(SECRET_ASSIGNMENT, "[REDACTED_SECRET]")
       .replace(URL_PATTERN, "[REDACTED_URL]")
       .replace(EMAIL_PATTERN, "[REDACTED_EMAIL]");
   }
