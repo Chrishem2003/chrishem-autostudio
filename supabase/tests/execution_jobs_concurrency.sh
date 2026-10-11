@@ -196,6 +196,11 @@ echo "Stale-run/lease race passed: fresh scheduler lease fenced reconciliation."
 # Two recovery callers racing the same stale run must produce exactly one
 # reconciliation; the loser must observe the now-terminal parent and do nothing.
 psql -v ON_ERROR_STOP=1 -c "
+  -- The earlier scheduler-lease race deliberately leaves a fresh lease behind;
+  -- expire it so this test isolates the same-run reconciliation row lock.
+  update public.scheduled_run_locks
+     set locked_until = now() - interval '1 second'
+   where automation_id = '00000000-0000-4000-8000-000000000002';
   insert into public.run_logs (id, automation_id, status, started_at, trigger_type)
   values ('00000000-0000-4000-8000-000000000031',
           '00000000-0000-4000-8000-000000000002',
