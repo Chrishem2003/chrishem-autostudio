@@ -157,3 +157,10 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Commit `0ef5cacd6f95f20e1954d6138b3cb7b634843a7d` passed both required CI jobs: [run 38170222554](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38170222554).
 - The disposable PostgreSQL smoke test now verifies that the database rejects out-of-range worker lease durations, unsupported trigger types, retry limits outside the allowed range, and queue payloads exceeding the 64 KiB database limit.
 - This is a regression-test checkpoint, not staging acceptance. Provider idempotency, interrupted-worker recovery, production-runtime transport compatibility, staging authentication, and the full migration rollout remain unverified. Keep durable queue and outbound transport disabled until those gates have evidence.
+
+## Exact-head scheduler lease-boundary verification — 2026-10-11
+
+- Commit `331eb33f2428e0835cd81d318afc036c81c48f6f` passed both required CI jobs: [run 38172882461](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38172882461).
+- The disposable PostgreSQL smoke suite now checks manual and scheduled lease-duration bounds, stale manual-release token rejection, preservation of the active lease after a stale release attempt, and that manual lease release does not advance the scheduler cadence cursor.
+- The first run exposed an incomplete disposable schema fixture (missing the `automations.last_run_at` column referenced by the scheduler release RPC). The fixture was corrected to model that existing contract; the full migration and concurrency smoke test then passed.
+- This does not close P0. Live staging migration/authentication, interrupted-worker recovery, provider idempotency/duplicate-effect checks, and deployed outbound transport compatibility remain open. Durable queue and outbound transport must remain disabled until those acceptance checks are evidenced.
