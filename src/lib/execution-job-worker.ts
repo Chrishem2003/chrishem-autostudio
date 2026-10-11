@@ -126,9 +126,9 @@ export async function processOneExecutionJob(
         result = {
           status: status as ExecutionJobResult["status"],
           sideEffectCertainty: certainty as SideEffectCertainty,
-          error: typeof errorValue === "string" || errorValue === null ? errorValue : undefined,
-          retryAt: typeof retryAtValue === "string" || retryAtValue === null ? retryAtValue : undefined,
-          retryable: typeof retryableValue === "boolean" ? retryableValue : undefined,
+          ...(typeof errorValue === "string" || errorValue === null ? { error: errorValue } : {}),
+          ...(typeof retryAtValue === "string" || retryAtValue === null ? { retryAt: retryAtValue } : {}),
+          ...(typeof retryableValue === "boolean" ? { retryable: retryableValue } : {}),
         };
       }
     }
