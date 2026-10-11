@@ -1,6 +1,6 @@
 // @ts-nocheck -- Bun's test runner supplies test types at runtime
 import { describe, expect, test } from "bun:test";
-import { summarizeExecutionQueueHealth, summarizeExpiredExecutionLeases, type ExecutionQueueHealthRow, type ExecutionQueueStatus } from "@/lib/execution-queue-health";
+import { summarizeExecutionQueueHealth, summarizeExpiredExecutionLeases, summarizeStaleRunCandidates, type ExecutionQueueHealthRow, type ExecutionQueueStatus } from "@/lib/execution-queue-health";
 
 const emptyCounts = (): Record<ExecutionQueueStatus, number> => ({
   queued: 0,
@@ -88,5 +88,33 @@ describe("summarizeExpiredExecutionLeases", () => {
   test("safely handles an invalid aggregate count", () => {
     const summary = summarizeExpiredExecutionLeases(Number.NaN, []);
     expect(summary).toMatchObject({ totalCount: 0, sampledCount: 0, truncated: false });
+  });
+});
+
+
+describe("summarizeStaleRunCandidates", () => {
+  test("reports exact candidate totals separately from the bounded sample", () => {
+    const rows = Array.from({ length: 100 }, (_, index) => ({
+      id: `run-${index}`,
+      automation_id: `automation-${index}`,
+      trigger_type: index % 2 ? "manual" : "schedule",
+      started_at: "2026-10-11T09:00:00.000Z",
+    }));
+    const summary = summarizeStaleRunCandidates(137, rows, "2026-10-11T10:00:00.000Z");
+    expect(summary.totalCount).toBe(137);
+    expect(summary.sampledCount).toBe(100);
+    expect(summary.truncated).toBe(true);
+    expect(summary.sample).toHaveLength(20);
+    expect(summary.cutoff).toBe("2026-10-11T10:00:00.000Z");
+  });
+
+  test("does not claim truncation when all candidates fit in the sample", () => {
+    const summary = summarizeStaleRunCandidates(1, [{
+      id: "run-1",
+      automation_id: "automation-1",
+      trigger_type: "manual",
+      started_at: "2026-10-11T09:00:00.000Z",
+    }], "2026-10-11T10:00:00.000Z");
+    expect(summary).toMatchObject({ totalCount: 1, sampledCount: 1, truncated: false });
   });
 });

@@ -6,6 +6,7 @@ import {
   EXECUTION_QUEUE_STATUSES,
   summarizeExecutionQueueHealth,
   summarizeExpiredExecutionLeases,
+  summarizeStaleRunCandidates,
   type ExecutionQueueHealthRow,
   type ExecutionQueueStatus,
 } from "@/lib/execution-queue-health";
@@ -24,6 +25,18 @@ interface AuditQuery {
   in(column: string, values: string[]): AuditQuery;
   order(column: string, options: { ascending: boolean }): AuditQuery;
   limit(value: number): Promise<RowsResult>;
+}
+interface StaleRunQuery {
+  select(columns: string, options?: { count?: "exact"; head?: boolean }): StaleRunQuery;
+  eq(column: string, value: string): StaleRunQuery;
+  in(column: string, values: string[]): StaleRunQuery;
+  lte(column: string, value: string): StaleRunQuery;
+  order(column: string, options: { ascending: boolean }): StaleRunQuery;
+  limit(value: number): Promise<RowsResult>;
+  then<TResult1 = CountResult, TResult2 = never>(
+    onfulfilled?: ((value: CountResult) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+  ): Promise<TResult1 | TResult2>;
 }
 interface QueueQuery {
   select(columns: string, options?: { count?: "exact"; head?: boolean }): QueueQuery;
@@ -153,7 +166,38 @@ export const Route = createFileRoute("/api/public/cron/execution-queue-health")(
             ),
             sample: findings.slice(0, 20),
           };
-          return Response.json({ ...summary, consistency, expiredLeases: expiredLeaseSummary }, {
+
+          // Manual/scheduled runs are not part of the durable queue lease table.
+          // Report old open runs as review candidates, never repair them from a
+          // health endpoint: external effects may have occurred before a crash.
+          const staleRunCutoff = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+          const fromRuns = () => supabaseAdmin.from("run_logs" as never) as unknown as StaleRunQuery;
+          const staleRunCountResult = await fromRuns()
+            .select("id", { count: "exact", head: true })
+            .eq("status", "running")
+            .in("trigger_type", ["manual", "schedule"])
+            .lte("started_at", staleRunCutoff);
+          if (staleRunCountResult.error) throw new Error("Stale run count unavailable.");
+          const staleRunRowsResult = await fromRuns()
+            .select("id, automation_id, trigger_type, started_at")
+            .eq("status", "running")
+            .in("trigger_type", ["manual", "schedule"])
+            .lte("started_at", staleRunCutoff)
+            .order("started_at", { ascending: true })
+            .limit(100);
+          if (staleRunRowsResult.error) throw new Error("Stale run sample unavailable.");
+          const staleRuns = summarizeStaleRunCandidates(
+            staleRunCountResult.count ?? staleRunRowsResult.data?.length ?? 0,
+            (staleRunRowsResult.data ?? []) as Array<{
+              id: string;
+              automation_id: string;
+              trigger_type: string;
+              started_at: string;
+            }>,
+            staleRunCutoff,
+          );
+
+          return Response.json({ ...summary, consistency, expiredLeases: expiredLeaseSummary, staleRuns }, {
             headers: {
               "Cache-Control": "no-store",
               "X-Content-Type-Options": "nosniff",

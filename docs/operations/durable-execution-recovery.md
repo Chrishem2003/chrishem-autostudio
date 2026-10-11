@@ -130,3 +130,10 @@ This query is diagnostic only. It can include a recently interrupted manual/sche
 
 When incident volume justifies automation, add a dedicated, lease-fenced stale-run reconciliation task with explicit ownership, age thresholds, per-path eligibility, and audit evidence before enabling automatic repair. Do not treat this operator query as an automatic repair mechanism.
 
+
+
+## Stale manual and scheduled run monitoring
+
+The cron-secret-protected `/api/public/cron/execution-queue-health` response includes `staleRuns` for manual and scheduled audit runs that remain `running` beyond the 20-minute recovery threshold. The response separates `totalCount` from the bounded query sample, reports whether the sample is truncated, and includes at most 20 run references for triage.
+
+These are **review candidates, not automatic repairs**. A stale-looking row does not prove the worker stopped or that an external action did not happen. Before a manual recovery, check the current automation lease, worker logs, in-flight step intents, and provider-side state. If the external outcome cannot be established, preserve the uncertain outcome. The health endpoint is read-only and does not alter run, step, or lease state.

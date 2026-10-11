@@ -106,3 +106,35 @@ export function summarizeExpiredExecutionLeases(
     sample,
   };
 }
+
+
+export interface StaleRunCandidateRow {
+  id: string;
+  automation_id: string;
+  trigger_type: string;
+  started_at: string;
+}
+
+/**
+ * Format a bounded stale-run sample without implying that sampled rows are the
+ * full incident count. This is diagnostic only; it never authorizes a repair.
+ */
+export function summarizeStaleRunCandidates(
+  totalCount: number,
+  rows: StaleRunCandidateRow[],
+  cutoff: string,
+) {
+  const safeTotal = Number.isSafeInteger(totalCount) && totalCount >= 0 ? totalCount : rows.length;
+  return {
+    cutoff,
+    totalCount: safeTotal,
+    sampledCount: rows.length,
+    truncated: safeTotal > rows.length,
+    sample: rows.slice(0, 20).map((run) => ({
+      runId: run.id,
+      automationId: run.automation_id,
+      triggerType: run.trigger_type,
+      startedAt: run.started_at,
+    })),
+  };
+}
