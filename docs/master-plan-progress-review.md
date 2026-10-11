@@ -359,6 +359,17 @@ The build remains aligned with the plan's reliability-first sequence: execution 
 2. Add route-level regression coverage for malformed persisted workflows at the real enqueue/run boundaries.
 3. Continue the provider reliability contract: per-adapter capability declarations and only verified idempotency claims; no speculative retries of uncertain effects.
 
+## Manual execution preflight parity — 2026-10-11
+
+**Implemented on the active hardening branch; exact-head CI pending.**
+
+- The authenticated manual flow entry point now uses `preparePersistedExecutionPlan`, the same saved-workflow trust boundary used by scheduled producers and durable queue workers.
+- Manual execution therefore applies structural parsing, graph/linear-chain validation, and whole-flow mapping validation before queue enqueue, run-log creation, step-intent persistence, or provider invocation.
+- Existing manual-run business validation and live connector preflight remain in place; this is shared-boundary parity, not a relaxation of capability checks.
+- The change removes the separate manual parser/planner path, reducing drift between the three execution entry points.
+
+**Acceptance gate:** exact-head typecheck, unit tests, production build, and PostgreSQL queue smoke checks must pass. Route/server-function behavior still needs staging verification; CI does not prove a live Supabase or provider interaction.
+
 ## Worker retry capability boundary — 2026-10-11
 
 **Implemented on the active hardening branch; exact-head CI pending.**
