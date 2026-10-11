@@ -45,6 +45,7 @@ describe("findExecutionAuditConsistencyIssues", () => {
     )).toEqual([
       { issue: "succeeded_job_without_confirmed_successful_run", jobId: "no-run", runId: null },
       { issue: "succeeded_job_without_confirmed_successful_run", jobId: "failed-run", runId: "run-failed" },
+      { issue: "successful_audit_run_without_completion_timestamp", jobId: "unfinished-run", runId: "run-open" },
       { issue: "succeeded_job_without_confirmed_successful_run", jobId: "unfinished-run", runId: "run-open" },
       { issue: "linked_run_missing", jobId: "missing-run", runId: "deleted-run" },
       { issue: "succeeded_job_without_confirmed_successful_run", jobId: "missing-run", runId: "deleted-run" },
@@ -90,6 +91,19 @@ describe("findExecutionAuditConsistencyIssues", () => {
       { issue: "succeeded_job_without_confirmed_successful_run", jobId: "finished-job", runId: "still-running" },
       { issue: "nonrunning_job_with_running_audit_run", jobId: "queued-job", runId: "still-running" },
       { issue: "running_job_with_terminal_audit_run", jobId: "active-job", runId: "failed-run" },
+    ]);
+  });
+
+  test("flags successful audit runs that lack their own completion timestamp", () => {
+    expect(findExecutionAuditConsistencyIssues(
+      [{ id: "failed-job", status: "failed", run_id: "run-without-finished-at" }],
+      [{ id: "run-without-finished-at", status: "succeeded", finished_at: null }],
+    )).toEqual([
+      {
+        issue: "successful_audit_run_without_completion_timestamp",
+        jobId: "failed-job",
+        runId: "run-without-finished-at",
+      },
     ]);
   });
 });
