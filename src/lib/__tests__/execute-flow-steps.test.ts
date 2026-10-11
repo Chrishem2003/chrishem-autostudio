@@ -165,7 +165,7 @@ describe("shared flow-step engine", () => {
     expect(intents).toBe(1);
     expect(result.steps[0].detail).toMatch(/verify external effects/i);
   });
-  it("never executes later steps when an earlier outcome cannot be persisted", async () => {
+  it("halts later steps when an outcome update matches zero rows without a database error", async () => {
     const executedNodes = [];
     const persistedIntents = [];
     const outcomeAttempts = [];
