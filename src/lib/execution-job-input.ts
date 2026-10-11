@@ -81,7 +81,11 @@ export function validateExecutionJobPayload(value: unknown): ExecutionJobPayload
   }
 
   try {
-    return { success: true, payload: JSON.parse(serialized) as Json };
+    const normalized: unknown = JSON.parse(serialized);
+    if (!normalized || typeof normalized !== "object" || Array.isArray(normalized)) {
+      return { success: false, error: "Execution job payload must be a JSON object." };
+    }
+    return { success: true, payload: normalized as Json };
   } catch {
     return { success: false, error: "Execution job payload must be valid JSON." };
   }

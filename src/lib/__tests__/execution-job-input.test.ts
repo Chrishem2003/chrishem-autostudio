@@ -84,6 +84,21 @@ describe("durable execution job payload validation", () => {
     expect(result.success).toBe(false);
   });
 
+  it("rejects objects that serialize into a non-object JSON value", () => {
+    expect(validateExecutionJobPayload(new Date("2030-01-01T00:00:00Z"))).toEqual({
+      success: false,
+      error: "Execution job payload must be a JSON object.",
+    });
+    expect(validateExecutionJobPayload({ toJSON: () => null })).toEqual({
+      success: false,
+      error: "Execution job payload must be a JSON object.",
+    });
+    expect(validateExecutionJobPayload({ toJSON: () => ["unexpected"] })).toEqual({
+      success: false,
+      error: "Execution job payload must be a JSON object.",
+    });
+  });
+
   it("rejects cyclic payloads rather than throwing an opaque serialization error", () => {
     const cyclic = {};
     cyclic.self = cyclic;

@@ -73,4 +73,4 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - The enqueue adapter validates the database RPC response as untrusted data: the returned job identifier must be non-empty and bounded, and status must be one of the database-supported queue states.
 - Regression tests cover malformed rows, missing fields, unknown status values, and valid statuses.
 - Exact-head CI passed on commit `347e4123336cc12c3fefc861bf4ea37227261093`: typecheck, unit tests, production build and the disposable PostgreSQL queue migration/concurrency smoke test. See [CI run 38144857528](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38144857528).
-- The next small hardening step bounds the optional enqueue timestamp string before date parsing. This remains application-level validation; database/provider staging gates remain open.
+- Optional enqueue timestamps are now bounded to 100 characters before date parsing, with a regression test for oversized input. This remains application-level validation; database/provider staging gates remain open.
