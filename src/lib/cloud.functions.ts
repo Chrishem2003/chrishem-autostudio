@@ -231,6 +231,16 @@ export const listVersions = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ automationId: z.string().uuid() }).parse(input))
   .handler(async ({ context, data }): Promise<CloudVersion[]> => {
+    // Verify ownership before reading version history; IDs are identifiers, not authorization.
+    const { data: ownedAutomation, error: ownerError } = await context.supabase
+      .from("automations")
+      .select("id")
+      .eq("id", data.automationId)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (ownerError) throw new Error("Could not verify automation ownership.");
+    if (!ownedAutomation) throw new Error("Automation not found.");
+
     const { data: rows, error } = await context.supabase
       .from("automation_versions")
       .select("id, version_number, change_summary, created_at, flow_json")
@@ -257,6 +267,16 @@ export const restoreVersion = createServerFn({ method: "POST" })
     z.object({ automationId: z.string().uuid(), versionNumber: z.number().int().positive() }).parse(input),
   )
   .handler(async ({ context, data }) => {
+    // Authorize the parent automation before reading any historical snapshot.
+    const { data: ownedAutomation, error: ownerError } = await context.supabase
+      .from("automations")
+      .select("id")
+      .eq("id", data.automationId)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (ownerError) throw new Error("Could not verify automation ownership.");
+    if (!ownedAutomation) throw new Error("Automation not found.");
+
     const { data: snapshot, error } = await context.supabase
       .from("automation_versions")
       .select("flow_json")
@@ -317,11 +337,22 @@ export interface CloudRun {
 export const listRuns = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<CloudRun[]> => {
+    // Scope history through automations owned by the authenticated user instead
+    // of relying on run-log row policies as the only privacy boundary.
+    const { data: ownedAutomations, error: ownerError } = await context.supabase
+      .from("automations")
+      .select("id")
+      .eq("user_id", context.userId);
+    if (ownerError) throw new Error("Could not load your automation access scope.");
+    const automationIds = (ownedAutomations ?? []).map((automation) => automation.id);
+    if (automationIds.length === 0) return [];
+
     const { data, error } = await context.supabase
       .from("run_logs")
       .select(
         "id, automation_id, status, trigger_type, is_dry_run, started_at, duration_ms, error_summary, run_step_logs(id, node_label, status, outcome_state, duration_ms, error_detail, output_snapshot, step_index)",
       )
+      .in("automation_id", automationIds)
       .order("started_at", { ascending: false })
       .limit(60);
     if (error) throw new Error(error.message);
