@@ -237,6 +237,7 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
             // Keep run history reconcilable when an unexpected error occurs after
             // the run row exists. In-flight step intents stay explicitly uncertain.
             if (activeRunId) {
+              try {
               const finishedAt = new Date().toISOString();
               const { error: stepRecoveryError } = await supabaseAdmin
                 .from("run_step_logs")
@@ -275,6 +276,16 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
                   runId: activeRunId,
                   stepRecoveryFailed: Boolean(stepRecoveryError),
                   runRecoveryFailed: Boolean(runRecoveryError),
+                });
+              }
+              } catch (recoveryError) {
+                // Recovery is best-effort: a database transport exception must not
+                // replace the original execution error or imply the external effect
+                // is safe to retry. Leave the job uncertain for lease-based review.
+                console.error("[AutoStudio queue worker] Interrupted run recovery threw.", {
+                  jobId: job.id,
+                  runId: activeRunId,
+                  errorName: recoveryError instanceof Error ? recoveryError.name : "UnknownError",
                 });
               }
             }
