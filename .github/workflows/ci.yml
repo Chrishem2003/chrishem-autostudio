@@ -99,6 +99,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261011130000_atomic_stale_run_reconciliation.sql
       - name: Apply success/audit consistency guard
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261011140000_execution_success_requires_audit.sql
+      - name: Apply one-to-one audit-run association guard
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261011170000_execution_job_run_association_guard.sql
       - name: Verify idempotency, lease fencing and RPC permissions
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/execution_jobs_smoke.sql
       - name: Verify concurrent workers claim distinct jobs
