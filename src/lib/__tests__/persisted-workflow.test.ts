@@ -134,6 +134,31 @@ describe("persisted workflow runtime validation", () => {
     }).success).toBe(false);
   });
 
+  it("rejects accessors that change or throw between serialization and schema validation", () => {
+    let reads = 0;
+    const unstable = { ...valid };
+    Object.defineProperty(unstable, "name", {
+      enumerable: true,
+      get() {
+        reads += 1;
+        if (reads === 1) return "Example";
+        throw new Error("untrusted getter must not escape");
+      },
+    });
+    expect(() => parsePersistedWorkflow(unstable)).not.toThrow();
+    expect(parsePersistedWorkflow(unstable).success).toBe(false);
+  });
+
+  it("rejects proxy traps that throw during schema validation", () => {
+    const hostile = new Proxy({ ...valid }, {
+      get(target, key, receiver) {
+        if (key === "name") throw new Error("untrusted proxy trap");
+        return Reflect.get(target, key, receiver);
+      },
+    });
+    expect(parsePersistedWorkflow(hostile).success).toBe(false);
+  });
+
   it("rejects circular and non-JSON workflow values without throwing", () => {
     const circular: Record<string, unknown> = { ...valid };
     circular.self = circular;

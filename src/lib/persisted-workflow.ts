@@ -43,18 +43,26 @@ export function parsePersistedWorkflow(value: unknown):
     return { success: false };
   }
 
-  const parsed = persistedWorkflowShape.safeParse(value);
-  if (!parsed.success) return { success: false };
+  // Accessors and proxies are not expected in database JSON, but this function
+  // is also a trust boundary for tests, adapters, and future callers. A getter
+  // may return one value during serialization and throw/change during parsing.
+  // Any such runtime behavior must reject the workflow rather than escape.
+  try {
+    const parsed = persistedWorkflowShape.safeParse(value);
+    if (!parsed.success) return { success: false };
 
-  // Per-field limits alone still allow a large configuration payload across
-  // many nodes. Bound the aggregate before graph planning, logging, or enqueueing.
-  let totalConfigChars = 0;
-  for (const node of parsed.data.nodes) {
-    for (const [key, configValue] of Object.entries(node.config)) {
-      totalConfigChars += key.length + configValue.length;
-      if (totalConfigChars > MAX_TOTAL_CONFIG_CHARS) return { success: false };
+    // Per-field limits alone still allow a large configuration payload across
+    // many nodes. Bound the aggregate before graph planning, logging, or enqueueing.
+    let totalConfigChars = 0;
+    for (const node of parsed.data.nodes) {
+      for (const [key, configValue] of Object.entries(node.config)) {
+        totalConfigChars += key.length + configValue.length;
+        if (totalConfigChars > MAX_TOTAL_CONFIG_CHARS) return { success: false };
+      }
     }
-  }
 
-  return { success: true, data: parsed.data };
+    return { success: true, data: parsed.data };
+  } catch {
+    return { success: false };
+  }
 }
