@@ -48,6 +48,21 @@ export type ProcessOneJobResult =
   | { outcome: "finalization_rejected"; jobId: string };
 
 /**
+ * Queue payloads are normalized JSON, but nested objects would otherwise remain
+ * mutable when the job envelope is frozen. Freeze the complete payload graph
+ * before handing it to an executor so the request being executed cannot drift.
+ */
+function freezeExecutionPayload(value: unknown, seen = new WeakSet<object>()): unknown {
+  if (!value || typeof value !== "object") return value;
+  if (seen.has(value)) return value;
+  seen.add(value);
+  for (const child of Object.values(value as Record<string, unknown>)) {
+    freezeExecutionPayload(child, seen);
+  }
+  return Object.freeze(value);
+}
+
+/**
  * Processes at most one claimed job. Database atomicity and lease fencing are
  * enforced by the RPC adapter; this function never assumes it owns a lease
  * after heartbeat reports false. An exception from an executor is uncertain.
@@ -63,7 +78,10 @@ export async function processOneExecutionJob(
   // The executor receives the job object. Snapshot and freeze its identity so
   // an adapter cannot mutate the job ID or fencing token before heartbeat or
   // finalization; those RPCs must refer to the exact claim originally returned.
-  const job: ClaimedExecutionJob = Object.freeze({ ...claimedJob });
+  const job: ClaimedExecutionJob = Object.freeze({
+    ...claimedJob,
+    payload: freezeExecutionPayload(claimedJob.payload),
+  });
 
   let leaseLost = false;
   const heartbeat = async (): Promise<boolean> => {

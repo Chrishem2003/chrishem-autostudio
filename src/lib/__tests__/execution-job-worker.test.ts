@@ -38,6 +38,10 @@ describe("processOneExecutionJob", () => {
   test("does not let executor mutation change the claimed identity used for heartbeat/finalization", async () => {
     const seen = { heartbeat: [], finish: [] };
     const { deps, calls } = dependencies({
+      claim: async () => ({
+        ...job,
+        payload: { request: { recipient: "approved@example.test" } },
+      }),
       heartbeat: async (claimed) => {
         seen.heartbeat.push({ id: claimed.id, workerToken: claimed.workerToken });
         return true;
@@ -45,6 +49,8 @@ describe("processOneExecutionJob", () => {
       execute: async (claimed, context) => {
         expect(Reflect.set(claimed, "id", "spoofed-job")).toBe(false);
         expect(Reflect.set(claimed, "workerToken", "spoofed-token")).toBe(false);
+        expect(Reflect.set((claimed.payload as any).request, "recipient", "attacker@example.test")).toBe(false);
+        expect((claimed.payload as any).request.recipient).toBe("approved@example.test");
         await context.heartbeat();
         return { status: "succeeded", sideEffectCertainty: "effect_confirmed" };
       },

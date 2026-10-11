@@ -97,7 +97,18 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Exact-head CI is required for this change. Staging provider-idempotency, interruption-recovery, concurrency, and deployment gates remain open; do not enable the durable queue or outbound transport based on unit tests alone.
 
 
+## Immutable execution request snapshot — 2026-10-11
+
+- The worker now recursively freezes the normalized JSON payload as well as the top-level claimed-job envelope before passing it to an executor.
+- Regression coverage attempts to rewrite a nested recipient field and verifies the original request value remains intact, alongside the job ID and lease token.
+- This prevents adapter-side mutation of the in-memory request from changing what downstream asynchronous work reads. Exact-head CI is required; external staging and provider-effect gates remain open.
+
 ## Claimed-job identity immutability — 2026-10-11
+
+- The worker now snapshots and freezes the claimed job envelope before exposing it to the executor. This protects the job ID and lease fencing token used for heartbeat/finalization from accidental or hostile mutation by execution adapters.
+- Regression coverage attempts to mutate both identifiers and verifies heartbeat and finalization still use the original claimed identity.
+- Exact-head CI is required. This is defense in depth and does not replace staging validation of provider idempotency, recovery, concurrency, authentication, or migrations.
+
 
 - The worker now snapshots and freezes the claimed job envelope before exposing it to the executor. This protects the job ID and lease fencing token used for heartbeat/finalization from accidental or hostile mutation by execution adapters.
 - Regression coverage attempts to mutate both identifiers and verifies heartbeat and finalization still use the original claimed identity.
