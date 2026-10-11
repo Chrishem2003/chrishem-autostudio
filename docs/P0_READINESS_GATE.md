@@ -58,3 +58,11 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - The verified diagnostics work distinguishes database totals, inspected rows, and returned samples; exposes queue-count mismatch and bounded finding-scan/sample truncation; and keeps health checks read-only and secret-protected.
 - This is an exact-head CI checkpoint, not P0 exit approval. The checklist below remains open for staging Supabase migration/authentication, provider idempotency and duplicate-effect verification, interrupted-worker recovery, concurrent-worker rehearsal, and final release evidence.
 - Keep `AUTOSTUDIO_DURABLE_QUEUE_ENABLED=false` and `AUTOSTUDIO_OUTBOUND_TRANSPORT_READY` unset/false until the non-production staging gates pass.
+
+
+## Retry-policy capability boundary — 2026-10-11
+
+- Removed provider-idempotency claims from the retry policy's typed input contract. The pure retry decision helper no longer permits an uncertain external outcome to be requeued merely because a caller supplies a boolean and a non-empty key.
+- Uncertain effects now always enter `needs_review` until a trusted, reviewed adapter capability is explicitly integrated. Malformed side-effect certainty also fails closed to manual review rather than falling through to a retry path.
+- Regression tests cover legacy caller-supplied idempotency claims and malformed certainty. This is deliberately conservative: no provider-specific automatic retry is enabled by this change.
+- Exact-head CI and the PostgreSQL smoke test are required for this batch. P0 still requires real staging verification of provider behavior, interruption recovery, concurrency, authentication, and migration rollout; keep durable queue and outbound transport disabled until acceptance evidence is recorded.

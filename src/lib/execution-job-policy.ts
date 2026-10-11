@@ -18,8 +18,6 @@ export interface RetryPolicyInput {
   sideEffectCertainty: SideEffectCertainty;
   attempts: number;
   maxAttempts: number;
-  providerSupportsIdempotency?: boolean;
-  stableIdempotencyKey?: string | null;
 }
 
 export type RetryDecision =
@@ -29,10 +27,23 @@ export type RetryDecision =
 
 /**
  * Pure guard for worker retry decisions. Callers must not treat a timeout as
- * proof that an action did not happen. Provider idempotency is accepted only
- * when the provider contract is verified and the same stable key is reused.
+ * proof that an action did not happen. Uncertain outcomes always require
+ * manual review until a trusted, reviewed adapter capability is explicitly
+ * integrated into this policy; caller-provided claims are not sufficient.
  */
 export function decideExecutionRetry(input: RetryPolicyInput): RetryDecision {
+  if (!input || typeof input !== "object" || ![
+    "not_attempted",
+    "confirmed_no_effect",
+    "uncertain",
+    "effect_confirmed",
+  ].includes(input.sideEffectCertainty)) {
+    return {
+      status: "needs_review",
+      retryAllowed: false,
+      reason: "Side-effect certainty is invalid; verify the external outcome before retrying.",
+    };
+  }
   if (!Number.isInteger(input.attempts) || input.attempts < 1) {
     throw new Error("attempts must be a positive integer");
   }
@@ -44,18 +55,13 @@ export function decideExecutionRetry(input: RetryPolicyInput): RetryDecision {
   }
 
   if (input.sideEffectCertainty === "uncertain") {
-    const idempotencyVerified =
-      input.providerSupportsIdempotency === true &&
-      typeof input.stableIdempotencyKey === "string" &&
-      input.stableIdempotencyKey.trim().length > 0;
-    if (!idempotencyVerified) {
-      return {
-        status: "needs_review",
-        retryAllowed: false,
-        reason: "The side effect may already have occurred; verify it before retrying.",
-      };
-    }
-  } else if (input.sideEffectCertainty === "effect_confirmed") {
+    return {
+      status: "needs_review",
+      retryAllowed: false,
+      reason: "The side effect may already have occurred; verify it before retrying.",
+    };
+  }
+  if (input.sideEffectCertainty === "effect_confirmed") {
     return {
       status: "needs_review",
       retryAllowed: false,
@@ -74,9 +80,6 @@ export function decideExecutionRetry(input: RetryPolicyInput): RetryDecision {
   return {
     status: "queued",
     retryAllowed: true,
-    reason:
-      input.sideEffectCertainty === "uncertain"
-        ? "Retry is permitted only under the verified provider idempotency contract."
-        : "No external side effect occurred, so retry is safe.",
+    reason: "No external side effect occurred, so retry is safe.",
   };
 }

@@ -29,24 +29,26 @@ describe("decideExecutionRetry", () => {
     expect(decision.retryAllowed).toBe(false);
   });
 
-  test("allows uncertain retry only with verified provider idempotency and stable key", () => {
-    expect(decideExecutionRetry({
+  test("never retries uncertain effects based on caller-provided idempotency claims", () => {
+    const decision = decideExecutionRetry({
       sideEffectCertainty: "uncertain",
       attempts: 1,
       maxAttempts: 3,
       providerSupportsIdempotency: true,
       stableIdempotencyKey: "automation-123:job-456",
-    }).status).toBe("queued");
+    } as any);
+    expect(decision.status).toBe("needs_review");
+    expect(decision.retryAllowed).toBe(false);
   });
 
-  test("does not accept a missing key as idempotency protection", () => {
-    expect(decideExecutionRetry({
-      sideEffectCertainty: "uncertain",
+  test("fails closed when side-effect certainty is malformed", () => {
+    const decision = decideExecutionRetry({
+      sideEffectCertainty: "sometimes" as any,
       attempts: 1,
       maxAttempts: 3,
-      providerSupportsIdempotency: true,
-      stableIdempotencyKey: "  ",
-    }).status).toBe("needs_review");
+    });
+    expect(decision.status).toBe("needs_review");
+    expect(decision.retryAllowed).toBe(false);
   });
 
   test("does not repeat an already confirmed side effect", () => {
