@@ -316,24 +316,28 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
                     errorCode: stepRecoveryError.code,
                   });
                 }
-                const { data: recoveredRun, error: auditError } = await supabaseAdmin
-                  .from("run_logs")
-                  .update({
-                    status: "failed",
-                    finished_at: failedAt,
-                    duration_ms: Date.now() - started,
-                    error_summary: "The scheduled run stopped unexpectedly. Verify external effects before retrying.",
-                  })
-                  .eq("id", activeRunId)
-                  .eq("status", "running")
-                  .select("id")
-                  .maybeSingle();
-                if (auditError || !recoveredRun) {
-                  console.error("[AutoStudio scheduler] Could not mark interrupted run failed.", {
-                    automationId: row.id,
-                    runId: activeRunId,
-                    errorCode: auditError?.code ?? "NO_ROW_UPDATED",
-                  });
+                // Do not finalize the parent run until all in-flight step intents
+                // have been reconciled. The stale-run recovery pass can retry safely.
+                if (!stepRecoveryError) {
+                  const { data: recoveredRun, error: auditError } = await supabaseAdmin
+                    .from("run_logs")
+                    .update({
+                      status: "failed",
+                      finished_at: failedAt,
+                      duration_ms: Math.max(0, Date.now() - started),
+                      error_summary: "The scheduled run stopped unexpectedly. Verify external effects before retrying.",
+                    })
+                    .eq("id", activeRunId)
+                    .eq("status", "running")
+                    .select("id")
+                    .maybeSingle();
+                  if (auditError || !recoveredRun) {
+                    console.error("[AutoStudio scheduler] Could not mark interrupted run failed.", {
+                      automationId: row.id,
+                      runId: activeRunId,
+                      errorCode: auditError?.code ?? "NO_ROW_UPDATED",
+                    });
+                  }
                 }
               } catch {
                 console.error("[AutoStudio scheduler] Failed to record unexpected run failure.", {
