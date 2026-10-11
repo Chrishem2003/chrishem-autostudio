@@ -194,3 +194,10 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Added a forward-only migration and a disposable PostgreSQL smoke regression asserting the exact validation error.
 - CI applies the new migration before the queue smoke suite. Verify green CI on the exact latest branch head before treating this batch as accepted.
 - This is code/database-smoke evidence only. Live staging, provider-side idempotency, interruption recovery, authentication and deployment gates remain open; keep the durable queue and outbound transport disabled.
+
+
+## Enqueue NULL-contract hardening — 2026-10-11
+
+- Added a forward migration that explicitly rejects NULL trigger types and retry limits before SQL three-valued logic can bypass normal comparisons.
+- Added disposable PostgreSQL regression tests for both NULL cases and wired the migration into CI.
+- Require both CI jobs to pass on the exact latest commit. This does not replace live staging acceptance; queue workers and outbound transport remain disabled until all P0 gates are closed.
