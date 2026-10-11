@@ -15,7 +15,8 @@ create table if not exists public.run_logs (
   started_at timestamptz not null default now(),
   finished_at timestamptz,
   duration_ms integer,
-  error_summary text
+  error_summary text,
+  trigger_type text not null default 'manual'
 );
 create table if not exists public.run_step_logs (
   id uuid primary key,

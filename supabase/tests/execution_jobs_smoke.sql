@@ -146,6 +146,46 @@ begin
     raise exception 'Expired queue lease did not preserve uncertain step outcome for review';
   end if;
 
+
+  -- Stale manual/scheduled reconciliation is atomic and lease-aware.
+  insert into public.scheduled_run_locks (automation_id, lock_token, locked_until)
+  values ('00000000-0000-4000-8000-000000000002',
+          '00000000-0000-4000-8000-000000000099', now() + interval '5 minutes')
+  on conflict (automation_id) do update
+    set lock_token = excluded.lock_token, locked_until = excluded.locked_until;
+  insert into public.run_logs (id, automation_id, status, started_at, trigger_type)
+  values ('00000000-0000-4000-8000-000000000020','00000000-0000-4000-8000-000000000002','running',now()-interval '30 minutes','manual'),
+         ('00000000-0000-4000-8000-000000000022','00000000-0000-4000-8000-000000000002','running',now()-interval '30 minutes','schedule'),
+         ('00000000-0000-4000-8000-000000000024','00000000-0000-4000-8000-000000000002','running',now()-interval '2 minutes','manual');
+  insert into public.run_step_logs (id, run_id, status, outcome_state)
+  values ('00000000-0000-4000-8000-000000000021','00000000-0000-4000-8000-000000000020','running','uncertain'),
+         ('00000000-0000-4000-8000-000000000023','00000000-0000-4000-8000-000000000022','running','uncertain');
+  if public.reconcile_stale_execution_run('00000000-0000-4000-8000-000000000020', null) <> 'active_lease' then
+    raise exception 'Stale-run reconciliation ignored an active automation lease';
+  end if;
+  if public.reconcile_stale_execution_run('00000000-0000-4000-8000-000000000024', null) <> 'not_stale' then
+    raise exception 'Stale-run reconciliation accepted a run inside the safety window';
+  end if;
+  if public.reconcile_stale_execution_run('00000000-0000-4000-8000-000000000020','00000000-0000-4000-8000-000000000099') <> 'reconciled' then
+    raise exception 'Lease owner could not atomically reconcile a stale manual run';
+  end if;
+  if (select status from public.run_logs where id = '00000000-0000-4000-8000-000000000020') <> 'failed'
+     or (select outcome_state from public.run_step_logs where id = '00000000-0000-4000-8000-000000000021') <> 'uncertain' then
+    raise exception 'Stale-run reconciliation failed to preserve uncertain outcomes';
+  end if;
+  if public.reconcile_stale_execution_run('00000000-0000-4000-8000-000000000022', null) <> 'active_lease' then
+    raise exception 'Scheduled stale-run reconciliation ignored the active lease';
+  end if;
+  update public.scheduled_run_locks set locked_until = now() - interval '1 second'
+   where automation_id = '00000000-0000-4000-8000-000000000002';
+  if public.reconcile_stale_execution_run('00000000-0000-4000-8000-000000000022', null) <> 'reconciled' then
+    raise exception 'Expired lease did not permit safe stale-run reconciliation';
+  end if;
+  if has_function_privilege('anon', 'public.reconcile_stale_execution_run(uuid, uuid)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.reconcile_stale_execution_run(uuid, uuid)', 'EXECUTE') then
+    raise exception 'Untrusted roles can invoke stale-run reconciliation RPC';
+  end if;
+
   select * into dead_job
     from public.enqueue_execution_job(
       '00000000-0000-4000-8000-000000000002',
