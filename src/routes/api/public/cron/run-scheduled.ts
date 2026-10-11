@@ -27,7 +27,8 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
         const staleBefore = new Date(Date.now() - 20 * 60 * 1000).toISOString();
         const { data: staleRuns, error: staleQueryError } = await supabaseAdmin
           .from("run_logs").select("id").eq("status", "running")
-          .in("trigger_type", ["manual", "schedule"]).lt("started_at", staleBefore).limit(100);
+          .in("trigger_type", ["manual", "schedule"]).lt("started_at", staleBefore)
+          .order("started_at", { ascending: true }).limit(100);
         if (staleQueryError) {
           console.error("[AutoStudio scheduler] Could not inspect stale runs; refusing to schedule new work.", { errorCode: staleQueryError.code });
           return new Response("stale-run reconciliation failed", { status: 500 });
