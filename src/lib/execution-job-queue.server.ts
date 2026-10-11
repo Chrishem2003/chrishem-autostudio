@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import type { Json } from "@/integrations/supabase/types";
-import { validateExecutionJobPayload } from "@/lib/execution-job-input";
+import { validateExecutionJobEnqueueMetadata, validateExecutionJobPayload } from "@/lib/execution-job-input";
 import { parseClaimedExecutionJob } from "@/lib/execution-job-claim";
 import type { ExecutionJobStatus } from "@/lib/execution-job-policy";
 import type {
@@ -21,28 +21,20 @@ export interface EnqueueExecutionJobInput {
 
 /** Server-only enqueue adapter. Duplicate keys return the existing queue row. */
 export async function enqueueExecutionJob(input: EnqueueExecutionJobInput): Promise<{ id: string; status: string }> {
-  if (!input.automationId.trim()) throw new Error("An automation ID is required.");
-  if (typeof input.idempotencyKey !== "string" || !input.idempotencyKey.trim() || input.idempotencyKey.length > 200) {
-    throw new Error("Idempotency key must contain between 1 and 200 characters.");
-  }
+  const metadata = validateExecutionJobEnqueueMetadata(input);
+  if (!metadata.success) throw new Error(metadata.error);
+  const { automationId, triggerType, idempotencyKey, requestedBy, maxAttempts, availableAt } = metadata.value;
   const payloadValidation = validateExecutionJobPayload(input.payload);
   if (!payloadValidation.success) throw new Error(payloadValidation.error);
   const payload = payloadValidation.payload;
-  const maxAttempts = input.maxAttempts ?? 3;
-  if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 10) {
-    throw new Error("Maximum attempts must be an integer from 1 to 10.");
-  }
-  if (input.availableAt && Number.isNaN(Date.parse(input.availableAt))) {
-    throw new Error("Available-at timestamp must be a valid date.");
-  }
   const { data, error } = await supabaseAdmin.rpc("enqueue_execution_job", {
-    _automation_id: input.automationId,
-    _trigger_type: input.triggerType,
-    _idempotency_key: input.idempotencyKey,
+    _automation_id: automationId,
+    _trigger_type: triggerType,
+    _idempotency_key: idempotencyKey,
     _payload: payload,
-    _requested_by: input.requestedBy ?? null,
+    _requested_by: requestedBy ?? null,
     _max_attempts: maxAttempts,
-    _available_at: input.availableAt ?? new Date().toISOString(),
+    _available_at: availableAt ?? new Date().toISOString(),
   });
   if (error) throw new Error("Unable to enqueue execution job.");
   const row = Array.isArray(data) ? data[0] : null;

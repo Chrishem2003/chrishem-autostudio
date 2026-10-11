@@ -2,6 +2,49 @@
 import { describe, expect, it } from "bun:test";
 import { MAX_EXECUTION_JOB_PAYLOAD_BYTES, validateExecutionJobPayload } from "../execution-job-input";
 
+describe("durable execution job enqueue metadata validation", () => {
+  const valid = () => ({ automationId: "automation-1", triggerType: "manual", idempotencyKey: "request-1" });
+
+  it("normalizes defaults and accepts supported triggers", () => {
+    for (const triggerType of ["manual", "scheduled", "webhook"]) {
+      const result = validateExecutionJobEnqueueMetadata({ ...valid(), triggerType });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.value.maxAttempts).toBe(3);
+    }
+  });
+
+  it("rejects malformed runtime metadata before the RPC boundary", () => {
+    const invalidRequests = [
+      null,
+      { ...valid(), automationId: 12 },
+      { ...valid(), triggerType: "unknown" },
+      { ...valid(), idempotencyKey: " " },
+      { ...valid(), idempotencyKey: "x".repeat(201) },
+      { ...valid(), requestedBy: { user: "spoofed" } },
+      { ...valid(), maxAttempts: 0 },
+      { ...valid(), maxAttempts: 11 },
+      { ...valid(), availableAt: { toString: () => "2030-01-01" } },
+      { ...valid(), availableAt: "not-a-date" },
+    ];
+    for (const request of invalidRequests) {
+      expect(validateExecutionJobEnqueueMetadata(request).success).toBe(false);
+    }
+  });
+
+  it("preserves optional user and schedule metadata when valid", () => {
+    const result = validateExecutionJobEnqueueMetadata({
+      ...valid(), requestedBy: "user-1", maxAttempts: 5, availableAt: "2030-01-01T00:00:00Z",
+    });
+    expect(result).toEqual({
+      success: true,
+      value: {
+        automationId: "automation-1", triggerType: "manual", idempotencyKey: "request-1",
+        requestedBy: "user-1", maxAttempts: 5, availableAt: "2030-01-01T00:00:00Z",
+      },
+    });
+  });
+});
+
 describe("durable execution job payload validation", () => {
   it("defaults an omitted payload to an empty object", () => {
     expect(validateExecutionJobPayload(undefined)).toEqual({ success: true, payload: {} });
