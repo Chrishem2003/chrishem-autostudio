@@ -14,7 +14,7 @@ export interface AuditConsistencyRun {
 
 export type AuditConsistencyIssue =
   | "running_job_without_audit_run"
-  | "terminal_job_with_running_audit_run"
+  | "nonrunning_job_with_running_audit_run"
   | "running_job_with_terminal_audit_run"
   | "review_job_with_running_audit_run"
   | "linked_run_missing";
@@ -52,10 +52,10 @@ export function findExecutionAuditConsistencyIssues(
     if (job.status === "needs_review" && run.status === "running") {
       findings.push({ issue: "review_job_with_running_audit_run", jobId: job.id, runId: run.id });
     } else if (
-      ["queued", "succeeded", "failed", "dead_letter"].includes(job.status) &&
+      ["succeeded", "failed", "dead_letter"].includes(job.status) &&
       run.status === "running"
     ) {
-      findings.push({ issue: "terminal_job_with_running_audit_run", jobId: job.id, runId: run.id });
+      findings.push({ issue: "nonrunning_job_with_running_audit_run", jobId: job.id, runId: run.id });
     } else if (
       job.status === "running" &&
       ["succeeded", "failed"].includes(run.status)
