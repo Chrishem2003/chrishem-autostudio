@@ -304,6 +304,23 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
       if (activeRunId) {
         try {
           const failedAt = new Date().toISOString();
+          const { error: stepRecoveryError } = await context.supabase
+            .from("run_step_logs")
+            .update({
+              status: "failed",
+              outcome_state: "uncertain",
+              error_detail: "The manual worker stopped before confirming this step. Verify external effects before retrying.",
+              output_snapshot: { recoveryHint: "Interrupted manual run; external step outcome is uncertain. Verify before retry." },
+            })
+            .eq("run_id", activeRunId)
+            .eq("status", "running");
+          if (stepRecoveryError) {
+            console.error("[AutoStudio executor] Could not recover interrupted step intents.", {
+              automationId: row.id,
+              runId: activeRunId,
+              errorCode: stepRecoveryError.code,
+            });
+          }
           const { data: recoveredRun, error: auditError } = await context.supabase
             .from("run_logs")
             .update({
