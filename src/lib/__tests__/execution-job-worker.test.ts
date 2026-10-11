@@ -67,6 +67,49 @@ describe("processOneExecutionJob", () => {
     expect(seen.finish).toEqual([{ id: "job-1", workerToken: "token-1" }]);
   });
 
+  test("does not execute when claimed retry metadata violates the queue contract", async () => {
+    for (const invalidCounters of [
+      { attempts: 0, maxAttempts: 3 },
+      { attempts: 1, maxAttempts: 11 },
+      { attempts: 4, maxAttempts: 3 },
+      { attempts: 1.5, maxAttempts: 3 },
+    ]) {
+      let executeCalls = 0;
+      const { deps, calls } = dependencies({
+        claim: async () => ({ ...job, ...invalidCounters }),
+        execute: async () => {
+          executeCalls++;
+          return { status: "succeeded", sideEffectCertainty: "effect_confirmed" };
+        },
+      });
+
+      const result = await processOneExecutionJob(deps);
+      expect(result).toEqual({ outcome: "finished", jobId: "job-1", status: "needs_review" });
+      expect(executeCalls).toBe(0);
+      expect(calls.finished).toHaveLength(1);
+      expect(calls.finished[0].status).toBe("needs_review");
+      expect(calls.finished[0].retryAt).toBeNull();
+    }
+  });
+
+  test("reports rejected finalization when invalid claim metadata cannot be recorded", async () => {
+    let executeCalls = 0;
+    const { deps } = dependencies({
+      claim: async () => ({ ...job, attempts: 0 }),
+      execute: async () => {
+        executeCalls++;
+        return { status: "succeeded", sideEffectCertainty: "effect_confirmed" };
+      },
+      finish: async () => false,
+    });
+
+    expect(await processOneExecutionJob(deps)).toEqual({
+      outcome: "finalization_rejected",
+      jobId: "job-1",
+    });
+    expect(executeCalls).toBe(0);
+  });
+
   test("finalizes successful execution", async () => {
     const { deps, calls } = dependencies();
     const result = await processOneExecutionJob(deps);
