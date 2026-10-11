@@ -949,5 +949,51 @@ begin
 end
 $$;
 
+-- Privilege contract: every sensitive queue/lease RPC is service-role-only.
+-- Keep this as a migration smoke assertion so a later CREATE OR REPLACE cannot
+-- silently restore PostgreSQL's default PUBLIC EXECUTE grant.
+do $
+declare
+  signature text;
+  protected_signatures text[] := array[
+    'public.enqueue_execution_job(uuid, text, text, jsonb, uuid, integer, timestamptz)',
+    'public.claim_execution_job(integer)',
+    'public.heartbeat_execution_job(uuid, uuid, integer)',
+    'public.finish_execution_job(uuid, uuid, text, text, timestamptz)',
+    'public.attach_execution_job_run(uuid, uuid, uuid)',
+    'public.reconcile_stale_execution_run(uuid, uuid)',
+    'public.claim_scheduled_automation(uuid, integer)',
+    'public.release_scheduled_automation(uuid, uuid, timestamptz)',
+    'public.claim_manual_automation(uuid, integer)',
+    'public.release_manual_automation(uuid, uuid)',
+    'public.heartbeat_manual_automation(uuid, uuid, integer)'
+  ];
+begin
+  foreach signature in array protected_signatures loop
+    if has_function_privilege('anon', signature, 'EXECUTE')
+       or has_function_privilege('authenticated', signature, 'EXECUTE')
+       or has_function_privilege('public', signature, 'EXECUTE') then
+      raise exception 'Untrusted role can execute protected RPC: %', signature;
+    end if;
+    if not has_function_privilege('service_role', signature, 'EXECUTE') then
+      raise exception 'Service role cannot execute protected RPC: %', signature;
+    end if;
+  end loop;
+
+  if has_table_privilege('anon', 'public.execution_jobs', 'SELECT')
+     or has_table_privilege('anon', 'public.execution_jobs', 'INSERT')
+     or has_table_privilege('authenticated', 'public.execution_jobs', 'UPDATE')
+     or has_table_privilege('authenticated', 'public.scheduled_run_locks', 'DELETE') then
+    raise exception 'Untrusted role has direct access to queue or lease tables';
+  end if;
+
+  if not has_table_privilege('service_role', 'public.execution_jobs', 'SELECT')
+     or not has_table_privilege('service_role', 'public.execution_jobs', 'UPDATE')
+     or not has_table_privilege('service_role', 'public.scheduled_run_locks', 'DELETE') then
+    raise exception 'Service role is missing required queue or lease table privileges';
+  end if;
+end
+$;
+
 select status, attempts from public.execution_jobs
 where idempotency_key = 'smoke-idempotency-key';
