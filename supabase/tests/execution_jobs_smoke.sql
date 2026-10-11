@@ -18,6 +18,8 @@ declare
   expired_job public.execution_jobs%rowtype;
   dead_job public.execution_jobs%rowtype;
   interrupted_run_id uuid;
+  terminal_job public.execution_jobs%rowtype;
+  terminal_run_id uuid;
 begin
   select * into first_job
     from public.enqueue_execution_job(
@@ -197,6 +199,47 @@ begin
        and error_detail like 'Worker lease expired%'
   ) then
     raise exception 'Expired job did not reconcile its in-flight step as uncertain';
+  end if;
+
+  -- A previously terminal run must retain its recorded outcome while the
+  -- queue-level uncertainty remains visible as a separate review flag.
+  select * into terminal_job
+    from public.enqueue_execution_job(
+      '00000000-0000-4000-8000-000000000002',
+      'manual',
+      'smoke-terminal-review-flag',
+      '{}'::jsonb,
+      null,
+      3,
+      now()
+    );
+  select * into claimed from public.claim_execution_job(300);
+  if claimed.id is distinct from terminal_job.id then
+    raise exception 'Could not claim terminal-run review fixture';
+  end if;
+  insert into public.run_logs (
+    automation_id, execution_job_id, status, started_at, finished_at, duration_ms
+  ) values (
+    '00000000-0000-4000-8000-000000000002',
+    terminal_job.id,
+    'success',
+    now() - interval '5 seconds',
+    now(),
+    5000
+  ) returning id into terminal_run_id;
+
+  update public.execution_jobs
+     set locked_until = now() - interval '1 second'
+   where id = terminal_job.id;
+  perform * from public.claim_execution_job(300);
+
+  if not exists (
+    select 1 from public.run_logs
+     where id = terminal_run_id
+       and status = 'success'
+       and queue_review_required
+  ) then
+    raise exception 'Queue review flag changed or failed to preserve terminal run outcome';
   end if;
 
   -- A worker whose lease expired cannot renew or finalize after recovery.
