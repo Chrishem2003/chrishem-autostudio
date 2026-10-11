@@ -42,6 +42,32 @@ describe("processOneExecutionJob", () => {
     expect(calls.finished[0].status).toBe("succeeded");
   });
 
+  test("does not accept success when side effects are uncertain", async () => {
+    const { deps, calls } = dependencies({
+      execute: async () => ({
+        status: "succeeded",
+        sideEffectCertainty: "uncertain",
+        error: "Provider response could not be verified",
+      }),
+    });
+    const result = await processOneExecutionJob(deps);
+    expect(result).toEqual({ outcome: "finished", jobId: "job-1", status: "needs_review" });
+    expect(calls.finished[0].status).toBe("needs_review");
+    expect(calls.finished[0].error).toContain("without confirmed side-effect evidence");
+  });
+
+  test("does not accept success when no side effect was attempted", async () => {
+    const { deps, calls } = dependencies({
+      execute: async () => ({
+        status: "succeeded",
+        sideEffectCertainty: "not_attempted",
+      }),
+    });
+    const result = await processOneExecutionJob(deps);
+    expect(result.status).toBe("needs_review");
+    expect(calls.finished[0].status).toBe("needs_review");
+  });
+
   test("routes uncertain failures to manual review", async () => {
     const { deps, calls } = dependencies({
       execute: async () => ({ status: "failed", sideEffectCertainty: "uncertain", error: "Timed out" }),
