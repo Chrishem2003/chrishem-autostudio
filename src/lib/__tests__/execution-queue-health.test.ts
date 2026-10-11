@@ -96,7 +96,6 @@ describe("summarizeStaleRunCandidates", () => {
   test("reports exact candidate totals separately from the bounded sample", () => {
     const rows = Array.from({ length: 100 }, (_, index) => ({
       id: `run-${index}`,
-      automation_id: `automation-${index}`,
       trigger_type: index % 2 ? "manual" : "schedule",
       started_at: "2026-10-11T09:00:00.000Z",
     }));
@@ -111,7 +110,6 @@ describe("summarizeStaleRunCandidates", () => {
   test("does not claim truncation when all candidates fit in the sample", () => {
     const summary = summarizeStaleRunCandidates(1, [{
       id: "run-1",
-      automation_id: "automation-1",
       trigger_type: "manual",
       started_at: "2026-10-11T09:00:00.000Z",
     }], "2026-10-11T10:00:00.000Z");
