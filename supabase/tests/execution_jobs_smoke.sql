@@ -61,6 +61,59 @@ begin
     end if;
   end;
 
+  -- The same idempotency key must not alias a different trigger, actor, or
+  -- retry policy, even when the payload happens to be identical.
+  begin
+    perform * from public.enqueue_execution_job(
+      '00000000-0000-4000-8000-000000000002',
+      'webhook',
+      'smoke-idempotency-key',
+      '{"source":"ci"}'::jsonb,
+      '00000000-0000-4000-8000-000000000001',
+      3,
+      now()
+    );
+    raise exception 'Conflicting trigger replay unexpectedly succeeded';
+  exception when others then
+    if sqlerrm not like 'Idempotency key was reused with a different request%' then
+      raise;
+    end if;
+  end;
+
+  begin
+    perform * from public.enqueue_execution_job(
+      '00000000-0000-4000-8000-000000000002',
+      'manual',
+      'smoke-idempotency-key',
+      '{"source":"ci"}'::jsonb,
+      null,
+      3,
+      now()
+    );
+    raise exception 'Conflicting requester replay unexpectedly succeeded';
+  exception when others then
+    if sqlerrm not like 'Idempotency key was reused with a different request%' then
+      raise;
+    end if;
+  end;
+
+  begin
+    perform * from public.enqueue_execution_job(
+      '00000000-0000-4000-8000-000000000002',
+      'manual',
+      'smoke-idempotency-key',
+      '{"source":"ci"}'::jsonb,
+      '00000000-0000-4000-8000-000000000001',
+      4,
+      now()
+    );
+    raise exception 'Conflicting retry-policy replay unexpectedly succeeded';
+  exception when others then
+    if sqlerrm not like 'Idempotency key was reused with a different request%' then
+      raise;
+    end if;
+  end;
+
   select * into claimed from public.claim_execution_job(300);
   if claimed.id is distinct from first_job.id or claimed.status <> 'running'
      or claimed.attempts <> 1 or claimed.worker_token is null then
