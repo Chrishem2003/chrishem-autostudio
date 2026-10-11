@@ -272,6 +272,7 @@ export interface CloudRun {
   startedAt: string;
   durationMs: number | null;
   errorSummary: string | null;
+  queueReviewRequired: boolean;
   steps: Array<{
     id: string;
     label: string | null;
@@ -292,7 +293,7 @@ export const listRuns = createServerFn({ method: "GET" })
     const { data, error } = await context.supabase
       .from("run_logs")
       .select(
-        "id, automation_id, status, trigger_type, is_dry_run, started_at, duration_ms, error_summary, run_step_logs(id, node_label, status, duration_ms, error_detail, output_snapshot, step_index)",
+        "id, automation_id, status, trigger_type, is_dry_run, started_at, duration_ms, error_summary, queue_review_required, run_step_logs(id, node_label, status, duration_ms, error_detail, output_snapshot, step_index)",
       )
       .in("automation_id", automationIds)
       .order("started_at", { ascending: false })
@@ -307,6 +308,7 @@ export const listRuns = createServerFn({ method: "GET" })
       startedAt: r.started_at,
       durationMs: r.duration_ms,
       errorSummary: r.error_summary,
+      queueReviewRequired: r.queue_review_required,
       steps: [...(r.run_step_logs ?? [])]
         .sort((a, b) => a.step_index - b.step_index)
         .map((s) => ({
