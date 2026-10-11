@@ -205,6 +205,7 @@ function Runs() {
             </span>
             <span className="mono-label">{new Date(r.startedAt).toLocaleString()} · {r.durationMs ?? 0}ms</span>
           </button>
+          {r.queueReviewRequired && <p role="alert" className="mt-2 rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">Queue needs review: the worker lease expired or finalization became uncertain. Verify any external effects before retrying; this warning does not change the recorded run outcome.</p>}
           {r.errorSummary && <p className="mt-1 text-xs text-destructive">{r.errorSummary}</p>}
           {(r.status === "failed" || r.status === "halted") && <ExplainFailure runId={r.id} />}
           {open === r.id && (
