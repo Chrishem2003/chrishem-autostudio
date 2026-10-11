@@ -35,3 +35,47 @@ if [[ "$total" != "8" || "$unique" != "8" ]]; then
 fi
 
 echo "Concurrent claim safety passed: 8 workers claimed 8 distinct jobs."
+
+# Race stale-run reconciliation against a fresh scheduler lease claim. The
+# claimant first owns the automation row; reconciliation must wait, then see
+# the newly committed lease and leave the stale run open for a later review.
+psql -v ON_ERROR_STOP=1 -c "
+  insert into public.run_logs (id, automation_id, status, started_at, trigger_type)
+  values ('00000000-0000-4000-8000-000000000030',
+          '00000000-0000-4000-8000-000000000002',
+          'running', now() - interval '30 minutes', 'schedule')
+  on conflict (id) do update set status = 'running',
+    started_at = now() - interval '30 minutes', trigger_type = 'schedule';
+"
+(
+  psql -X -q -v ON_ERROR_STOP=1 -c "
+    begin;
+    select id from public.automations
+      where id = '00000000-0000-4000-8000-000000000002'
+      for update;
+    select pg_sleep(1.5);
+    select public.claim_scheduled_automation(
+      '00000000-0000-4000-8000-000000000002', 900
+    );
+    commit;
+  " > "$tmp_dir/scheduler-claim"
+) &
+claim_pid=$!
+sleep 0.2
+reconcile_result="$(psql -X -A -t -v ON_ERROR_STOP=1 -c "select public.reconcile_stale_execution_run('00000000-0000-4000-8000-000000000030', null)" | tr -d '[:space:]')"
+wait "$claim_pid"
+
+if [[ "$reconcile_result" != "active_lease" ]]; then
+  echo "Stale-run/lease race failed: reconcile result=$reconcile_result (expected active_lease)" >&2
+  cat "$tmp_dir/scheduler-claim" >&2
+  psql -X -c "select id, status, started_at from public.run_logs where id = '00000000-0000-4000-8000-000000000030'" >&2
+  exit 1
+fi
+
+run_status="$(psql -X -A -t -v ON_ERROR_STOP=1 -c "select status from public.run_logs where id = '00000000-0000-4000-8000-000000000030'" | tr -d '[:space:]')"
+if [[ "$run_status" != "running" ]]; then
+  echo "Stale-run/lease race closed a run while a fresh lease was acquired: status=$run_status" >&2
+  exit 1
+fi
+
+echo "Stale-run/lease race passed: fresh scheduler lease fenced reconciliation."
