@@ -346,6 +346,16 @@ begin
      or (select error_detail from public.run_step_logs where id = '00000000-0000-4000-8000-000000000025') <> 'preexisting successful step' then
     raise exception 'Stale-run reconciliation overwrote an already-terminal step';
   end if;
+  -- Recovery may be retried by overlapping scheduler invocations. Once closed,
+  -- the run must remain closed and the original terminal history must remain intact.
+  if public.reconcile_stale_execution_run('00000000-0000-4000-8000-000000000020', null) <> 'not_running' then
+    raise exception 'Repeated stale-run reconciliation did not remain idempotent';
+  end if;
+  if (select status from public.run_logs where id = '00000000-0000-4000-8000-000000000020') <> 'failed'
+     or (select status from public.run_step_logs where id = '00000000-0000-4000-8000-000000000025') <> 'succeeded'
+     or (select error_detail from public.run_step_logs where id = '00000000-0000-4000-8000-000000000025') <> 'preexisting successful step' then
+    raise exception 'Repeated stale-run reconciliation mutated closed audit history';
+  end if;
   if public.reconcile_stale_execution_run('00000000-0000-4000-8000-000000000022', null) <> 'active_lease' then
     raise exception 'Scheduled stale-run reconciliation ignored the active lease';
   end if;
