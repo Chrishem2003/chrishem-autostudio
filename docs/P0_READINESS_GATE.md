@@ -208,3 +208,10 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Added a forward-only migration that rejects explicit NULL durations in scheduled lease claims, manual lease claims, and shared-lease heartbeats. PostgreSQL range comparisons with NULL evaluate to unknown and otherwise can bypass an IF range check.
 - Added PostgreSQL smoke regressions that assert the exact validation errors for all three RPCs and wired the migration into CI after the existing queue/lease guards.
 - This is database-smoke and exact-head CI evidence only. Live staging migration, auth, provider idempotency, interrupted-worker recovery, and provider-side duplicate-effect verification remain open. Keep the durable queue and outbound transport disabled.
+
+
+## Scheduled release cursor guard — 2026-10-12
+
+- Added a forward-only guard rejecting NULL _last_run_at in release_scheduled_automation before the lock is deleted. This prevents clearing cadence progress, which could reset scheduled idempotency-key derivation.
+- Added a regression test proving a NULL cursor is rejected and the lease remains held, followed by a valid release test; wired the migration into PostgreSQL CI.
+- Live staging migration and scheduled end-to-end acceptance remain open. Keep producer, worker, and outbound transport gates disabled until the staging runbook is completed.
