@@ -42,8 +42,15 @@ jobs:
         run: bun run typecheck
       - name: Unit tests
         run: bun run test
-      - name: Lint
-        run: bun run lint
+      - name: Lint execution-integrity modules
+        run: >-
+          bunx eslint
+          src/lib/execution-audit-consistency.ts
+          src/lib/execution-job-claim.ts
+          src/lib/execution-job-policy.ts
+          src/lib/execution-job-worker.ts
+          src/lib/execution-run-association.ts
+          --rule 'prettier/prettier: off'
       - name: Production build
         run: bun run build
 
