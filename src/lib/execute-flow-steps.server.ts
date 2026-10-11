@@ -22,6 +22,15 @@ export interface ExecuteFlowStepsInput {
 }
 export interface ExecuteFlowStepsResult { steps: ExecutedStep[]; failed: boolean; }
 
+/** Diagnostics must never override the execution engine's fail-closed decision. */
+function notifyPersistenceError(input: ExecuteFlowStepsInput, stage: "intent" | "outcome", node: WorkflowNode): void {
+  try {
+    input.onPersistenceError?.(stage, node);
+  } catch {
+    // Observability callbacks are best-effort; persistence failure still halts execution.
+  }
+}
+
 /** Shared ordered traversal with full-flow mapping validation before any executor is called. */
 export async function executeFlowSteps(input: ExecuteFlowStepsInput): Promise<ExecuteFlowStepsResult> {
   const steps: ExecutedStep[] = [];
@@ -42,14 +51,14 @@ export async function executeFlowSteps(input: ExecuteFlowStepsInput): Promise<Ex
       detail: `Flow mapping preflight failed before any step executed: ${mappingError.error} No external action was attempted.`,
     };
     if (!intent) {
-      input.onPersistenceError?.("intent", node);
+      notifyPersistenceError(input, "intent", node);
       return { steps: [failedStep], failed: true };
     }
     let persisted = false;
     try {
       persisted = await input.persistOutcome(intent.id, failedStep, "not_attempted");
     } catch { persisted = false; }
-    if (!persisted) input.onPersistenceError?.("outcome", node);
+    if (!persisted) notifyPersistenceError(input, "outcome", node);
     return {
       steps: [persisted ? failedStep : { ...failedStep, detail: "Mapping preflight failed and its outcome could not be safely recorded. No external action was attempted." }],
       failed: true,

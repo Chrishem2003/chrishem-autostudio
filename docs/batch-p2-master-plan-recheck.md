@@ -52,3 +52,10 @@ Plan reference: `docs/master-plan-progress-review.md`
 ## Current decision
 
 **Continue building in batches, with CI and safety gates as part of each batch.** The next milestone is route-boundary validation and execution recovery—not broadening the integration catalog before the runtime contracts are proven.
+
+
+## Audit callback failure isolation and master-plan crosswalk — 2026-10-11
+
+The ordered executor now catches exceptions from persistence-diagnostic callbacks so telemetry failures cannot override the original fail-closed outcome. Regression tests cover intent-write and outcome-write failures when the diagnostic callback also throws. This does not change the rollout gates or imply that database writes and external side effects are transactional.
+
+Phase review: P0 is substantially implemented but still has staging/route-acceptance gates; P1 connector truthfulness and AI gateway remain partial/incomplete; P2 durable queue/mapping is implemented in CI but not staging-verified; P3–P8 remain partial or roadmap as recorded in `docs/master-plan-progress-review.md`. Keep queue and outbound transport disabled until staging acceptance.

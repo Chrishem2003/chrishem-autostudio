@@ -448,3 +448,29 @@ Regression tests verify that preflight stops at the first failing node and that 
 ## Execution entry-point regression gate — 2026-10-11
 
 Introduced a shared prepared-execution gate and wired it into authenticated manual runs, scheduled runs, and the durable queue worker. The gate rejects malformed persisted workflows and invalid graph/mapping plans before its capability-preflight callback can run. Added tests for malformed workflow JSON, invalid graph structure, and valid plans entering preflight. These tests exercise the gate used by production entry points; downstream database writes/provider integrations still require staging fault-injection. CI must pass on the exact commit before this batch is considered verified.
+
+
+## Audit-boundary review — diagnostic failure isolation (2026-10-11)
+
+**Implemented on `audit/p0-hardening`; exact-head CI required before marking verified.**
+
+- The ordered step engine now treats persistence-error callbacks as best-effort diagnostics. If logging/telemetry itself throws, the original safety decision is preserved: an unrecorded intent still means no action is attempted, and an unrecorded outcome still halts all later steps with an uncertainty warning.
+- Added regression tests for both callback-failure combinations. These complement the existing intent-write, outcome-write, zero-row update, run-finalization, and recovery tests.
+- This is a narrow resilience fix; it does not make provider effects and database audit writes transactional, nor does it replace controlled staging fault-injection.
+
+### Upgraded master-plan phase crosswalk
+
+| Plan area | Current assessment | Exit evidence still needed |
+|---|---|---|
+| P0 — security and execution foundation | Substantially implemented on the hardening branch; continuous regression work remains | Exact-head CI, reviewed PR diff, protected staging rehearsal, rollback evidence |
+| P1 — connector contracts and truthful capabilities | Partial; reviewed manifests cover a limited set of live adapters | Broader adapters must each have validated config, executor, output contract, tests, and honest idempotency claims |
+| P1 — AI gateway and natural-language flow drafting | Incomplete | Provider-agnostic gateway, structured draft/refine loop, missing-input clarification, safety validation |
+| P2 — durable queue, triggers, and mapping | Core queue/worker and linear-chain mapping implemented; production deployment unverified | Live staging migration, auth/lease fencing, duplicate enqueue, worker recovery and provider-effect rehearsal |
+| P3 — AI-assisted connector drafting | Roadmap | Generated integrations remain test-only until reviewed and explicitly approved |
+| P4 — industry packs | Partial | Audit real executable capability per pack; do not count catalog-only nodes as implemented integrations |
+| P5 — builder UX and accessibility | Not yet accepted | Keyboard-only flow creation, WCAG AA review, 375px layout, first-automation usability tests |
+| P6 — teams and approvals | Incomplete | Workspace roles, invitations, shared connections, approval gates and authorization tests |
+| P7 — analytics and API | Partial | Search/timeline, safe replay, version diff/restore, scoped API keys, quotas, health and retention controls |
+| P8 — differentiators | Roadmap | Autopilot, Watch Mode, rewind simulation, approve/undo, multilingual/voice input |
+
+**Phase decision:** stay in reliability hardening / P0 exit-gate work while closing staging evidence and route-boundary coverage. Do not jump to connector-count expansion or declare production readiness. Keep `AUTOSTUDIO_DURABLE_QUEUE_ENABLED=false` and `AUTOSTUDIO_OUTBOUND_TRANSPORT_READY` unset/false until the documented staging gates pass.

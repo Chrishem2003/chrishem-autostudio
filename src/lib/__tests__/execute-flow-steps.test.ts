@@ -237,4 +237,40 @@ describe("shared flow-step engine", () => {
     expect(result.steps[0].detail).toMatch(/No external action was attempted/i);
   });
 
+
+  it("keeps intent-persistence failure fail-closed when its diagnostic callback also throws", async () => {
+    let executions = 0;
+    const result = await executeFlowSteps(baseInput({
+      persistIntent: async () => null,
+      onPersistenceError: () => { throw new Error("logger unavailable"); },
+      execute: async ({ node }) => {
+        executions++;
+        return { nodeId: node.id, label: node.name, status: "success", ms: 1, detail: "unexpected" };
+      },
+    }));
+
+    expect(result.failed).toBe(true);
+    expect(executions).toBe(0);
+    expect(result.steps).toHaveLength(1);
+    expect(result.steps[0].detail).toMatch(/No action was attempted/i);
+  });
+
+  it("keeps outcome-persistence failure fail-closed when its diagnostic callback throws", async () => {
+    let executions = 0;
+    const result = await executeFlowSteps(baseInput({
+      persistOutcome: async () => false,
+      onPersistenceError: () => { throw new Error("logger unavailable"); },
+      execute: async ({ node }) => {
+        executions++;
+        return { nodeId: node.id, label: node.name, status: "success", ms: 1, detail: "provider accepted request" };
+      },
+    }));
+
+    expect(result.failed).toBe(true);
+    expect(executions).toBe(1);
+    expect(result.steps).toHaveLength(1);
+    expect(result.steps[0].status).toBe("failed");
+    expect(result.steps[0].detail).toMatch(/Verify external effects before retrying/i);
+  });
+
 });
