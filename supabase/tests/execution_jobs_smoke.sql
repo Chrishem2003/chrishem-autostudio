@@ -99,6 +99,67 @@ begin
     raise exception 'Finalization accepted a stale/reused worker token';
   end if;
 
+  -- A failed audit summary must never permit a queue success, but the same
+  -- valid worker lease must still be able to record a truthful failed result.
+  select * into first_job
+    from public.enqueue_execution_job(
+      '00000000-0000-4000-8000-000000000002',
+      'manual',
+      'smoke-failed-audit-summary',
+      '{"source":"ci-failed-audit"}'::jsonb,
+      '00000000-0000-4000-8000-000000000001',
+      3,
+      now()
+    );
+  select * into claimed from public.claim_execution_job(300);
+  if claimed.id is distinct from first_job.id then
+    raise exception 'Could not claim failed-audit fixture';
+  end if;
+  insert into public.run_logs (id, automation_id, status, started_at, finished_at)
+  values ('00000000-0000-4000-8000-000000000016',
+          '00000000-0000-4000-8000-000000000002', 'failed', now() - interval '1 second', now());
+  if not public.attach_execution_job_run(
+    claimed.id, claimed.worker_token, '00000000-0000-4000-8000-000000000016'
+  ) then
+    raise exception 'Could not attach failed-audit fixture';
+  end if;
+  if public.finish_execution_job(claimed.id, claimed.worker_token, 'succeeded', null, null) then
+    raise exception 'Queue job succeeded despite a failed audit run';
+  end if;
+  if not public.finish_execution_job(claimed.id, claimed.worker_token, 'failed', 'Audit run failed', null) then
+    raise exception 'Failed audit run prevented truthful queue failure finalization';
+  end if;
+
+  -- A succeeded status without finished_at is not confirmed persistence.
+  select * into first_job
+    from public.enqueue_execution_job(
+      '00000000-0000-4000-8000-000000000002',
+      'manual',
+      'smoke-unfinished-audit-summary',
+      '{"source":"ci-unfinished-audit"}'::jsonb,
+      '00000000-0000-4000-8000-000000000001',
+      3,
+      now()
+    );
+  select * into claimed from public.claim_execution_job(300);
+  if claimed.id is distinct from first_job.id then
+    raise exception 'Could not claim unfinished-audit fixture';
+  end if;
+  insert into public.run_logs (id, automation_id, status, started_at, finished_at)
+  values ('00000000-0000-4000-8000-000000000017',
+          '00000000-0000-4000-8000-000000000002', 'succeeded', now(), null);
+  if not public.attach_execution_job_run(
+    claimed.id, claimed.worker_token, '00000000-0000-4000-8000-000000000017'
+  ) then
+    raise exception 'Could not attach unfinished-audit fixture';
+  end if;
+  if public.finish_execution_job(claimed.id, claimed.worker_token, 'succeeded', null, null) then
+    raise exception 'Queue job succeeded without an audit completion timestamp';
+  end if;
+  if not public.finish_execution_job(claimed.id, claimed.worker_token, 'needs_review', 'Audit completion is unconfirmed', null) then
+    raise exception 'Unconfirmed audit result could not be routed to manual review';
+  end if;
+
   if has_function_privilege('anon', 'public.claim_execution_job(integer)', 'EXECUTE')
      or has_function_privilege('authenticated', 'public.claim_execution_job(integer)', 'EXECUTE') then
     raise exception 'Untrusted roles can execute the worker claim RPC';
