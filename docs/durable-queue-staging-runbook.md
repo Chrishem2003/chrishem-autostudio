@@ -2,7 +2,7 @@
 
 **Purpose:** verify the queue against a dedicated non-production Supabase project before enabling it in production.
 
-**Safety defaults:** `AUTOSTUDIO_DURABLE_QUEUE_ENABLED` must remain `false` until the checks below pass. Never paste service-role keys, cron secrets, OAuth tokens, or provider credentials into tickets, chat, or CI logs.
+**Safety defaults:** `AUTOSTUDIO_DURABLE_QUEUE_ENABLED=false` keeps producers disabled, and `AUTOSTUDIO_DURABLE_QUEUE_WORKER_ENABLED=false` keeps the worker from claiming jobs. Both flags default to disabled. Never paste service-role keys, cron secrets, OAuth tokens, or provider credentials into tickets, chat, or CI logs.
 
 ## 1. Preflight
 
@@ -11,7 +11,7 @@
 - [ ] Confirm the application deployment includes `POST /api/public/cron/run-execution-job`.
 - [ ] Configure the server-side Supabase URL and service-role key in the deployment secret store.
 - [ ] Configure `LOVABLE_CRON_SECRET` in the deployment secret store; do not expose it as a client-side `VITE_*` variable.
-- [ ] Keep `AUTOSTUDIO_DURABLE_QUEUE_ENABLED=false` while validating the worker endpoint.
+- [ ] Keep both `AUTOSTUDIO_DURABLE_QUEUE_ENABLED=false` and `AUTOSTUDIO_DURABLE_QUEUE_WORKER_ENABLED=false` while preparing staging.
 - [ ] In staging, disable or de-publish unrelated live automations so a rollout test cannot trigger unintended external actions.
 
 ## 2. Apply and inspect database migrations
@@ -36,7 +36,7 @@ Verify the durable queue migration is recorded as applied. The migration file is
 
 ## 3. Deploy and smoke-test the protected worker
 
-Deploy the application to staging with the queue flag still disabled. Configure a separate scheduled invocation for:
+Deploy the application to staging with both queue flags disabled. Configure a separate scheduled invocation for:
 
 `POST https://<STAGING_APP_HOST>/api/public/cron/run-execution-job`
 
@@ -44,16 +44,18 @@ Send the cron secret only as the Authorization bearer token. Test these cases wi
 
 - [ ] No Authorization header returns `401`.
 - [ ] An incorrect bearer token returns `401`.
-- [ ] A valid bearer token returns a successful response and, with an empty queue, reports `outcome: empty`.
+- [ ] A valid bearer token while the worker flag is disabled returns `503` and does not claim a job.
+- [ ] Enable `AUTOSTUDIO_DURABLE_QUEUE_WORKER_ENABLED=true` in staging only, while leaving the producer flag false; a valid bearer token against an empty queue reports `outcome: empty`.
+- [ ] Confirm a missing or misspelled worker flag remains disabled; only the exact string `true` enables it.
 - [ ] The request never exposes service-role credentials or provider secrets in its response/logs.
 
-Do not enable the producer flag until the worker endpoint is deployed and its valid-secret request succeeds.
+Keep the producer flag false until the worker endpoint is deployed and its valid-secret empty-queue request succeeds. The worker flag controls consumption; the producer flag controls new durable enqueueing.
 
 ## 4. Controlled end-to-end queue test
 
-Before turning on the flag, ensure only a deliberately prepared staging test automation is live. Use a dedicated test account/mailbox or another provider sandbox, and choose an action whose effect can be independently verified.
+Before turning on the producer flag, ensure only a deliberately prepared staging test automation is live. Use a dedicated test account/mailbox or another provider sandbox, and choose an action whose effect can be independently verified.
 
-- [ ] Set `AUTOSTUDIO_DURABLE_QUEUE_ENABLED=true` in staging only.
+- [ ] Set `AUTOSTUDIO_DURABLE_QUEUE_ENABLED=true` in staging only after worker acceptance; keep `AUTOSTUDIO_DURABLE_QUEUE_WORKER_ENABLED=true` for the controlled test.
 - [ ] Trigger one manual live run with the Studio UI.
 - [ ] Confirm the UI says the run was queued, not completed.
 - [ ] Confirm one `execution_jobs` row is created and its idempotency key is stable for a repeat of the same request.
@@ -73,7 +75,7 @@ Do not use production mailboxes, public webhook targets, or customer-connected a
 
 Record the deployment SHA, migration status, test automation ID, queue job ID, run ID, provider-side evidence, and CI run URLs. Never include secret values or full credential-bearing payloads.
 
-Before any staging enablement, verify the deployed build is using the centralized fail-closed helpers: only the exact string `true` enables `AUTOSTUDIO_DURABLE_QUEUE_ENABLED` or `AUTOSTUDIO_OUTBOUND_TRANSPORT_READY`; unset values must leave both capabilities disabled. Do not set either flag in production as part of this rehearsal.
+Before any staging enablement, verify the deployed build is using the centralized fail-closed helpers: only the exact string `true` enables `AUTOSTUDIO_DURABLE_QUEUE_ENABLED`, `AUTOSTUDIO_DURABLE_QUEUE_WORKER_ENABLED`, or `AUTOSTUDIO_OUTBOUND_TRANSPORT_READY`; unset values must leave all capabilities disabled. Do not set these flags in production as part of this rehearsal.
 
 Acceptance requires all of the following:
 
@@ -90,12 +92,13 @@ Acceptance requires all of the following:
 To stop queue processing safely:
 
 1. Disable the worker cron first so it cannot claim additional jobs.
-2. Set `AUTOSTUDIO_DURABLE_QUEUE_ENABLED=false` to stop new manual/scheduled queue producers.
-3. Inspect all `queued` and `running` jobs. Do not delete or replay jobs with uncertain external outcomes; reconcile them to `needs_review` after evidence review.
-4. Confirm the legacy execution paths are healthy before restoring normal scheduling.
-5. Keep the queue migration and audit records in place; do not drop tables as an emergency rollback.
+2. Set `AUTOSTUDIO_DURABLE_QUEUE_WORKER_ENABLED=false` to fail closed even if the cron is accidentally invoked.
+3. Set `AUTOSTUDIO_DURABLE_QUEUE_ENABLED=false` to stop new durable producers.
+4. Inspect all `queued` and `running` jobs. Do not delete or replay jobs with uncertain external outcomes; reconcile them to `needs_review` after evidence review.
+5. Confirm the legacy execution paths are healthy before restoring normal scheduling.
+6. Keep the queue migration and audit records in place; do not drop tables as an emergency rollback.
 
-The queue flag controls producers, not already queued jobs. Stopping the worker cron is therefore a separate rollback step.
+The producer flag controls new enqueueing; the worker flag controls consumption of existing jobs. Disable both and stop the cron during rollback.
 
 ## Current environment boundary
 
