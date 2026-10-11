@@ -76,6 +76,18 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
             };
           }
 
+          // The queue lease and per-automation lease are separate fences. Renew
+          // both before each new step so a long multi-step flow cannot outlive the
+          // lock that prevents manual/scheduled overlap.
+          const heartbeatAutomationLease = async (): Promise<boolean> => {
+            const { data: alive, error } = await supabaseAdmin.rpc("heartbeat_manual_automation", {
+              _automation_id: automation.id,
+              _lock_token: executionLock,
+              _lease_seconds: 300,
+            });
+            return !error && alive === true;
+          };
+
           let activeRunId: string | null = null;
           let runStartedMs = Date.now();
           try {
@@ -126,15 +138,21 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
             startedAtMs: started,
             maxRuntimeMs: MAX_JOB_RUNTIME_MS,
             execute: async (args) => {
-              const alive = await context.heartbeat();
-              if (!alive) {
-                throw new Error("Execution lease was lost; stop before starting another external action.");
+              const queueLeaseAlive = await context.heartbeat();
+              if (!queueLeaseAlive) {
+                throw new Error("Execution queue lease was lost; stop before starting another external action.");
+              }
+              const automationLeaseAlive = await heartbeatAutomationLease();
+              if (!automationLeaseAlive) {
+                throw new Error("Automation execution lease was lost; stop before starting another external action.");
               }
               return executeStep(args);
             },
             persistIntent: async (node, index) => {
-              const alive = await context.heartbeat();
-              if (!alive) return null;
+              const queueLeaseAlive = await context.heartbeat();
+              if (!queueLeaseAlive) return null;
+              const automationLeaseAlive = await heartbeatAutomationLease();
+              if (!automationLeaseAlive) return null;
               const { data: intent, error } = await supabaseAdmin
                 .from("run_step_logs")
                 .insert({

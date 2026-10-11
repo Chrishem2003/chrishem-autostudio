@@ -238,6 +238,33 @@ begin
   end if;
 
 
+  -- The shared automation lease can be renewed only by its live owner.
+  if not public.heartbeat_manual_automation(
+    '00000000-0000-4000-8000-000000000002',
+    '00000000-0000-4000-8000-000000000099',
+    300
+  ) then
+    raise exception 'Current automation lease owner could not renew its lease';
+  end if;
+  if public.heartbeat_manual_automation(
+    '00000000-0000-4000-8000-000000000002',
+    gen_random_uuid(),
+    300
+  ) then
+    raise exception 'Automation lease heartbeat accepted a stale token';
+  end if;
+  update public.scheduled_run_locks set locked_until = now() - interval '1 second'
+   where automation_id = '00000000-0000-4000-8000-000000000002';
+  if public.heartbeat_manual_automation(
+    '00000000-0000-4000-8000-000000000002',
+    '00000000-0000-4000-8000-000000000099',
+    300
+  ) then
+    raise exception 'Automation lease heartbeat renewed an expired lease';
+  end if;
+  update public.scheduled_run_locks set locked_until = now() + interval '5 minutes'
+   where automation_id = '00000000-0000-4000-8000-000000000002';
+
   -- Stale manual/scheduled reconciliation is atomic and lease-aware.
   insert into public.scheduled_run_locks (automation_id, lock_token, locked_until)
   values ('00000000-0000-4000-8000-000000000002',

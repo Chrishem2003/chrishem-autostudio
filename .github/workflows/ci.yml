@@ -89,6 +89,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261010170000_durable_execution_jobs.sql
       - name: Apply automation lease migration
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261010130000_scheduler_leases.sql
+      - name: Apply automation lease heartbeat migration
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261011150000_automation_lease_heartbeat.sql
       - name: Apply execution audit reconciliation migration
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261011120000_execution_job_run_reconciliation.sql
       - name: Apply atomic stale-run reconciliation migration
