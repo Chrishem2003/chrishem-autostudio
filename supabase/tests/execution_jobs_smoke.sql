@@ -613,6 +613,79 @@ begin
     if sqlerrm <> 'Execution payload exceeds 64 KiB' then raise; end if;
   end;
 
+  -- Shared manual/scheduled lease RPCs enforce their own bounded durations.
+  begin
+    perform public.claim_manual_automation('00000000-0000-4000-8000-000000000002', 59);
+    raise exception 'Manual lease accepted a duration below the minimum';
+  exception when others then
+    if sqlerrm <> 'Invalid manual-run lease duration' then raise; end if;
+  end;
+  begin
+    perform public.claim_manual_automation('00000000-0000-4000-8000-000000000002', 901);
+    raise exception 'Manual lease accepted a duration above the maximum';
+  exception when others then
+    if sqlerrm <> 'Invalid manual-run lease duration' then raise; end if;
+  end;
+  begin
+    perform public.claim_scheduled_automation('00000000-0000-4000-8000-000000000002', 59);
+    raise exception 'Scheduled lease accepted a duration below the minimum';
+  exception when others then
+    if sqlerrm <> 'Invalid scheduler lease duration' then raise; end if;
+  end;
+  begin
+    perform public.claim_scheduled_automation('00000000-0000-4000-8000-000000000002', 3601);
+    raise exception 'Scheduled lease accepted a duration above the maximum';
+  exception when others then
+    if sqlerrm <> 'Invalid scheduler lease duration' then raise; end if;
+  end;
+
+  -- A stale release token must not clear a current manual lease or change the
+  -- schedule cursor; manual release itself must not advance that cursor either.
+  declare
+    manual_token uuid;
+    cursor_before timestamptz;
+  begin
+    select last_run_at into cursor_before
+      from public.automations
+     where id = '00000000-0000-4000-8000-000000000002';
+
+    manual_token := public.claim_manual_automation(
+      '00000000-0000-4000-8000-000000000002', 300
+    );
+    if manual_token is null then
+      raise exception 'Could not claim manual lease fixture';
+    end if;
+
+    if public.release_manual_automation(
+      '00000000-0000-4000-8000-000000000002', gen_random_uuid()
+    ) then
+      raise exception 'Manual lease accepted a stale release token';
+    end if;
+    if not exists (
+      select 1 from public.scheduled_run_locks
+       where automation_id = '00000000-0000-4000-8000-000000000002'
+         and lock_token = manual_token
+         and locked_until > now()
+    ) then
+      raise exception 'Stale release token altered the current lease';
+    end if;
+    if (select last_run_at from public.automations
+         where id = '00000000-0000-4000-8000-000000000002')
+       is distinct from cursor_before then
+      raise exception 'Stale manual release changed the schedule cursor';
+    end if;
+    if not public.release_manual_automation(
+      '00000000-0000-4000-8000-000000000002', manual_token
+    ) then
+      raise exception 'Current manual lease token could not release its lease';
+    end if;
+    if (select last_run_at from public.automations
+         where id = '00000000-0000-4000-8000-000000000002')
+       is distinct from cursor_before then
+      raise exception 'Manual release unexpectedly advanced the schedule cursor';
+    end if;
+  end;
+
   select * into dead_job
     from public.enqueue_execution_job(
       '00000000-0000-4000-8000-000000000002',
