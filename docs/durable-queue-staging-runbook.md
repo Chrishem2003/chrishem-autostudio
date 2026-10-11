@@ -120,3 +120,8 @@ GitHub CI currently validates the worker code and the migration against a dispos
 - [ ] Inspect provider-side history before any manual retry. Do not replay an uncertain action until its effect has been reconciled.
 
 The disposable PostgreSQL smoke suite now checks multi-step recovery and unrelated-run isolation. That is useful regression coverage, not a substitute for this deployed staging rehearsal.
+
+
+### Shared automation lease boundary check
+
+The current database smoke suite also verifies that scheduled lease claims, manual lease claims, and shared-lease heartbeats reject explicit NULL durations. During staging acceptance, additionally verify invalid lease durations return a safe client-visible error and cannot create or extend a lock. Do not treat disposable PostgreSQL results as a substitute for testing the deployed Supabase migration chain.
