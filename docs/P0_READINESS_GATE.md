@@ -201,3 +201,10 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Added a forward migration that explicitly rejects NULL trigger types and retry limits before SQL three-valued logic can bypass normal comparisons.
 - Added disposable PostgreSQL regression tests for both NULL cases and wired the migration into CI.
 - Require both CI jobs to pass on the exact latest commit. This does not replace live staging acceptance; queue workers and outbound transport remain disabled until all P0 gates are closed.
+
+
+## Shared automation lease NULL-contract hardening — 2026-10-12
+
+- Added a forward-only migration that rejects explicit NULL durations in scheduled lease claims, manual lease claims, and shared-lease heartbeats. PostgreSQL range comparisons with NULL evaluate to unknown and otherwise can bypass an IF range check.
+- Added PostgreSQL smoke regressions that assert the exact validation errors for all three RPCs and wired the migration into CI after the existing queue/lease guards.
+- This is database-smoke and exact-head CI evidence only. Live staging migration, auth, provider idempotency, interrupted-worker recovery, and provider-side duplicate-effect verification remain open. Keep the durable queue and outbound transport disabled.
