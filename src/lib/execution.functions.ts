@@ -245,14 +245,14 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
         return { id: attempt.id };
       },
       persistOutcome: async (intentId, step, outcomeState) => {
-        const { error: stepLogError } = await context.supabase.from("run_step_logs").update({
+        const { data: persistedStep, error: stepLogError } = await context.supabase.from("run_step_logs").update({
           status: step.status,
           outcome_state: outcomeState,
           duration_ms: Math.max(0, Math.round(step.ms)),
           error_detail: step.status === "failed" ? step.detail.slice(0, 500) : null,
           output_snapshot: { detail: step.detail.slice(0, 500), outcomeState, ...(step.outputs ? { outputs: step.outputs } : {}) },
-        }).eq("id", intentId);
-        return !stepLogError;
+        }).eq("id", intentId).eq("run_id", run.id).select("id").maybeSingle();
+        return !stepLogError && Boolean(persistedStep);
       },
       onUnexpectedError: (node, error) => {
         console.error("[AutoStudio executor] Step failed unexpectedly.", {
