@@ -1,0 +1,57 @@
+// @ts-nocheck -- Bun's test runner supplies test types at runtime
+import { describe, expect, test } from "bun:test";
+import { findExecutionAuditConsistencyIssues } from "../execution-audit-consistency";
+
+describe("findExecutionAuditConsistencyIssues", () => {
+  test("returns no findings for aligned queue and audit states", () => {
+    expect(findExecutionAuditConsistencyIssues(
+      [
+        { id: "queued", status: "queued", run_id: null },
+        { id: "running", status: "running", run_id: "run-active" },
+        { id: "done", status: "succeeded", run_id: "run-done" },
+      ],
+      [
+        { id: "run-active", status: "running" },
+        { id: "run-done", status: "succeeded" },
+      ],
+    )).toEqual([]);
+  });
+
+  test("detects queue jobs without an audit run and missing linked runs", () => {
+    expect(findExecutionAuditConsistencyIssues(
+      [
+        { id: "no-run", status: "running", run_id: null },
+        { id: "missing", status: "failed", run_id: "deleted-run" },
+      ],
+      [],
+    )).toEqual([
+      { issue: "running_job_without_audit_run", jobId: "no-run", runId: null },
+      { issue: "linked_run_missing", jobId: "missing", runId: "deleted-run" },
+    ]);
+  });
+
+  test("detects a needs-review job whose run remains running", () => {
+    expect(findExecutionAuditConsistencyIssues(
+      [{ id: "review-job", status: "needs_review", run_id: "run-1" }],
+      [{ id: "run-1", status: "running" }],
+    )).toEqual([
+      { issue: "review_job_with_running_audit_run", jobId: "review-job", runId: "run-1" },
+    ]);
+  });
+
+  test("detects terminal job/run mismatches without treating review as a terminal mismatch", () => {
+    expect(findExecutionAuditConsistencyIssues(
+      [
+        { id: "finished-job", status: "succeeded", run_id: "still-running" },
+        { id: "active-job", status: "running", run_id: "failed-run" },
+      ],
+      [
+        { id: "still-running", status: "running" },
+        { id: "failed-run", status: "failed" },
+      ],
+    )).toEqual([
+      { issue: "terminal_job_with_running_audit_run", jobId: "finished-job", runId: "still-running" },
+      { issue: "running_job_with_terminal_audit_run", jobId: "active-job", runId: "failed-run" },
+    ]);
+  });
+});
