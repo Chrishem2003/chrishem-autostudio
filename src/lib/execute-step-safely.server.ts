@@ -6,6 +6,7 @@ export interface SafeStepExecutionInput {
   flowName: string;
   userId: string;
   mode: ExecutionMode;
+  values?: Readonly<Record<string, string | number | boolean>>;
   onUnexpectedError?: (error: unknown) => void;
   execute?: typeof executeStep;
 }

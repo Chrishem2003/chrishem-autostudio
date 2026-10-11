@@ -82,6 +82,7 @@ export async function executeFlowSteps(input: ExecuteFlowStepsInput): Promise<Ex
         step = await executeStepSafely({
           node: { ...node, config: resolution.config },
           flowName: input.flowName, userId: input.userId, mode: input.mode,
+          values: Object.assign(Object.create(null) as Record<string, string | number | boolean>, ...Object.values(priorOutputs)),
           ...(input.execute ? { execute: input.execute } : {}),
           onUnexpectedError: (error) => input.onUnexpectedError?.(node, error),
         });

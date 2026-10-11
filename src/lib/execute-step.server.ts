@@ -5,7 +5,7 @@ import { buildGmailMessage, isGmailSendStep, toRawEmail } from "@/lib/gmail-step
 import { callWeb, isBlockedHost, resolvePublicTarget, type WebInput } from "@/lib/web-steps.server";
 import { NODES } from "@/lib/automation-catalog";
 import { mapFields } from "@/lib/field-mapping";
-import { evaluateFilterCondition } from "@/lib/logic-filter";
+import { evaluateFilterCondition, validateFilterCondition } from "@/lib/logic-filter";
 import { getConnectorManifestForNode, validateConnectorActionConfig } from "@/lib/connector-manifests";
 import type { WorkflowNode } from "@/lib/workflow";
 
@@ -29,7 +29,7 @@ export function liveCapabilityError(node: WorkflowNode): string | null {
   const tool = NODES[node.defId]?.tool;
   if (node.defId === "trigger.schedule" || node.defId === "trigger.manual") return null;
   if (node.defId === "logic.filter") {
-    const evaluated = evaluateFilterCondition(node.config["condition"] ?? "");
+    const evaluated = validateFilterCondition(node.config["condition"] ?? "");
     return evaluated.ok ? null : evaluated.error;
   }
   if (node.defId === "logic.map") {
@@ -97,8 +97,9 @@ export async function executeStep(args: {
   flowName: string;
   userId: string;
   mode: ExecutionMode;
+  values?: Readonly<Record<string, string | number | boolean>>;
 }): Promise<ExecutedStep> {
-  const { node, flowName, userId, mode } = args;
+  const { node, flowName, userId, mode, values } = args;
   const started = Date.now();
   const result = (status: ExecutedStep["status"], detail: string, ms = Date.now() - started, outputs?: Readonly<Record<string, string | number | boolean>>): ExecutedStep => ({
     nodeId: node.id,
@@ -130,7 +131,7 @@ export async function executeStep(args: {
 
   // Local logic nodes execute deterministically without network calls or credentials.
   if (node.defId === "logic.filter") {
-    const evaluated = evaluateFilterCondition(node.config["condition"] ?? "");
+    const evaluated = evaluateFilterCondition(node.config["condition"] ?? "", values);
     if (!evaluated.ok) return result("failed", evaluated.error, 0);
     return result("success", evaluated.passed ? "Filter condition matched; the flow continues." : "Filter condition did not match; remaining steps are skipped.", 0, { passed: evaluated.passed });
   }
