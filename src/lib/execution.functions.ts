@@ -315,11 +315,14 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
             .eq("run_id", activeRunId)
             .eq("status", "running");
           if (stepRecoveryError) {
-            console.error("[AutoStudio executor] Could not recover interrupted step intents.", {
+            console.error("[AutoStudio executor] Could not recover interrupted step intents; leaving the run open for stale-run reconciliation.", {
               automationId: row.id,
               runId: activeRunId,
               errorCode: stepRecoveryError.code,
             });
+            // Do not mark the parent run terminal while its in-flight step intents
+            // could not be reconciled. A later stale-run pass must retry this safely.
+            throw new Error("Interrupted step recovery failed; run remains open for reconciliation.");
           }
           const { data: recoveredRun, error: auditError } = await context.supabase
             .from("run_logs")
