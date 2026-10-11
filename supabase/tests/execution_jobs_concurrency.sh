@@ -192,3 +192,41 @@ if [[ "$run_status" != "running" ]]; then
 fi
 
 echo "Stale-run/lease race passed: fresh scheduler lease fenced reconciliation."
+
+# Two recovery callers racing the same stale run must produce exactly one
+# reconciliation; the loser must observe the now-terminal parent and do nothing.
+psql -v ON_ERROR_STOP=1 -c "
+  insert into public.run_logs (id, automation_id, status, started_at, trigger_type)
+  values ('00000000-0000-4000-8000-000000000031',
+          '00000000-0000-4000-8000-000000000002',
+          'running', now() - interval '30 minutes', 'manual')
+  on conflict (id) do update set status = 'running',
+    started_at = now() - interval '30 minutes', trigger_type = 'manual';
+  insert into public.run_step_logs (id, run_id, status, outcome_state)
+  values ('00000000-0000-4000-8000-000000000032',
+          '00000000-0000-4000-8000-000000000031', 'running', 'uncertain')
+  on conflict (id) do update set status = 'running', outcome_state = 'uncertain';
+"
+(
+  psql -X -A -t -v ON_ERROR_STOP=1 -c "select public.reconcile_stale_execution_run('00000000-0000-4000-8000-000000000031', null)" \
+    | tr -d '[:space:]' > "$tmp_dir/reconcile-race-1"
+) &
+reconcile_one=$!
+(
+  psql -X -A -t -v ON_ERROR_STOP=1 -c "select public.reconcile_stale_execution_run('00000000-0000-4000-8000-000000000031', null)" \
+    | tr -d '[:space:]' > "$tmp_dir/reconcile-race-2"
+) &
+reconcile_two=$!
+wait "$reconcile_one"
+wait "$reconcile_two"
+reconcile_results="$(cat "$tmp_dir/reconcile-race-1" "$tmp_dir/reconcile-race-2" | sort | tr '\\n' ' ')"
+reconciled_count="$(grep -h -o 'reconciled' "$tmp_dir"/reconcile-race-* | wc -l | tr -d '[:space:]')"
+not_running_count="$(grep -h -o 'not_running' "$tmp_dir"/reconcile-race-* | wc -l | tr -d '[:space:]')"
+race_parent="$(psql -X -A -t -v ON_ERROR_STOP=1 -c "select status from public.run_logs where id = '00000000-0000-4000-8000-000000000031'" | tr -d '[:space:]')"
+race_step="$(psql -X -A -t -v ON_ERROR_STOP=1 -c "select status || ':' || outcome_state from public.run_step_logs where id = '00000000-0000-4000-8000-000000000032'" | tr -d '[:space:]')"
+if [[ "$reconciled_count" != "1" || "$not_running_count" != "1" || "$race_parent" != "failed" || "$race_step" != "failed:uncertain" ]]; then
+  echo "Concurrent stale reconciliation failed: results=$reconcile_results parent=$race_parent step=$race_step (expected reconciled/not_running, failed, failed:uncertain)" >&2
+  exit 1
+fi
+
+echo "Concurrent stale reconciliation passed: exactly one caller reconciled the run."
