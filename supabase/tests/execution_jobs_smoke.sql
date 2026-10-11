@@ -952,7 +952,7 @@ $$;
 -- Privilege contract: every sensitive queue/lease RPC is service-role-only.
 -- Keep this as a migration smoke assertion so a later CREATE OR REPLACE cannot
 -- silently restore PostgreSQL's default PUBLIC EXECUTE grant.
-do $
+do $privilege_check$
 declare
   signature text;
   protected_signatures text[] := array[
@@ -994,7 +994,7 @@ begin
     raise exception 'Service role is missing required queue or lease table privileges';
   end if;
 end
-$;
+$privilege_check$;
 
 select status, attempts from public.execution_jobs
 where idempotency_key = 'smoke-idempotency-key';
