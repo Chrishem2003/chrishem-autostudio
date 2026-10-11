@@ -97,3 +97,36 @@ This is a review queue, not an automatic repair command. Check recent worker log
 ## Scope and limitations
 
 The database smoke test validates migrations, permissions, idempotency, lease fencing, concurrent claims, audit-run attachment, and expired-lease reconciliation. It does not prove that a production deployment has applied the migration, configured the scheduler, or completed a live provider integration test. Confirm those separately before rollout.
+
+## Interrupted manual and scheduled runs
+
+Manual and scheduled execution paths also preserve an open `run_logs` record when the database refuses to reconcile an in-flight step intent. This is deliberate: a terminal parent run must not hide a step whose external effect is still uncertain. Unlike expired durable-queue leases, these paths do not currently have an automatic general-purpose stale-run repairer. Treat such records as an operator review item, not as proof that execution is still active or safe to replay.
+
+### Find open audit runs that are not attached to an active queue job
+
+```sql
+select
+  r.id as run_id,
+  r.automation_id,
+  r.started_at,
+  r.status as run_status,
+  count(s.id) filter (where s.status = 'running') as running_step_count,
+  count(s.id) filter (where s.outcome_state = 'uncertain') as uncertain_step_count
+from public.run_logs r
+left join public.run_step_logs s on s.run_id = r.id
+where r.status = 'running'
+  and not exists (
+    select 1
+    from public.execution_jobs j
+    where j.run_id = r.id
+      and j.status = 'running'
+      and j.locked_until > now()
+  )
+group by r.id, r.automation_id, r.started_at, r.status
+order by r.started_at;
+```
+
+This query is diagnostic only. It can include a recently interrupted manual/scheduled run, a queue run awaiting lease reconciliation, or a run whose worker is delayed. Check worker logs, the matching step intents, and provider-side activity before changing state. For each in-flight step, establish whether the external action happened; preserve uncertainty when it cannot be established. Do not blindly mark the parent run successful or replay the automation. If the audit database itself is unavailable, wait for recovery and repeat the read-only checks before attempting any repair.
+
+When incident volume justifies automation, add a dedicated, lease-fenced stale-run reconciliation task with explicit ownership, age thresholds, per-path eligibility, and audit evidence before enabling automatic repair. Do not treat this operator query as an automatic repair mechanism.
+
