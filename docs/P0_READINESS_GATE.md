@@ -52,6 +52,13 @@ P0 is complete only when all applicable A, B, and C gates are evidenced by actua
 Do not mark any unchecked item as passed based on code inspection alone.
 
 
+## SQL NULL lease-boundary hardening — 2026-10-11
+
+- Review found that PostgreSQL comparisons against explicit `NULL` evaluate to unknown, so range-only checks could be bypassed by a caller passing `NULL` to queue claim/heartbeat RPCs. A claim could then attempt to create a running job with no valid expiry.
+- Both RPCs now explicitly reject a NULL lease duration as well as values outside 30–900 seconds.
+- Disposable PostgreSQL regression coverage includes NULL, below-minimum, and above-maximum values for both RPCs. Exact-head CI must pass before this fix is considered verified.
+- This is database-level hardening only; staging rollout, authentication, provider idempotency, and interrupted-worker rehearsal remain open. Queue and outbound transport stay disabled.
+
 ## Exact-head queue-health verification — 2026-10-11
 
 - Current branch head `ba0f8aff3d62515229c17be39321de5ba4031b43` passed both required GitHub Actions jobs: [CI run 38138209525](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38138209525).
