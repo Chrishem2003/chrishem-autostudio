@@ -36,6 +36,18 @@ describe("sanitizeRunOutput", () => {
     expect(sanitizeRunOutput({ list: Array.from({ length: 55 }, (_, i) => i) }).list).toHaveLength(51);
   });
 
+  test("redacts credentials embedded in ordinary output strings", () => {
+    const result = sanitizeRunOutput({
+      detail: "api_key=sk_live_123 password=hunter2 client_secret:very-secret",
+      authorization: "Bearer hidden",
+    });
+    expect(result.detail).not.toContain("sk_live_123");
+    expect(result.detail).not.toContain("hunter2");
+    expect(result.detail).not.toContain("very-secret");
+    expect(result.detail).toContain("[REDACTED_SECRET]");
+    expect(result.authorization).toBe("[redacted]");
+  });
+
   test("omits unsupported runtime values", () => {
     expect(sanitizeRunOutput({ value: undefined, fn: () => "secret" })).toEqual({
       value: "[omitted]",
