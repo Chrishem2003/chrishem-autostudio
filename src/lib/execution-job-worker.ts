@@ -95,9 +95,17 @@ export async function processOneExecutionJob(
   let error = result.error
     ? sanitizeExecutionError(result.error, "Execution failed; inspect the run details and verify external outcome before retrying.")
     : null;
-  if (result.status === "succeeded") {
+  if (result.status === "succeeded" && result.sideEffectCertainty === "effect_confirmed") {
     finalStatus = "succeeded";
     error = null;
+  } else if (result.status === "succeeded") {
+    // A success label without confirmed side-effect evidence is contradictory.
+    // Do not publish success or automatically replay a potentially completed action.
+    finalStatus = "needs_review";
+    error = sanitizeExecutionError(
+      result.error,
+      "Executor reported success without confirmed side-effect evidence. Verify the external outcome before retrying.",
+    );
   } else if (result.retryable === false) {
     // Permanent validation/configuration failures are terminal for this job.
     // Keep them distinct from transient no-side-effect failures that can retry.
