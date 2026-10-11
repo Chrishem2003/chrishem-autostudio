@@ -20,7 +20,7 @@ export function sanitizeStepOutputs(node: WorkflowNode, step: ExecutedStep): Exe
     if (typeof step.outputs["mappedCount"] === "number" && Number.isInteger(step.outputs["mappedCount"]) && step.outputs["mappedCount"] >= 0 && step.outputs["mappedCount"] <= 50) safe["mappedCount"] = step.outputs["mappedCount"];
     const mappedConfig = node.config["mapping"];
     if (typeof mappedConfig === "string") {
-      const mappedFields = mappedConfig.split(/\\r?\\n/);
+      const mappedFields = mappedConfig.split(/\r?\n/);
       for (const line of mappedFields) {
         const separator = line.indexOf("=");
         if (separator < 1) continue;
