@@ -24,7 +24,6 @@ export interface ExecutionJobResult {
   retryAt?: string | null;
   /** False for permanent validation/configuration failures; do not spin retries. */
   retryable?: boolean;
-  providerSupportsIdempotency?: boolean;
 }
 
 export interface ExecutionJobWorkerDependencies {
@@ -52,6 +51,8 @@ export type ProcessOneJobResult =
  * Processes at most one claimed job. Database atomicity and lease fencing are
  * enforced by the RPC adapter; this function never assumes it owns a lease
  * after heartbeat reports false. An exception from an executor is uncertain.
+ * Executor results cannot self-assert provider idempotency: until a reviewed
+ * adapter capability is wired into this worker, uncertain effects go to review.
  */
 export async function processOneExecutionJob(
   dependencies: ExecutionJobWorkerDependencies,
@@ -106,9 +107,6 @@ export async function processOneExecutionJob(
       sideEffectCertainty: result.sideEffectCertainty,
       attempts: job.attempts,
       maxAttempts: job.maxAttempts,
-      ...(result.providerSupportsIdempotency === undefined
-        ? {}
-        : { providerSupportsIdempotency: result.providerSupportsIdempotency }),
       stableIdempotencyKey: job.idempotencyKey,
     });
     finalStatus = decision.status;
