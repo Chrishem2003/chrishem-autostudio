@@ -100,7 +100,7 @@ The database smoke test validates migrations, permissions, idempotency, lease fe
 
 ## Interrupted manual and scheduled runs
 
-The authenticated `/api/public/cron/run-scheduled` task scans up to 100 open manual and scheduled runs older than 20 minutes on each invocation. It calls the transactional `reconcile_stale_execution_run` RPC, which serializes against the per-automation lease and leaves a run untouched while another worker owns an active lease. Reconciliation closes the parent run as failed and marks only still-running step intents as failed/uncertain; it never replays provider actions.
+The authenticated `/api/public/cron/run-scheduled` task scans up to 100 open manual and scheduled runs older than 20 minutes on each invocation, oldest first. Before starting a new live manual run, the authenticated server function also checks up to 50 stale manual runs for that same automation while holding its own lease. Both paths call the transactional `reconcile_stale_execution_run` RPC, which serializes against the per-automation lease and leaves a run untouched while another worker owns an active lease. Reconciliation closes the parent run as failed and marks only still-running step intents as failed/uncertain; it never replays provider actions.
 
 If the scheduler is stopped or the stale-run query/RPC fails, open records may remain for later inspection. The read-only queue-health endpoint reports stale manual/scheduled candidates. Treat those candidates as review signals, not proof that execution is active or safe to replay. Inspect provider history before any manual retry.
 
