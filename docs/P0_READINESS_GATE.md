@@ -186,3 +186,11 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - The disposable PostgreSQL smoke suite now checks manual and scheduled lease-duration bounds, stale manual-release token rejection, preservation of the active lease after a stale release attempt, and that manual lease release does not advance the scheduler cadence cursor.
 - The first run exposed an incomplete disposable schema fixture (missing the `automations.last_run_at` column referenced by the scheduler release RPC). The fixture was corrected to model that existing contract; the full migration and concurrency smoke test then passed.
 - This does not close P0. Live staging migration/authentication, interrupted-worker recovery, provider idempotency/duplicate-effect checks, and deployed outbound transport compatibility remain open. Durable queue and outbound transport must remain disabled until those acceptance checks are evidenced.
+
+
+## Queue final-status NULL validation — 2026-10-11
+
+- Hardened `finish_execution_job` to reject an explicit NULL status before PostgreSQL three-valued logic can bypass the allowed-status check.
+- Added a forward-only migration and a disposable PostgreSQL smoke regression asserting the exact validation error.
+- CI applies the new migration before the queue smoke suite. Verify green CI on the exact latest branch head before treating this batch as accepted.
+- This is code/database-smoke evidence only. Live staging, provider-side idempotency, interruption recovery, authentication and deployment gates remain open; keep the durable queue and outbound transport disabled.
