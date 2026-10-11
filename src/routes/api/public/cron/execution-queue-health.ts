@@ -168,7 +168,11 @@ export const Route = createFileRoute("/api/public/cron/execution-queue-health")(
             totalJobCount: totalQueueJobs,
             findingCount: findings.length,
             sampledFindingCount: sampledFindings.length,
+            // Counts and rows are read in separate database statements, not
+            // one transaction. Expose a mismatch instead of implying the count
+            // and inspected snapshot represent the same instant.
             jobsTruncated: totalQueueJobs > jobs.length,
+            jobCountMismatch: totalQueueJobs !== jobs.length,
             findingsTruncated: findings.length > sampledFindings.length,
             truncated: totalQueueJobs > jobs.length || findings.length > sampledFindings.length,
             countsByIssue: Object.fromEntries(

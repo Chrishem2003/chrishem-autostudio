@@ -76,6 +76,10 @@ These fixes are covered by the branch's typecheck, unit tests, production build 
 5. Audit onboarding, keyboard navigation, WCAG AA and mobile layout against measurable plan targets.
 6. Build P6 teams/approvals, P7 observability and API, then P8 differentiators.
 
+## Queue diagnostic snapshot consistency — 2026-10-11
+
+The protected queue-health endpoint now reports `jobCountMismatch` when its independently queried aggregate job counts do not equal the number of queue rows inspected for audit consistency. These reads are not wrapped in one database snapshot, so concurrent enqueue/finalization can legitimately cause a temporary mismatch. The endpoint remains read-only; the mismatch is diagnostic, not a repair trigger. This does not replace staging concurrency acceptance.
+
 ## Evidence boundary
 
 GitHub CI is evidence for code/build/unit-test and disposable PostgreSQL behavior only. It is not evidence that a real Supabase project, deployment secret, scheduler service, provider account or customer workflow has been configured successfully.
