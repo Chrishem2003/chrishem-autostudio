@@ -75,7 +75,10 @@ export interface ExpiredExecutionLeaseRow {
 
 export interface ExpiredExecutionLeaseSummary {
   totalCount: number;
+  /** Number of rows actually returned in the public diagnostic sample. */
   sampledCount: number;
+  /** Number of database rows inspected to build the sample. */
+  inspectedCount: number;
   truncated: boolean;
   sample: Array<{
     jobId: string;
@@ -101,8 +104,9 @@ export function summarizeExpiredExecutionLeases(
   }));
   return {
     totalCount: safeTotal,
-    sampledCount: rows.length,
-    truncated: safeTotal > rows.length,
+    sampledCount: sample.length,
+    inspectedCount: rows.length,
+    truncated: safeTotal > sample.length || rows.length > sample.length,
     sample,
   };
 }
@@ -124,15 +128,17 @@ export function summarizeStaleRunCandidates(
   cutoff: string,
 ) {
   const safeTotal = Number.isSafeInteger(totalCount) && totalCount >= 0 ? totalCount : rows.length;
+  const sample = rows.slice(0, 20).map((run) => ({
+    runId: run.id,
+    triggerType: run.trigger_type,
+    startedAt: run.started_at,
+  }));
   return {
     cutoff,
     totalCount: safeTotal,
-    sampledCount: rows.length,
-    truncated: safeTotal > rows.length,
-    sample: rows.slice(0, 20).map((run) => ({
-      runId: run.id,
-      triggerType: run.trigger_type,
-      startedAt: run.started_at,
-    })),
+    sampledCount: sample.length,
+    inspectedCount: rows.length,
+    truncated: safeTotal > sample.length || rows.length > sample.length,
+    sample,
   };
 }

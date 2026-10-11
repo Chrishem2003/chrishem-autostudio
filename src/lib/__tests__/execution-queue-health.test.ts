@@ -69,7 +69,8 @@ describe("summarizeExpiredExecutionLeases", () => {
     }));
     const summary = summarizeExpiredExecutionLeases(137, rows);
     expect(summary.totalCount).toBe(137);
-    expect(summary.sampledCount).toBe(100);
+    expect(summary.sampledCount).toBe(20);
+    expect(summary.inspectedCount).toBe(100);
     expect(summary.truncated).toBe(true);
     expect(summary.sample).toHaveLength(20);
   });
@@ -82,12 +83,12 @@ describe("summarizeExpiredExecutionLeases", () => {
       attempts: 1,
       max_attempts: 3,
     }]);
-    expect(summary).toMatchObject({ totalCount: 1, sampledCount: 1, truncated: false });
+    expect(summary).toMatchObject({ totalCount: 1, sampledCount: 1, inspectedCount: 1, truncated: false });
   });
 
   test("safely handles an invalid aggregate count", () => {
     const summary = summarizeExpiredExecutionLeases(Number.NaN, []);
-    expect(summary).toMatchObject({ totalCount: 0, sampledCount: 0, truncated: false });
+    expect(summary).toMatchObject({ totalCount: 0, sampledCount: 0, inspectedCount: 0, truncated: false });
   });
 });
 
