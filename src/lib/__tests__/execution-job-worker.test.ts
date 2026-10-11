@@ -218,6 +218,28 @@ describe("processOneExecutionJob", () => {
     expect(persistedError).toContain("[REDACTED_SECRET]");
   });
 
+  test("does not execute or finalize when claiming a job fails", async () => {
+    let executeCalls = 0;
+    let finishCalls = 0;
+    const { deps } = dependencies({
+      claim: async () => {
+        throw new Error("queue database unavailable");
+      },
+      execute: async () => {
+        executeCalls++;
+        return { status: "succeeded", sideEffectCertainty: "effect_confirmed" };
+      },
+      finish: async () => {
+        finishCalls++;
+        return true;
+      },
+    });
+
+    await expect(processOneExecutionJob(deps)).rejects.toThrow("queue database unavailable");
+    expect(executeCalls).toBe(0);
+    expect(finishCalls).toBe(0);
+  });
+
   test("reports rejected finalization instead of claiming success", async () => {
     const { deps } = dependencies({ finish: async () => false });
     expect(await processOneExecutionJob(deps)).toEqual({
