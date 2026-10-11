@@ -256,6 +256,21 @@ begin
     raise exception 'Service role cannot execute a required queue, lease, or recovery RPC';
   end if;
 
+  -- Ensure the migrations leave row-level security enabled as defense in depth.
+  if not exists (
+    select 1 from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relname = 'execution_jobs'
+      and c.relrowsecurity
+  ) or not exists (
+    select 1 from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relname = 'scheduled_run_locks'
+      and c.relrowsecurity
+  ) then
+    raise exception 'Row-level security is disabled for a protected queue or lease table';
+  end if;
+
   -- RLS is defense in depth: untrusted roles must have no direct table
   -- privileges, while the server-side service role needs the queue/lease tables.
   if has_table_privilege('anon', 'public.execution_jobs', 'SELECT')
