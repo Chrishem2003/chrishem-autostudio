@@ -58,6 +58,37 @@ begin
       raise exception 'Could not claim scheduled lease fixture';
     end if;
 
+    -- A stale scheduler token must not release the active lease or move the
+    -- cadence cursor, even when the caller supplies an otherwise valid time.
+    declare
+      scheduled_cursor_before timestamptz;
+    begin
+      select last_run_at into scheduled_cursor_before
+        from public.automations
+       where id = '00000000-0000-4000-8000-000000000002';
+
+      if public.release_scheduled_automation(
+        '00000000-0000-4000-8000-000000000002', gen_random_uuid(), now()
+      ) then
+        raise exception 'Scheduled release accepted a stale lock token';
+      end if;
+
+      if not exists (
+        select 1 from public.scheduled_run_locks
+         where automation_id = '00000000-0000-4000-8000-000000000002'
+           and lock_token = scheduled_token
+           and locked_until > now()
+      ) then
+        raise exception 'Stale scheduled release altered the active lease';
+      end if;
+
+      if (select last_run_at from public.automations
+           where id = '00000000-0000-4000-8000-000000000002')
+         is distinct from scheduled_cursor_before then
+        raise exception 'Stale scheduled release advanced the cadence cursor';
+      end if;
+    end;
+
     begin
       perform public.release_scheduled_automation(
         '00000000-0000-4000-8000-000000000002', scheduled_token, null
