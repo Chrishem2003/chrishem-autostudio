@@ -411,3 +411,9 @@ Hardened all three live run-summary finalization paths (authenticated manual run
 - Scheduled execution enters its existing failed-state fallback when the summary update errors or updates no row; it does not assume that a no-error response means a row was changed.
 
 This closes the Supabase/PostgREST distinction between a successful request and a confirmed row mutation. It does not make run-step writes transactional with external provider actions, and it does not replace staging failure-injection tests against a real database. Keep durable queue and outbound transport gates disabled until those staging checks pass.
+
+## Step-outcome write confirmation — 2026-10-11
+
+Both synchronous manual execution and durable queued execution now consider a step outcome persisted only when the database update returns the expected run_step_logs row. Updates are scoped by step intent ID and run ID. A database error or zero-row result fails closed; the shared traversal halts subsequent steps because the external action may already have occurred while its outcome remains unrecorded.
+
+Regression coverage explicitly exercises the zero-row/no-error callback result and verifies later steps do not execute. This is unit coverage of the traversal contract, not a substitute for staging fault-injection against the real Supabase adapter. Durable queue and outbound transport remain gated off pending staging acceptance.
