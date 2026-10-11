@@ -359,3 +359,14 @@ The build remains aligned with the plan's reliability-first sequence: execution 
 2. Add route-level regression coverage for malformed persisted workflows at the real enqueue/run boundaries.
 3. Continue the provider reliability contract: per-adapter capability declarations and only verified idempotency claims; no speculative retries of uncertain effects.
 
+## Provider idempotency claims corrected — 2026-10-11
+
+**Implemented on the active hardening branch; exact-head CI pending.**
+
+- Corrected the Gmail send action manifest: the adapter does not supply a provider-enforced idempotency key, so it must not advertise `provider-managed` idempotency or a provider-contract retry policy.
+- Gmail uncertain outcomes now follow the same conservative contract as other message sends: no automatic replay without a separately implemented and verified idempotency mechanism; inspect provider state first.
+- Added a connector-manifest regression test so future edits cannot silently restore the unsupported claim.
+- This is a capability-truthfulness fix, not a change to the live Gmail transport. It does not authorize queue activation or automatic retries.
+
+**Acceptance gate:** typecheck, tests, production build, and PostgreSQL queue smoke tests must pass on the exact resulting commit. Staging must still demonstrate provider behavior independently; manifest metadata alone is not provider-side proof.
+
