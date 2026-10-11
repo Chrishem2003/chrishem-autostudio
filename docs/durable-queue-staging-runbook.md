@@ -59,6 +59,7 @@ Before turning on the flag, ensure only a deliberately prepared staging test aut
 - [ ] Confirm one `execution_jobs` row is created and its idempotency key is stable for a repeat of the same request.
 - [ ] Invoke the worker; verify job status transitions through `running` to its terminal state.
 - [ ] Verify the matching `run_logs` row and all `run_step_logs` records, including outcome certainty.
+- [ ] Confirm Run History shows the queue-review warning and identifies any `outcome_state = uncertain` step; terminal run status must remain unchanged if the queue later requires review.
 - [ ] Verify the provider-side effect exactly once using the provider's own audit/history.
 - [ ] Replay the same request ID with the same logical payload and confirm enqueue returns the existing job rather than creating a duplicate.
 - [ ] Reuse that idempotency key with a changed trigger, payload, requester, or retry limit and confirm enqueue rejects the conflicting request instead of silently returning the old job.
