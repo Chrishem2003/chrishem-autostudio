@@ -1,7 +1,8 @@
 // @ts-nocheck -- Bun's test runner supplies test types at runtime
 import { describe, expect, it } from "bun:test";
 import {
-  MAX_EXECUTION_JOB_PAYLOAD_BYTES,\n  parseExecutionJobEnqueueResult,
+  MAX_EXECUTION_JOB_PAYLOAD_BYTES,
+  parseExecutionJobEnqueueResult,
   validateExecutionJobEnqueueMetadata,
   validateExecutionJobPayload,
 } from "../execution-job-input";
