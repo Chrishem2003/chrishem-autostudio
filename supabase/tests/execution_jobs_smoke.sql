@@ -100,6 +100,17 @@ begin
   if claimed.id is distinct from expired_job.id then
     raise exception 'Could not claim the expired-lease fixture';
   end if;
+  insert into public.run_logs (id, automation_id, status, started_at)
+  values ('00000000-0000-4000-8000-000000000010',
+          '00000000-0000-4000-8000-000000000002', 'running', now() - interval '2 minutes');
+  insert into public.run_step_logs (id, run_id, status, outcome_state)
+  values ('00000000-0000-4000-8000-000000000011',
+          '00000000-0000-4000-8000-000000000010', 'running', 'uncertain');
+  if not public.attach_execution_job_run(
+    expired_job.id, claimed.worker_token, '00000000-0000-4000-8000-000000000010'
+  ) then
+    raise exception 'Current worker could not attach its audit run';
+  end if;
   update public.execution_jobs
      set locked_until = now() - interval '1 second'
    where id = expired_job.id;
@@ -107,6 +118,13 @@ begin
   select * into expired_job from public.execution_jobs where id = expired_job.id;
   if expired_job.status <> 'needs_review' or expired_job.worker_token is not null then
     raise exception 'Expired lease was not safely moved to needs_review';
+  end if;
+  if (select status from public.run_logs where id = '00000000-0000-4000-8000-000000000010') <> 'failed' then
+    raise exception 'Expired queue lease left its audit run stuck as running';
+  end if;
+  if (select status from public.run_step_logs where id = '00000000-0000-4000-8000-000000000011') <> 'failed'
+     or (select outcome_state from public.run_step_logs where id = '00000000-0000-4000-8000-000000000011') <> 'uncertain' then
+    raise exception 'Expired queue lease did not preserve uncertain step outcome for review';
   end if;
 
   select * into dead_job
