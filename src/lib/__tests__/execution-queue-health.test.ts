@@ -1,6 +1,6 @@
 // @ts-nocheck -- Bun's test runner supplies test types at runtime
 import { describe, expect, test } from "bun:test";
-import { summarizeExecutionQueueHealth, type ExecutionQueueHealthRow, type ExecutionQueueStatus } from "@/lib/execution-queue-health";
+import { summarizeExecutionQueueHealth, summarizeExpiredExecutionLeases, type ExecutionQueueHealthRow, type ExecutionQueueStatus } from "@/lib/execution-queue-health";
 
 const emptyCounts = (): Record<ExecutionQueueStatus, number> => ({
   queued: 0,
@@ -55,5 +55,38 @@ describe("summarizeExecutionQueueHealth", () => {
     expect(summary.recentFailures[0]?.error).toBe("[REDACTED_SECRET]");
     expect(summary.recentFailures[1]?.error).toBe("No safe error detail is available.");
     expect(JSON.stringify(summary)).not.toContain("secret-value");
+  });
+});
+
+describe("summarizeExpiredExecutionLeases", () => {
+  test("distinguishes the exact total from a bounded diagnostic sample", () => {
+    const rows = Array.from({ length: 100 }, (_, index) => ({
+      id: `job-${index}`,
+      locked_until: "2026-10-11T09:00:00.000Z",
+      updated_at: "2026-10-11T08:55:00.000Z",
+      attempts: 2,
+      max_attempts: 3,
+    }));
+    const summary = summarizeExpiredExecutionLeases(137, rows);
+    expect(summary.totalCount).toBe(137);
+    expect(summary.sampledCount).toBe(100);
+    expect(summary.truncated).toBe(true);
+    expect(summary.sample).toHaveLength(20);
+  });
+
+  test("does not report a truncated sample when all expired leases fit", () => {
+    const summary = summarizeExpiredExecutionLeases(1, [{
+      id: "job-1",
+      locked_until: "2026-10-11T09:00:00.000Z",
+      updated_at: "2026-10-11T08:55:00.000Z",
+      attempts: 1,
+      max_attempts: 3,
+    }]);
+    expect(summary).toMatchObject({ totalCount: 1, sampledCount: 1, truncated: false });
+  });
+
+  test("safely handles an invalid aggregate count", () => {
+    const summary = summarizeExpiredExecutionLeases(Number.NaN, []);
+    expect(summary).toMatchObject({ totalCount: 0, sampledCount: 0, truncated: false });
   });
 });
