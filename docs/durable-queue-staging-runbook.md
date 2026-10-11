@@ -125,3 +125,10 @@ The disposable PostgreSQL smoke suite now checks multi-step recovery and unrelat
 ### Shared automation lease boundary check
 
 The current database smoke suite also verifies that scheduled lease claims, manual lease claims, and shared-lease heartbeats reject explicit NULL durations. During staging acceptance, additionally verify invalid lease durations return a safe client-visible error and cannot create or extend a lock. Do not treat disposable PostgreSQL results as a substitute for testing the deployed Supabase migration chain.
+
+
+### Scheduled cadence cursor integrity
+
+- [ ] Confirm release_scheduled_automation rejects a NULL cadence cursor before releasing its token-fenced lock.
+- [ ] Verify a rejected release leaves the current lease intact and does not change automations.last_run_at.
+- [ ] Verify a valid release advances the cadence cursor once, and a repeated delivery of the same schedule window returns the same idempotent job.
