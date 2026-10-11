@@ -438,3 +438,10 @@ These are database-level regression checks, not a substitute for staging rehears
 - Extended the disposable CI database schema and smoke test to simulate a hard crash after run/step intent persistence, expire the queue lease, and assert that both run and step audit records reconcile correctly. CI applies the new migration before running the smoke test.
 
 **Safety boundary:** expired jobs remain `needs_review`; reconciliation does not replay provider actions or imply that an external effect did not happen. The database smoke test verifies this recovery path locally in CI, but staging verification is still required before enabling the durable queue or outbound transport.
+
+## Worker-side audit payload minimization — 2026-10-11
+
+- Applied the shared recursive output sanitizer to durable worker step snapshots, including step detail and connector outputs, rather than only sanitizing the legacy client dry-run path. Failure detail is also passed through the execution-error sanitizer before storage.
+- Expanded string redaction to cover credential assignments (for example `api_key=` and `client_secret:`), JWT-like tokens, and Basic/Bearer authorization values, in addition to URLs and email addresses. Added regression coverage for credentials embedded in otherwise ordinary strings.
+
+**Acceptance boundary:** CI must pass at the exact commit. Redaction remains defense in depth; connector implementations should still emit allowlisted, minimal outputs instead of raw provider payloads.
