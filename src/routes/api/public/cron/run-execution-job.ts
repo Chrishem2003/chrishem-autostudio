@@ -206,7 +206,7 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
             mode: "live",
             startedAtMs: started,
           });
-          const { error: finishRunError } = await supabaseAdmin
+          const { data: finalizedRun, error: finishRunError } = await supabaseAdmin
             .from("run_logs")
             .update({
               status: finalization.status,
@@ -217,11 +217,14 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
                 : null,
             })
             .eq("id", run.id)
-            .eq("status", "running");
+            .eq("status", "running")
+            .select("id")
+            .maybeSingle();
 
-          if (finishRunError) {
+          if (finishRunError || !finalizedRun) {
+            // A zero-row update is also an unconfirmed finalization, not success.
             // Do not return success to the queue when the audit summary is unknown.
-            throw new Error("Run summary could not be persisted; inspect step audit records before retrying.");
+            throw new Error("Run summary could not be confirmed as persisted; inspect step audit records before retrying.");
           }
 
           if (finalization.status === "failed") {
