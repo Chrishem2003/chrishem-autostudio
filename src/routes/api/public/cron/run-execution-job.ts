@@ -13,6 +13,7 @@ import { executeStep, livePreflightError } from "@/lib/execute-step.server";
 import type { Workflow } from "@/lib/workflow";
 import { createAndAttachExecutionJobRun } from "@/lib/execution-run-association";
 import { firstLivePreflightError } from "@/lib/live-execution-preflight";
+import { runWithExecutionLeaseKeepalive } from "@/lib/execution-lease-keepalive.server";
 
 const MAX_JOB_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -146,7 +147,14 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
               if (!automationLeaseAlive) {
                 throw new Error("Automation execution lease was lost; stop before starting another external action.");
               }
-              return executeStep(args);
+              return runWithExecutionLeaseKeepalive(
+                () => executeStep(args),
+                async () => {
+                  const queueAlive = await context.heartbeat();
+                  if (!queueAlive) return false;
+                  return heartbeatAutomationLease();
+                },
+              );
             },
             persistIntent: async (node, index) => {
               const queueLeaseAlive = await context.heartbeat();
