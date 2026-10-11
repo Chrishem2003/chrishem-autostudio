@@ -16,6 +16,36 @@ declare
   expired_job public.execution_jobs%rowtype;
   dead_job public.execution_jobs%rowtype;
 begin
+  -- Shared scheduler/manual leases must reject NULL durations explicitly.
+  begin
+    perform public.claim_scheduled_automation(
+      '00000000-0000-4000-8000-000000000002', null
+    );
+    raise exception 'Scheduled lease claim accepted NULL duration';
+  exception when others then
+    if sqlerrm <> 'Invalid scheduler lease duration' then raise; end if;
+  end;
+
+  begin
+    perform public.claim_manual_automation(
+      '00000000-0000-4000-8000-000000000002', null
+    );
+    raise exception 'Manual lease claim accepted NULL duration';
+  exception when others then
+    if sqlerrm <> 'Invalid manual-run lease duration' then raise; end if;
+  end;
+
+  begin
+    perform public.heartbeat_manual_automation(
+      '00000000-0000-4000-8000-000000000002',
+      '00000000-0000-4000-8000-000000000099',
+      null
+    );
+    raise exception 'Automation lease heartbeat accepted NULL duration';
+  exception when others then
+    if sqlerrm <> 'Invalid automation lease duration' then raise; end if;
+  end;
+
   -- Required scalar parameters must reject explicit NULL, not fall through
   -- PostgreSQL's three-valued IF logic and fail later with a constraint error.
   begin
