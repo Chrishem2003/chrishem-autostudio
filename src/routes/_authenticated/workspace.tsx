@@ -19,6 +19,7 @@ import { explainFailure } from "@/lib/assist.functions";
 import { detectConflicts } from "@/lib/conflicts";
 import { cn } from "@/lib/utils";
 import { setPublished } from "@/lib/gallery.functions";
+import { listMyExecutionQueue } from "@/lib/execution-queue.functions";
 
 export const Route = createFileRoute("/_authenticated/workspace")({
   head: () => ({
@@ -34,7 +35,7 @@ export const Route = createFileRoute("/_authenticated/workspace")({
   component: Workspace,
 });
 
-type Section = "automations" | "runs" | "integrations";
+type Section = "automations" | "runs" | "queue" | "integrations";
 
 function healthTone(h: number) {
   return h >= 80 ? "text-primary" : h >= 50 ? "text-foreground" : "text-destructive";
@@ -62,6 +63,7 @@ function Workspace() {
             [
               ["automations", "My Automations"],
               ["runs", "Run History"],
+              ["queue", "Execution Queue"],
               ["integrations", "Integrations"],
             ] as const
           ).map(([id, label]) => (
@@ -84,12 +86,13 @@ function Workspace() {
       <main className="min-w-0 flex-1 p-6 max-sm:p-4">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <h1 className="font-display text-xl font-semibold">
-            {section === "automations" ? "My Automations" : section === "runs" ? "Run History" : "Integrations"}
+            {section === "automations" ? "My Automations" : section === "runs" ? "Run History" : section === "queue" ? "Execution Queue" : "Integrations"}
           </h1>
           <Link to="/" className="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground">+ New Automation</Link>
         </div>
         {section === "automations" && <Automations />}
         {section === "runs" && <Runs />}
+        {section === "queue" && <ExecutionQueue />}
         {section === "integrations" && <Integrations />}
       </main>
     </div>
