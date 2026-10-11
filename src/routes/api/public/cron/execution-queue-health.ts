@@ -5,6 +5,7 @@ import { sanitizeExecutionError } from "@/lib/execution-error-sanitizer";
 import {
   EXECUTION_QUEUE_STATUSES,
   summarizeExecutionQueueHealth,
+  summarizeExpiredExecutionLeases,
   type ExecutionQueueHealthRow,
   type ExecutionQueueStatus,
 } from "@/lib/execution-queue-health";
@@ -115,10 +116,17 @@ export const Route = createFileRoute("/api/public/cron/execution-queue-health")(
 
           // Expired leases are reported, never reset here: a lease timeout can
           // mean an external side effect happened but its acknowledgement was lost.
+          const expiredLeaseCutoff = new Date().toISOString();
+          const expiredLeaseCountResult = await fromQueue()
+            .select("id", { count: "exact", head: true })
+            .eq("status", "running")
+            .lte("locked_until", expiredLeaseCutoff);
+          if (expiredLeaseCountResult.error) throw new Error("Expired lease count unavailable.");
+
           const expiredLeaseResult = await fromQueue()
             .select("id, locked_until, updated_at, attempts, max_attempts")
             .eq("status", "running")
-            .lte("locked_until", new Date().toISOString())
+            .lte("locked_until", expiredLeaseCutoff)
             .order("locked_until", { ascending: true })
             .limit(100);
           if (expiredLeaseResult.error) throw new Error("Expired lease snapshot unavailable.");
@@ -129,16 +137,10 @@ export const Route = createFileRoute("/api/public/cron/execution-queue-health")(
             attempts: number;
             max_attempts: number;
           }>;
-          const expiredLeaseSummary = {
-            sampledCount: expiredLeases.length,
-            sample: expiredLeases.slice(0, 20).map((job) => ({
-              jobId: job.id,
-              lockedUntil: job.locked_until,
-              updatedAt: job.updated_at,
-              attempts: job.attempts,
-              maxAttempts: job.max_attempts,
-            })),
-          };
+          const expiredLeaseSummary = summarizeExpiredExecutionLeases(
+            expiredLeaseCountResult.count ?? expiredLeases.length,
+            expiredLeases,
+          );
 
           const consistency = {
             sampledJobs: jobs.length,
