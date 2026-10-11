@@ -3,7 +3,7 @@ import { authenticateCronRequest } from "@/integrations/supabase/cron-auth";
 import { runCronTaskAfterAuthentication } from "@/lib/cron-task-guard";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { classifyExecutionOutcome } from "@/lib/execution-outcome";
-import { sanitizeExecutionError } from "@/lib/execution-error-sanitizer";
+import { sanitizeExecutionAuditValue, sanitizeExecutionError } from "@/lib/execution-error-sanitizer";
 import { executeFlowSteps } from "@/lib/execute-flow-steps.server";
 import { createSupabaseExecutionJobDependencies } from "@/lib/execution-job-queue.server";
 import { processOneExecutionJob } from "@/lib/execution-job-worker";
@@ -177,7 +177,7 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
                   output_snapshot: {
                     detail: sanitizeExecutionError(step.detail, "Step completed without safe detail."),
                     outcomeState,
-                    ...(step.outputs ? { outputs: step.outputs } : {}),
+                    ...(step.outputs ? { outputs: sanitizeExecutionAuditValue(step.outputs) } : {}),
                   },
                 })
                 .eq("id", intentId)
