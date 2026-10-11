@@ -280,15 +280,27 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
             }
             throw executionError;
           } finally {
-            const { error: releaseError } = await supabaseAdmin.rpc("release_manual_automation", {
-              _automation_id: automation.id,
-              _lock_token: executionLock,
-            });
-            if (releaseError) {
-              console.error("[AutoStudio queue worker] Automation lease release failed.", {
+            // Lock release is best-effort cleanup: a transport exception here must
+            // not overwrite a known execution/audit outcome and turn a confirmed
+            // side effect into a misleading worker failure. The lease has a bounded
+            // expiry, so log safely and let expiry recover if release is uncertain.
+            try {
+              const { error: releaseError } = await supabaseAdmin.rpc("release_manual_automation", {
+                _automation_id: automation.id,
+                _lock_token: executionLock,
+              });
+              if (releaseError) {
+                console.error("[AutoStudio queue worker] Automation lease release failed.", {
+                  jobId: job.id,
+                  automationId: automation.id,
+                  errorCode: releaseError.code,
+                });
+              }
+            } catch (releaseError) {
+              console.error("[AutoStudio queue worker] Automation lease release threw.", {
                 jobId: job.id,
                 automationId: automation.id,
-                errorCode: releaseError.code,
+                errorName: releaseError instanceof Error ? releaseError.name : "UnknownError",
               });
             }
           }
