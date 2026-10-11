@@ -140,6 +140,26 @@ describe("durable execution job enqueue RPC response validation", () => {
     expect(parseExecutionJobEnqueueResult({ id: "job-2", status: "needs_review" }).status).toBe("needs_review");
   });
 
+  it("snapshots enqueue response accessors once", () => {
+    let idReads = 0;
+    let statusReads = 0;
+    const result = {
+      get id() { idReads++; return idReads === 1 ? "job-1" : ""; },
+      get status() { statusReads++; return statusReads === 1 ? "queued" : "invalid"; },
+    };
+    expect(parseExecutionJobEnqueueResult(result)).toEqual({ id: "job-1", status: "queued" });
+    expect(idReads).toBe(1);
+    expect(statusReads).toBe(1);
+  });
+
+  it("fails closed when enqueue response accessors throw", () => {
+    const result = Object.defineProperties({}, {
+      id: { enumerable: true, get() { throw new Error("untrusted getter"); } },
+      status: { enumerable: true, value: "queued" },
+    });
+    expect(() => parseExecutionJobEnqueueResult(result)).toThrow("Queue enqueue returned no valid job.");
+  });
+
   it("rejects malformed identifiers and unknown statuses", () => {
     const invalidRows = [
       null,

@@ -21,41 +21,62 @@ export function parseClaimedExecutionJob(value: unknown): ClaimedExecutionJob {
     throw new Error("Queue claim returned an invalid job row.");
   }
 
-  const row = value as ClaimedJobRow;
+  let id: unknown;
+  let automationId: unknown;
+  let triggerType: unknown;
+  let payload: unknown;
+  let attempts: unknown;
+  let maxAttempts: unknown;
+  let workerToken: unknown;
+  let idempotencyKey: unknown;
+  try {
+    const row = value as ClaimedJobRow;
+    id = row.id;
+    automationId = row.automation_id;
+    triggerType = row.trigger_type;
+    payload = row.payload;
+    attempts = row.attempts;
+    maxAttempts = row.max_attempts;
+    workerToken = row.worker_token;
+    idempotencyKey = row.idempotency_key;
+  } catch {
+    throw new Error("Queue claim row contains invalid fields.");
+  }
+
   if (
-    typeof row.id !== "string" || row.id.trim().length === 0 || row.id.length > 200 ||
-    typeof row.automation_id !== "string" || row.automation_id.trim().length === 0 || row.automation_id.length > 200 ||
-    !["manual", "scheduled", "webhook"].includes(row.trigger_type as string) ||
-    typeof row.worker_token !== "string" || row.worker_token.trim().length === 0 || row.worker_token.length > 200 ||
-    typeof row.idempotency_key !== "string" ||
-    row.idempotency_key.trim().length === 0 || row.idempotency_key.length > 200
+    typeof id !== "string" || id.trim().length === 0 || id.length > 200 ||
+    typeof automationId !== "string" || automationId.trim().length === 0 || automationId.length > 200 ||
+    !["manual", "scheduled", "webhook"].includes(triggerType as string) ||
+    typeof workerToken !== "string" || workerToken.trim().length === 0 || workerToken.length > 200 ||
+    typeof idempotencyKey !== "string" ||
+    idempotencyKey.trim().length === 0 || idempotencyKey.length > 200
   ) {
     throw new Error("Queue claim row is missing required fields.");
   }
 
   if (
-    typeof row.max_attempts !== "number" || !Number.isInteger(row.max_attempts) || row.max_attempts < 1 ||
-    (row.max_attempts as number) > 10 ||
-    typeof row.attempts !== "number" || !Number.isInteger(row.attempts) || row.attempts < 1 ||
-    (row.attempts as number) > (row.max_attempts as number)
+    typeof maxAttempts !== "number" || !Number.isInteger(maxAttempts) || maxAttempts < 1 ||
+    maxAttempts > 10 ||
+    typeof attempts !== "number" || !Number.isInteger(attempts) || attempts < 1 ||
+    attempts > maxAttempts
   ) {
     throw new Error("Queue claim row has invalid attempt counters.");
   }
 
-  const payloadValidation = validateExecutionJobPayload(row.payload);
+  const payloadValidation = validateExecutionJobPayload(payload);
   if (!payloadValidation.success) {
     throw new Error("Queue claim row has an invalid payload.");
   }
 
   return {
-    id: row.id,
-    automationId: row.automation_id,
-    triggerType: row.trigger_type as "manual" | "scheduled" | "webhook",
+    id,
+    automationId,
+    triggerType: triggerType as "manual" | "scheduled" | "webhook",
     payload: payloadValidation.payload,
-    attempts: row.attempts as number,
-    maxAttempts: row.max_attempts as number,
-    workerToken: row.worker_token,
-    idempotencyKey: row.idempotency_key,
+    attempts,
+    maxAttempts,
+    workerToken,
+    idempotencyKey,
   };
 }
 

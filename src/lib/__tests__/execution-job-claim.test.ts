@@ -51,6 +51,23 @@ describe("parseClaimedExecutionJob", () => {
     }
   });
 
+  test("snapshots claim row accessors once before returning normalized fields", () => {
+    let idReads = 0;
+    const row = {
+      ...validRow(),
+      get id() { idReads++; return idReads === 1 ? "job-1" : "spoofed-job"; },
+    };
+    expect(parseClaimedExecutionJob(row).id).toBe("job-1");
+    expect(idReads).toBe(1);
+  });
+
+  test("fails closed when claim row accessors throw", () => {
+    const row = Object.defineProperties(validRow(), {
+      worker_token: { enumerable: true, get() { throw new Error("untrusted getter"); } },
+    });
+    expect(() => parseClaimedExecutionJob(row)).toThrow("Queue claim row contains invalid fields.");
+  });
+
   test("rejects missing or unsupported trigger types before execution", () => {
     for (const trigger_type of [undefined, null, "schedule", "unknown"]) {
       expect(() => parseClaimedExecutionJob({ ...validRow(), trigger_type })).toThrow("missing required fields");

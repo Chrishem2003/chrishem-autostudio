@@ -121,19 +121,28 @@ export function parseExecutionJobEnqueueResult(value: unknown): ExecutionJobEnqu
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Queue enqueue returned no valid job.");
   }
-  const record = value as Record<string, unknown>;
+  let id: unknown;
+  let status: unknown;
+  try {
+    const record = value as Record<string, unknown>;
+    id = record["id"];
+    status = record["status"];
+  } catch {
+    throw new Error("Queue enqueue returned no valid job.");
+  }
+
   const validStatuses = ["queued", "running", "succeeded", "failed", "needs_review", "dead_letter"];
   if (
-    typeof record["id"] !== "string" ||
-    !record["id"].trim() ||
-    record["id"].length > 200 ||
-    typeof record["status"] !== "string" ||
-    !validStatuses.includes(record["status"])
+    typeof id !== "string" ||
+    !id.trim() ||
+    id.length > 200 ||
+    typeof status !== "string" ||
+    !validStatuses.includes(status)
   ) {
     throw new Error("Queue enqueue returned no valid job.");
   }
   return {
-    id: record["id"],
-    status: record["status"] as ExecutionJobEnqueueResult["status"],
+    id,
+    status: status as ExecutionJobEnqueueResult["status"],
   };
 }
