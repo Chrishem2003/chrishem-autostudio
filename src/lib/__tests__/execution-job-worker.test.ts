@@ -158,6 +158,34 @@ describe("processOneExecutionJob", () => {
     expect(Number.isFinite(Date.parse(calls.finished[0].retryAt))).toBe(true);
   });
 
+  test("drops retry timestamps when a job is routed to manual review", async () => {
+    const { deps, calls } = dependencies({
+      execute: async () => ({
+        status: "failed",
+        sideEffectCertainty: "uncertain",
+        retryAt: new Date(Date.now() + 60_000).toISOString(),
+        error: "Provider outcome is uncertain",
+      }),
+    });
+    const result = await processOneExecutionJob(deps);
+    expect(result.status).toBe("needs_review");
+    expect(calls.finished[0].retryAt).toBeNull();
+  });
+
+  test("normalizes valid executor retry timestamps to ISO format", async () => {
+    const { deps, calls } = dependencies({
+      execute: async () => ({
+        status: "failed",
+        sideEffectCertainty: "not_attempted",
+        retryAt: "2030-01-01T12:00:00+03:00",
+        error: "Temporary failure",
+      }),
+    });
+    const result = await processOneExecutionJob(deps);
+    expect(result.status).toBe("queued");
+    expect(calls.finished[0].retryAt).toBe("2030-01-01T09:00:00.000Z");
+  });
+
   test("preserves scheduled retry time for transient lock contention", async () => {
     const retryAt = new Date(Date.now() + 30_000).toISOString();
     const { deps, calls } = dependencies({
