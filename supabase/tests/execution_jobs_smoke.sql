@@ -120,6 +120,12 @@ begin
   ) then
     raise exception 'Current worker could not attach its audit run';
   end if;
+  -- A retry of the same association is safe, but a different run must never replace it.
+  if not public.attach_execution_job_run(
+    expired_job.id, claimed.worker_token, '00000000-0000-4000-8000-000000000010'
+  ) then
+    raise exception 'Idempotent audit run attachment retry was rejected';
+  end if;
   if public.attach_execution_job_run(
     expired_job.id, claimed.worker_token, '00000000-0000-4000-8000-000000000012'
   ) then
@@ -128,6 +134,12 @@ begin
   update public.execution_jobs
      set locked_until = now() - interval '1 second'
    where id = expired_job.id;
+  if public.heartbeat_execution_job(expired_job.id, claimed.worker_token, 300) then
+    raise exception 'Heartbeat renewed an already-expired worker lease';
+  end if;
+  if public.finish_execution_job(expired_job.id, claimed.worker_token, 'succeeded', null, null) then
+    raise exception 'Expired worker lease was allowed to finalize the job';
+  end if;
   perform * from public.claim_execution_job(300);
   select * into expired_job from public.execution_jobs where id = expired_job.id;
   if expired_job.status <> 'needs_review' or expired_job.worker_token is not null then
