@@ -1,6 +1,7 @@
 // @ts-nocheck -- Bun's test runner supplies test types at runtime
 import { describe, expect, it } from "bun:test";
 import { executeFlowSteps } from "../execute-flow-steps.server";
+import { executeStep } from "../execute-step.server";
 
 const nodes = [
   { id: "trigger-1", defId: "trigger.manual", name: "Manual trigger", x: 0, y: 0, config: {} },
@@ -177,6 +178,27 @@ describe("shared flow-step engine", () => {
     }));
     expect(result.failed).toBe(false);
     expect(executed).toEqual(["trigger-1", "filter-1"]);
+  });
+
+  it("evaluates a filter against declared outputs from an earlier step", async () => {
+    const executed = [];
+    const source = { ...nodes[1], defId: "action.http", config: {} };
+    const filter = { id: "filter-1", defId: "logic.filter", name: "Only server errors", x: 2, y: 0, config: { condition: "httpStatus >= 500" } };
+    const target = nodes[2];
+    const result = await executeFlowSteps(baseInput({
+      nodes: [nodes[0], source, filter, target],
+      execute: async (args) => {
+        executed.push(args.node.id);
+        if (args.node.id === "step-1") {
+          return { nodeId: args.node.id, label: args.node.name, status: "success", ms: 1, detail: "ok", outputs: { httpStatus: 201 } };
+        }
+        if (args.node.defId === "logic.filter") return executeStep(args);
+        return { nodeId: args.node.id, label: args.node.name, status: "success", ms: 1, detail: "should not run" };
+      },
+    }));
+    expect(result.failed).toBe(false);
+    expect(executed).toEqual(["trigger-1", "step-1", "filter-1"]);
+    expect(result.steps[2].outputs).toEqual({ passed: false });
   });
 
   it("allows only the declared passed output from a filter step", async () => {
