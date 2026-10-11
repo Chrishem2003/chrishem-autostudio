@@ -48,12 +48,14 @@ export function validateExecutionJobEnqueueMetadata(value: unknown): ExecutionJo
   if (typeof automationId !== "string" || !automationId.trim() || automationId.length > 200) {
     return { success: false, error: "An automation ID is required." };
   }
+  const normalizedAutomationId = automationId.trim();
   if (!["manual", "scheduled", "webhook"].includes(triggerType as string)) {
     return { success: false, error: "Execution trigger type is unsupported." };
   }
   if (typeof idempotencyKey !== "string" || !idempotencyKey.trim() || idempotencyKey.length > 200) {
     return { success: false, error: "Idempotency key must contain between 1 and 200 characters." };
   }
+  const normalizedIdempotencyKey = idempotencyKey.trim();
   if (requestedBy !== undefined && requestedBy !== null && (typeof requestedBy !== "string" || requestedBy.length > 200)) {
     return { success: false, error: "Requesting user ID must be a string or null." };
   }
@@ -67,9 +69,9 @@ export function validateExecutionJobEnqueueMetadata(value: unknown): ExecutionJo
   return {
     success: true,
     value: {
-      automationId,
+      automationId: normalizedAutomationId,
       triggerType: triggerType as "manual" | "scheduled" | "webhook",
-      idempotencyKey,
+      idempotencyKey: normalizedIdempotencyKey,
       ...(requestedBy !== undefined ? { requestedBy: requestedBy as string | null } : {}),
       maxAttempts,
       ...(availableAt !== undefined ? { availableAt: availableAt as string } : {}),

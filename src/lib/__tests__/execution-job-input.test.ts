@@ -62,6 +62,23 @@ describe("durable execution job enqueue metadata validation", () => {
     expect(reads).toBe(1);
   });
 
+  it("normalizes whitespace around automation and idempotency identifiers", () => {
+    const result = validateExecutionJobEnqueueMetadata({
+      automationId: " automation-1 ",
+      triggerType: "manual",
+      idempotencyKey: " request-1 ",
+    });
+    expect(result).toEqual({
+      success: true,
+      value: {
+        automationId: "automation-1",
+        triggerType: "manual",
+        idempotencyKey: "request-1",
+        maxAttempts: 3,
+      },
+    });
+  });
+
   it("preserves optional user and schedule metadata when valid", () => {
     const result = validateExecutionJobEnqueueMetadata({
       ...valid(), requestedBy: "user-1", maxAttempts: 5, availableAt: "2030-01-01T00:00:00Z",
