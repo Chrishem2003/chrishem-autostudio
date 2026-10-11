@@ -368,6 +368,7 @@ export type Database = {
         Row: {
           automation_id: string
           execution_job_id: string | null
+          queue_review_required: boolean
           created_at: string
           duration_ms: number | null
           error_summary: string | null
@@ -382,6 +383,7 @@ export type Database = {
         Insert: {
           automation_id: string
           execution_job_id?: string | null
+          queue_review_required?: boolean
           created_at?: string
           duration_ms?: number | null
           error_summary?: string | null
@@ -396,6 +398,7 @@ export type Database = {
         Update: {
           automation_id?: string
           execution_job_id?: string | null
+          queue_review_required?: boolean
           created_at?: string
           duration_ms?: number | null
           error_summary?: string | null
