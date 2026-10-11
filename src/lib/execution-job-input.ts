@@ -111,6 +111,23 @@ export function validateExecutionJobPayload(value: unknown): ExecutionJobPayload
   }
 }
 
+/**
+ * Read and validate the payload field at the enqueue boundary. Accessing the
+ * field itself can throw before JSON serialization gets a chance to validate it.
+ */
+export function validateExecutionJobRequestPayload(request: unknown): ExecutionJobPayloadValidation {
+  if (!request || typeof request !== "object" || Array.isArray(request)) {
+    return { success: false, error: "Execution job request must be an object." };
+  }
+  let payload: unknown;
+  try {
+    payload = (request as Record<string, unknown>)["payload"];
+  } catch {
+    return { success: false, error: "Execution job payload must be valid JSON." };
+  }
+  return validateExecutionJobPayload(payload);
+}
+
 export type ExecutionJobEnqueueResult = {
   id: string;
   status: "queued" | "running" | "succeeded" | "failed" | "needs_review" | "dead_letter";

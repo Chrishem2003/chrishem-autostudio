@@ -5,6 +5,7 @@ import {
   parseExecutionJobEnqueueResult,
   validateExecutionJobEnqueueMetadata,
   validateExecutionJobPayload,
+  validateExecutionJobRequestPayload,
 } from "../execution-job-input";
 
 describe("durable execution job enqueue metadata validation", () => {
@@ -125,6 +126,34 @@ describe("durable execution job payload validation", () => {
     const cyclic = {};
     cyclic.self = cyclic;
     expect(validateExecutionJobPayload(cyclic)).toEqual({
+      success: false,
+      error: "Execution job payload must be valid JSON.",
+    });
+  });
+});
+
+describe("durable execution job request payload boundary", () => {
+  it("snapshots the payload accessor once", () => {
+    let reads = 0;
+    const request = {
+      get payload() {
+        reads++;
+        return reads === 1 ? { message: "safe" } : { message: "substituted" };
+      },
+    };
+    expect(validateExecutionJobRequestPayload(request)).toEqual({
+      success: true,
+      payload: { message: "safe" },
+    });
+    expect(reads).toBe(1);
+  });
+
+  it("fails closed when reading the payload accessor throws", () => {
+    const request = Object.defineProperty({}, "payload", {
+      enumerable: true,
+      get() { throw new Error("untrusted getter"); },
+    });
+    expect(validateExecutionJobRequestPayload(request)).toEqual({
       success: false,
       error: "Execution job payload must be valid JSON.",
     });

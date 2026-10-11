@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import type { Json } from "@/integrations/supabase/types";
-import { parseExecutionJobEnqueueResult, validateExecutionJobEnqueueMetadata, validateExecutionJobPayload } from "@/lib/execution-job-input";
+import { parseExecutionJobEnqueueResult, validateExecutionJobEnqueueMetadata, validateExecutionJobRequestPayload } from "@/lib/execution-job-input";
 import { parseClaimedExecutionJobResponse } from "@/lib/execution-job-claim";
 import type { ExecutionJobStatus } from "@/lib/execution-job-policy";
 import type {
@@ -24,7 +24,7 @@ export async function enqueueExecutionJob(input: EnqueueExecutionJobInput): Prom
   const metadata = validateExecutionJobEnqueueMetadata(input);
   if (!metadata.success) throw new Error(metadata.error);
   const { automationId, triggerType, idempotencyKey, requestedBy, maxAttempts, availableAt } = metadata.value;
-  const payloadValidation = validateExecutionJobPayload(input.payload);
+  const payloadValidation = validateExecutionJobRequestPayload(input);
   if (!payloadValidation.success) throw new Error(payloadValidation.error);
   const payload = payloadValidation.payload;
   const { data, error } = await supabaseAdmin.rpc("enqueue_execution_job", {
