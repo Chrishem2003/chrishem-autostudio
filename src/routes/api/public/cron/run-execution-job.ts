@@ -109,6 +109,7 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
             .from("run_logs")
             .insert({
               automation_id: automation.id,
+              execution_job_id: job.id,
               workspace_id: automation.workspace_id,
               trigger_type: triggerType,
               is_dry_run: false,
