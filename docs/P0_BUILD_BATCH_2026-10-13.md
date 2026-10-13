@@ -45,3 +45,10 @@ CI does not prove these external gates. P0 remains open; P1 is not authorized.
 
 - Added dual-lease checks before step outcome writes and parent-run finalization. If lease ownership is lost, the worker no longer performs best-effort recovery writes through stale ownership; the authoritative reconciler handles the remaining open audit intent.
 - This change needs exact-head CI and a controlled staging lease-expiry/interruption rehearsal before acceptance.
+
+
+## Manual execution nested-output sanitization — 2026-10-13
+
+- Review found manual-run output snapshots were not using the shared nested-output sanitizer even though error details were redacted.
+- Aligned manual execution with the scheduled and durable-queue paths so nested outputs are sanitized before durable audit persistence.
+- Exact-head CI and staging audit inspection are required; P0 remains open.

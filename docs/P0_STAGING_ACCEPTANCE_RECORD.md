@@ -114,3 +114,9 @@ For `POST /api/public/cron/run-scheduled`, `POST /api/public/cron/run-execution-
 
 - The durable worker now revalidates queue and automation lease ownership before persisting each step outcome and before finalizing the parent audit run.
 - On ownership loss it leaves the active intent/run for stale-run reconciliation rather than allowing a stale worker to rewrite it. Verify this behavior in the controlled interruption rehearsal before P0 acceptance.
+
+
+## Manual-run output snapshot redaction
+
+- Manual step output snapshots now pass through the shared bounded nested-output sanitizer, including redaction of credential-like object keys and truncation of excessive nesting/size.
+- In staging, verify that safe output fields remain useful while token-like values are redacted before P0 acceptance.

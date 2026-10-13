@@ -358,3 +358,10 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Review found that the durable worker checked both leases before starting steps and during provider calls, but its audit-outcome persistence and parent-run finalization were not preceded by a fresh ownership check. A delayed/stale worker could therefore rewrite audit records after lease ownership had moved.
 - The worker now checks the queue and per-automation leases before persisting step outcomes and before finalizing the run. If either lease is lost, it leaves the in-flight intent/run for the fenced recovery path rather than writing through stale ownership.
 - Exact-head CI is required; staging interruption/fencing rehearsal remains a separate acceptance gate. P0 remains open.
+
+
+## Manual-run nested output redaction parity — 2026-10-13
+
+- Cross-path review found that manual-run step details were sanitized but nested step outputs were still persisted directly in output snapshots. Provider outputs may contain access tokens, cookies, or other sensitive values even when the error text is clean.
+- Manual execution now applies the bounded shared nested-output sanitizer before persisting output snapshots, aligning manual, scheduled, and durable-queue paths.
+- Exact-head CI and controlled staging audit inspection remain required; P0 remains open.
