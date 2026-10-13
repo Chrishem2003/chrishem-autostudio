@@ -142,3 +142,72 @@ export function summarizeStaleRunCandidates(
     sample,
   };
 }
+
+
+export type ExecutionQueueAlertSeverity = "warning" | "critical";
+export interface ExecutionQueueAlert {
+  code: string;
+  severity: ExecutionQueueAlertSeverity;
+  count: number;
+  message: string;
+}
+export interface ExecutionQueueAlertSummary {
+  status: "healthy" | "warning" | "critical";
+  alerts: ExecutionQueueAlert[];
+}
+
+/**
+ * Converts queue and recovery diagnostics into actionable, non-mutating alerts.
+ * Thresholds are deliberately conservative; alerts never authorize retries or repairs.
+ */
+export function buildExecutionQueueAlerts(input: {
+  counts: Record<ExecutionQueueStatus, number>;
+  sampledAt: string;
+  oldestQueuedAt: string | null;
+  expiredLeaseCount: number;
+  auditFindingCount: number;
+  auditScanTruncated: boolean;
+  jobCountMismatch: boolean;
+  staleRunCount: number;
+  staleRunSampleTruncated: boolean;
+}): ExecutionQueueAlertSummary {
+  const alerts: ExecutionQueueAlert[] = [];
+  const add = (code: string, severity: ExecutionQueueAlertSeverity, count: number, message: string) => {
+    if (Number.isFinite(count) && count > 0) alerts.push({ code, severity, count, message });
+  };
+
+  add("jobs_needing_review", "critical", input.counts.needs_review,
+    "One or more jobs need human verification before any retry.");
+  add("dead_letter_jobs", "critical", input.counts.dead_letter,
+    "One or more jobs exhausted their retry policy and need operator review.");
+  add("expired_execution_leases", "critical", input.expiredLeaseCount,
+    "Expired worker leases were found; inspect audit records before recovery.");
+  add("audit_consistency_findings", "critical", input.auditFindingCount,
+    "Queue and audit records disagree; reconcile the records before retrying affected jobs.");
+  add("failed_jobs", "warning", input.counts.failed,
+    "Failed jobs need review of the sanitized error and recorded execution outcome.");
+
+  const sampledAtMs = Date.parse(input.sampledAt);
+  const oldestQueuedAtMs = input.oldestQueuedAt ? Date.parse(input.oldestQueuedAt) : Number.NaN;
+  if (
+    Number.isFinite(sampledAtMs) &&
+    Number.isFinite(oldestQueuedAtMs) &&
+    sampledAtMs - oldestQueuedAtMs > 5 * 60 * 1000
+  ) {
+    add("queue_wait_over_five_minutes", "warning", input.counts.queued,
+      "The oldest queued job has waited more than five minutes; verify worker scheduling and queue capacity.");
+  }
+  add("stale_open_runs", "warning", input.staleRunCount,
+    "Long-running manual or scheduled audit runs need inspection; this diagnostic does not repair them.");
+  add("audit_scan_incomplete", "warning", input.auditScanTruncated ? 1 : 0,
+    "The audit consistency scan is bounded; some queue jobs were not inspected.");
+  add("queue_snapshot_mismatch", "warning", input.jobCountMismatch ? 1 : 0,
+    "Queue counts and the inspected snapshot differ; repeat the read before drawing conclusions.");
+  add("stale_run_sample_truncated", "warning", input.staleRunSampleTruncated ? 1 : 0,
+    "The stale-run sample is bounded; inspect the full count before planning recovery.");
+
+  const status = alerts.some((alert) => alert.severity === "critical")
+    ? "critical"
+    : alerts.length > 0 ? "warning" : "healthy";
+  return { status, alerts };
+}
