@@ -297,3 +297,11 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Added forward-only migration `20261013100000_lock_execution_audit_writes.sql`: authenticated users retain owner-scoped SELECT access, while all audit writes are restricted to the server-side `service_role` guarded paths.
 - Extended the disposable PostgreSQL migration chain and smoke assertions to verify client write privileges/policies are absent while required service-role writes remain available.
 - This is database/CI verification only; hosted staging migration and live audit-history acceptance remain open.
+
+
+## Exact-head audit-write boundary checkpoint — 2026-10-13
+
+- Commit `8771b31d38bb669dc8c66c8cb1c26a015d0a7d48` passed both required CI jobs: typecheck, full unit suite, targeted execution-integrity lint, production build, and the disposable PostgreSQL migration/concurrency smoke test. See [run 38372858015](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38372858015).
+- The new forward migration `20261013100000_lock_execution_audit_writes.sql` restricts authenticated clients to owner-scoped SELECT access for `run_logs` and `run_step_logs`; server-owned writes remain available to `service_role`.
+- The disposable smoke suite verifies client INSERT/UPDATE/DELETE privileges are absent, service-role writes remain available, and authenticated write policies have been removed.
+- This checkpoint is code/CI evidence only. Hosted staging migration and audit/recovery acceptance remain open; P0 is not passed and P1 is not authorized.

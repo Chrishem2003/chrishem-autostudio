@@ -593,3 +593,23 @@ The queue worker now renews both its durable-job lease and shared automation ove
 - Expanded the PostgreSQL recovery fixture with an already-failed step in the same run as unfinished steps.
 - The regression requires recovery to mark all still-running steps uncertain while preserving the pre-existing terminal step's status and diagnostic. This catches over-broad recovery updates that could erase useful audit history.
 - The disposable PostgreSQL smoke suite and exact-head CI must pass after this addition. Actual staging interruption/restart and provider-effect reconciliation remain open; P0 remains open.
+
+
+## P0 batch review — 2026-10-13
+
+**Current code checkpoint:** `8771b31d38bb669dc8c66c8cb1c26a015d0a7d48` passed both required CI jobs in [run 38372858015](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38372858015).
+
+### Completed in the latest batch
+
+- Hardened the scheduler, worker and queue-health authentication boundaries so malformed runtime auth results fail closed.
+- Added generic cache-safe fallback responses for unexpected scheduler and worker exceptions; targeted lint now includes the cron guard.
+- Closed a database write-boundary gap: authenticated users previously had direct write privileges and owner-all policies on `run_logs` and `run_step_logs`. A forward-only migration now gives authenticated users owner-scoped read-only access while server-side `service_role` retains guarded writes.
+- Extended the disposable PostgreSQL migration-chain guard and smoke checks to verify the audit-write grants and policies.
+
+### Remaining P0 acceptance
+
+The hosted staging acceptance record is still NOT RUN. P0 remains open until a verified non-production Supabase project and deployed app are tested for migration/RLS/grants, cron auth, provider-side idempotency and duplicate effects, interrupted-worker recovery, concurrency, audit history, and deployed outbound transport behavior. A second reviewer and the repository-wide lint baseline decision are also outstanding. Keep queue producers/workers and outbound transport disabled; do not merge to `main` or start P1.
+
+### Master-plan assessment
+
+The latest work strengthens P0 security and execution integrity; it does not complete the broader roadmap. Provider-agnostic AI, graph/branch semantics, broader real connector implementations, accessibility acceptance, teams/approvals, reliability analytics/API and P8 differentiators remain later roadmap items and must not be treated as P0 release blockers unless explicitly brought into the release scope.
