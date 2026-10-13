@@ -88,6 +88,14 @@ function isBlockedIPv6(host: string): boolean {
   }
 
   const first = groups[0]!;
+  // NAT64 prefixes can translate an apparently global IPv6 destination into
+  // an IPv4 private/local destination. Block both the well-known /96 and the
+  // locally assigned /48 rather than trying to infer the embedded IPv4 policy.
+  if (
+    (groups[0] === 0x0064 && groups[1] === 0xff9b &&
+      groups[2] === 0 && groups[3] === 0 && groups[4] === 0 && groups[5] === 0) ||
+    (groups[0] === 0x0064 && groups[1] === 0xff9b && groups[2] === 0x0001)
+  ) return true;
   if ((first & 0xe000) !== 0x2000) return true; // not in 2000::/3 global unicast
   if (first === 0x2001 && groups[1]! <= 0x01ff) return true; // special-purpose 2001::/23
   if (first === 0x2001 && groups[1] === 0x0db8) return true; // documentation range
