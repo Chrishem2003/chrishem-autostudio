@@ -3,7 +3,7 @@
 -- Authenticated clients may inspect their own execution history, but must not
 -- fabricate, rewrite, or delete audit records. Server-side service_role retains
 -- the write permissions required by guarded execution and recovery.
-do $
+do $audit_check$
 declare
   table_name text;
 begin
@@ -32,7 +32,7 @@ begin
   ) then
     raise exception 'Authenticated execution-audit write policy remains enabled';
   end if;
-end $;
+end $audit_check$;
 
 insert into auth.users (id)
 values ('00000000-0000-4000-8000-000000000001')
