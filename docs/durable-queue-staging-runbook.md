@@ -132,3 +132,13 @@ The current database smoke suite also verifies that scheduled lease claims, manu
 - [ ] Confirm release_scheduled_automation rejects a NULL cadence cursor before releasing its token-fenced lock.
 - [ ] Verify a rejected release leaves the current lease intact and does not change automations.last_run_at.
 - [ ] Verify a valid release advances the cadence cursor once, and a repeated delivery of the same schedule window returns the same idempotent job.
+
+
+### Read-only queue health alert summary
+
+The cron-secret-protected `/api/public/cron/execution-queue-health` response now includes an `alerts` object with an overall `healthy`, `warning`, or `critical` status and machine-readable alert codes. Critical codes include `jobs_needing_review`, `dead_letter_jobs`, `expired_execution_leases`, and `audit_consistency_findings`. Warnings cover failed jobs, queued work waiting more than five minutes, stale open runs, incomplete bounded scans, and count/snapshot mismatches.
+
+- [ ] In staging, confirm the health endpoint rejects unauthenticated requests and returns `Cache-Control: no-store`.
+- [ ] Create non-production fixtures for each alert condition and confirm the response code/severity matches the observed state.
+- [ ] Confirm alerts remain diagnostic only: the endpoint must not release leases, mutate audit history, retry jobs, or expose payloads/provider secrets.
+- [ ] Verify alert behavior when queue counts and sampled rows change between queries; treat mismatch warnings as a prompt to repeat the read, not proof of corruption.
