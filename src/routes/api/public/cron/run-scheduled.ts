@@ -167,6 +167,12 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
             return true;
           };
           try {
+          // Reconfirm ownership after scheduler setup and immediately before
+          // creating an audit run; a delayed claim response must not start work
+          // after another scheduler could have acquired the expired lease.
+          if (!(await confirmScheduledLease())) {
+            throw new Error("Scheduled execution lease ownership could not be confirmed before run creation.");
+          }
           // Persist the run before any external side effects. If audit persistence
           // is unavailable, fail closed and release the lease without executing.
           const { data: run, error: runError } = await supabaseAdmin
