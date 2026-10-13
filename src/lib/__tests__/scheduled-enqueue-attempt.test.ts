@@ -1,6 +1,6 @@
 // @ts-nocheck -- Bun's test runner supplies test types at runtime
 import { describe, expect, it } from "bun:test";
-import { runScheduledEnqueueAttempt } from "../scheduled-enqueue-attempt";
+import { runScheduledEnqueueAttempt, shouldReleaseScheduledLease } from "../scheduled-enqueue-attempt";
 
 describe("runScheduledEnqueueAttempt", () => {
   it("does not advance the schedule marker when enqueue fails", async () => {
@@ -34,6 +34,22 @@ describe("runScheduledEnqueueAttempt", () => {
 
     expect(releaseCalls).toBe(1);
     expect(result.releaseSucceeded).toBe(true);
+  });
+
+  it("retains the lease after an ambiguous first-generation enqueue failure", () => {
+    expect(shouldReleaseScheduledLease({ enqueueSucceeded: false, lastRunAt: null })).toBe(false);
+    expect(shouldReleaseScheduledLease({ enqueueSucceeded: false, lastRunAt: undefined })).toBe(false);
+  });
+
+  it("allows release after a failed enqueue when a prior cursor preserves the generation", () => {
+    expect(shouldReleaseScheduledLease({
+      enqueueSucceeded: false,
+      lastRunAt: "2026-10-11T05:00:00.000Z",
+    })).toBe(true);
+  });
+
+  it("allows release after successful enqueue even for the initial generation", () => {
+    expect(shouldReleaseScheduledLease({ enqueueSucceeded: true, lastRunAt: null })).toBe(true);
   });
 
   it("reports release failure separately after a successful enqueue", async () => {
