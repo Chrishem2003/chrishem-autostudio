@@ -39,3 +39,9 @@ CI does not prove these external gates. P0 remains open; P1 is not authorized.
 - Review found that the legacy direct scheduled executor still wrote raw step detail/output snapshots, unlike manual and durable queue paths.
 - Aligned scheduled audit persistence with shared error and nested-output sanitizers to reduce the risk of storing credentials or sensitive provider outputs in durable history.
 - Exact-head CI required; staging audit-history acceptance remains open.
+
+
+## Queue worker stale-audit fencing — 2026-10-13
+
+- Added dual-lease checks before step outcome writes and parent-run finalization. If lease ownership is lost, the worker no longer performs best-effort recovery writes through stale ownership; the authoritative reconciler handles the remaining open audit intent.
+- This change needs exact-head CI and a controlled staging lease-expiry/interruption rehearsal before acceptance.

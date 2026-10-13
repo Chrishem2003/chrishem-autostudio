@@ -108,3 +108,9 @@ For `POST /api/public/cron/run-scheduled`, `POST /api/public/cron/run-execution-
 
 - The legacy direct scheduled execution path now sanitizes persisted step error details and nested output snapshots using the same shared sanitizers as manual and queue execution.
 - Verify with a controlled staging run that credential-like values are not persisted. This code checkpoint alone does not complete staging acceptance.
+
+
+## Queue-worker dual-lease audit fencing
+
+- The durable worker now revalidates queue and automation lease ownership before persisting each step outcome and before finalizing the parent audit run.
+- On ownership loss it leaves the active intent/run for stale-run reconciliation rather than allowing a stale worker to rewrite it. Verify this behavior in the controlled interruption rehearsal before P0 acceptance.

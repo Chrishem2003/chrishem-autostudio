@@ -99,6 +99,18 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
             });
             return !error && alive === true;
           };
+          let executionLeaseLost = false;
+          const heartbeatBothLeases = async (): Promise<boolean> => {
+            if (!(await context.heartbeat())) {
+              executionLeaseLost = true;
+              return false;
+            }
+            if (!(await heartbeatAutomationLease())) {
+              executionLeaseLost = true;
+              return false;
+            }
+            return true;
+          };
 
           let activeRunId: string | null = null;
           let runStartedMs = Date.now();
@@ -150,21 +162,12 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
             startedAtMs: started,
             maxRuntimeMs: MAX_JOB_RUNTIME_MS,
             execute: async (args) => {
-              const queueLeaseAlive = await context.heartbeat();
-              if (!queueLeaseAlive) {
-                throw new Error("Execution queue lease was lost; stop before starting another external action.");
-              }
-              const automationLeaseAlive = await heartbeatAutomationLease();
-              if (!automationLeaseAlive) {
-                throw new Error("Automation execution lease was lost; stop before starting another external action.");
+              if (!(await heartbeatBothLeases())) {
+                throw new Error("Execution lease ownership was lost; stop before starting another external action.");
               }
               return runWithExecutionLeaseKeepalive(
                 () => executeStep(args),
-                async () => {
-                  const queueAlive = await context.heartbeat();
-                  if (!queueAlive) return false;
-                  return heartbeatAutomationLease();
-                },
+                heartbeatBothLeases,
               );
             },
             persistIntent: async (node, index) => {
@@ -190,6 +193,9 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
               return { id: intent.id };
             },
             persistOutcome: async (intentId, step, outcomeState) => {
+              // Do not let a stale worker rewrite audit outcomes after either lease
+              // has been lost. Leave the intent uncertain for the fenced recovery path.
+              if (!(await heartbeatBothLeases())) return false;
               const { data: persistedStep, error } = await supabaseAdmin
                 .from("run_step_logs")
                 .update({
@@ -229,6 +235,11 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
             },
           });
 
+          // Finalize the audit run only while both fencing leases are still valid.
+          // If ownership is lost, leave the run open for the authoritative reconciler.
+          if (!(await heartbeatBothLeases())) {
+            throw new Error("Execution lease ownership was lost before run finalization.");
+          }
           const finalization = buildRunFinalization({
             steps: execution.steps,
             mode: "live",
@@ -273,7 +284,7 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
           } catch (executionError) {
             // Keep run history reconcilable when an unexpected error occurs after
             // the run row exists. In-flight step intents stay explicitly uncertain.
-            if (activeRunId) {
+            if (activeRunId && !executionLeaseLost) {
               try {
               const finishedAt = new Date().toISOString();
               const { error: stepRecoveryError } = await supabaseAdmin

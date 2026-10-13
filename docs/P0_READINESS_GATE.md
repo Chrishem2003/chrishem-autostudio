@@ -351,3 +351,10 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Follow-up review found the legacy direct scheduled executor still persisted raw step details and output snapshots, while manual and durable-queue execution sanitized those values. This could retain credential-bearing provider errors or sensitive nested output fields in run history.
 - Updated scheduled step audit persistence to use the shared error sanitizer and bounded nested-output sanitizer, matching the manual/queue execution paths.
 - Exact-head CI must pass before treating the fix as verified. Staging audit-history verification remains required; P0 remains open.
+
+
+## Queue-worker audit writes fenced by both leases — 2026-10-13
+
+- Review found that the durable worker checked both leases before starting steps and during provider calls, but its audit-outcome persistence and parent-run finalization were not preceded by a fresh ownership check. A delayed/stale worker could therefore rewrite audit records after lease ownership had moved.
+- The worker now checks the queue and per-automation leases before persisting step outcomes and before finalizing the run. If either lease is lost, it leaves the in-flight intent/run for the fenced recovery path rather than writing through stale ownership.
+- Exact-head CI is required; staging interruption/fencing rehearsal remains a separate acceptance gate. P0 remains open.
