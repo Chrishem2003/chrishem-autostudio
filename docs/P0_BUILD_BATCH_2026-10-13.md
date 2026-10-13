@@ -142,3 +142,10 @@ CI does not prove these external gates. P0 remains open; P1 is not authorized.
 - Exact-head CI passed on `dbeef93644127137ddf0c3946755ba224903aedd`: [run 38449594791](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38449594791). Typecheck, unit tests, execution-integrity lint, production build, and the full disposable PostgreSQL migration/permissions/fencing/concurrency smoke test passed.
 - Repository-level verification is not hosted staging acceptance. Staging remains **NOT RUN**; provider-side duplicate-effect verification, deployed interruption/recovery rehearsal, deployed outbound transport verification, audit-history inspection, repository-wide lint disposition, and independent acceptance remain blockers. P0 remains open; do not merge, deploy, enable durable workers/outbound transport, or authorize P1.
 
+## Bounded executor retry-time verification — 2026-10-13
+
+- Hardened the worker boundary for executor-supplied retry timestamps. Past or near-immediate values now fall back to the worker's exponential backoff; valid future hints are normalized to ISO and capped at 24 hours so an adapter cannot trigger a hot retry loop or park a safe retry indefinitely.
+- Added regression tests for past timestamps, distant timestamps, and timezone-offset normalization. The initial test run exposed a faulty offset fixture; the fixture was corrected and the subsequent exact-head run passed.
+- Exact-head CI passed on `bcd31201df0b96b188def692cc05780ab09c5a7b`: [run 38450959562](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38450959562). Typecheck, unit tests, execution-integrity lint, production build, and disposable PostgreSQL migration/permission/fencing/concurrency smoke checks passed.
+- This is repository-level evidence, not hosted staging acceptance. Staging remains **NOT RUN**; provider-side duplicate-effect verification, deployed interruption/recovery rehearsal, deployed outbound transport verification, audit-history inspection, repository-wide lint disposition, and independent acceptance remain blockers. P0 remains open; do not merge, deploy, enable durable workers/outbound transport, or authorize P1.
+
