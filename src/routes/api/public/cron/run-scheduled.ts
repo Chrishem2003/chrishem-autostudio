@@ -13,6 +13,7 @@ import { sanitizeExecutionAuditValue, sanitizeExecutionError } from "@/lib/execu
 import { firstLivePreflightError } from "@/lib/live-execution-preflight";
 import { confirmExecutionLeaseHeartbeat, runWithExecutionLeaseKeepalive } from "@/lib/execution-lease-keepalive.server";
 import { scheduledExecutionIdempotencyKey } from "@/lib/scheduled-execution-key";
+import { normalizeScheduledTriggerConfig } from "@/lib/scheduled-trigger-config";
 
 const MAX_SCHEDULED_FLOW_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -67,15 +68,14 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
             const wf = prepared.workflow as unknown as Workflow;
             const trigger = wf.nodes.find((node) => node.defId === "trigger.schedule");
             if (!trigger) return { prepared, trigger: null, cadence: null, due: false, preflightError: null };
-            // Persisted workflow configuration is untrusted input. Match the
-            // queue producer's normalization contract instead of passing arbitrary
-            // JSON values into schedule evaluation or the idempotency-key helper.
-            const cadenceValue = trigger.config?.["cadence"];
-            const cadence = typeof cadenceValue === "string" ? cadenceValue : "Hourly";
-            const timezoneValue = trigger.config?.["timezone"];
-            const timezone = typeof timezoneValue === "string" && timezoneValue.trim()
-              ? timezoneValue
-              : "UTC";
+            // Normalize persisted JSON at the trust boundary. Unsupported
+            // cadence values are surfaced as failures rather than silently
+            // disabling a live automation; invalid timezones fall back to UTC.
+            const normalizedConfig = normalizeScheduledTriggerConfig(trigger.config);
+            if (!normalizedConfig) {
+              return { prepared, trigger, cadence: null, due: false, preflightError: "Invalid schedule configuration." };
+            }
+            const { cadence, timezone } = normalizedConfig;
             const due = isDue(
               cadence,
               row.last_run_at ? new Date(row.last_run_at) : null,
