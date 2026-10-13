@@ -279,3 +279,8 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Exact-head CI passed on `94544236ace5a9c702b1e071ef154384fff8bebb`: [run 38365100889](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38365100889). Both required jobs passed: typecheck/tests/targeted lint/production build and the PostgreSQL migration/concurrency smoke test, including the new chain assertion.
 - This remains CI-only evidence. Hosted staging migration/authentication, provider-side exact-once evidence, interrupted-worker recovery, audit-history verification, and final acceptance review are still open. P0 remains open and P1 is not authorized.
 
+## Shared scheduler/worker authentication boundary — 2026-10-13
+
+- Review found the scheduled producer route used a truthiness check for its authentication adapter result, unlike the worker's stricter runtime boundary. A malformed falsy value such as `undefined` or `false` could otherwise be mistaken for authorization success by a runtime adapter that violates its TypeScript contract.
+- Added one shared authentication normalizer for scheduler and worker routes. Only literal `null` permits protected work; actual `Response` denials preserve their status/body with required security headers; thrown or malformed adapter results return a generic cache-safe 503 before protected work runs.
+- Added regression coverage for malformed falsy values, valid denial, literal-null success, and the existing worker task-laziness contract. Exact-head CI is required; staging authentication remains an independent release gate.

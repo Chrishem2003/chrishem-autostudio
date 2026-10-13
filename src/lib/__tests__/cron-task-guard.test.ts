@@ -1,6 +1,6 @@
 // @ts-nocheck -- Bun's test runner supplies test types at runtime
 import { describe, expect, it } from "bun:test";
-import { runCronTaskAfterAuthentication, withCronSecurityHeaders } from "../cron-task-guard";
+import { authenticateCronRequestSafely, runCronTaskAfterAuthentication, withCronSecurityHeaders } from "../cron-task-guard";
 import { processOneExecutionJob } from "../execution-job-worker";
 
 function request() {
@@ -83,6 +83,27 @@ describe("authenticated cron task guard", () => {
     expect(result.denied?.headers.get("Pragma")).toBe("no-cache");
     expect(result.denied?.headers.get("X-Content-Type-Options")).toBe("nosniff");
     expect(taskCalls).toBe(0);
+  });
+
+  it("normalizes malformed falsy authentication results to a generic 503", async () => {
+    for (const malformed of [undefined, false, 0, ""]) {
+      const denied = await authenticateCronRequestSafely(
+        request(),
+        async () => malformed as any,
+      );
+      expect(denied).toBeInstanceOf(Response);
+      expect(denied?.status).toBe(503);
+      expect(denied?.headers.get("Cache-Control")).toBe("no-store");
+      expect(denied?.headers.get("Pragma")).toBe("no-cache");
+      expect(denied?.headers.get("X-Content-Type-Options")).toBe("nosniff");
+      expect(await denied?.text()).toBe(JSON.stringify({ error: "Cron task is temporarily unavailable." }));
+    }
+  });
+
+  it("preserves a valid denial and treats only literal null as authorization success", async () => {
+    const response = new Response("Unauthorized", { status: 401 });
+    expect(await authenticateCronRequestSafely(request(), async () => response)).toBeInstanceOf(Response);
+    expect(await authenticateCronRequestSafely(request(), async () => null)).toBeNull();
   });
 
   it("runs the worker exactly once after successful authentication", async () => {

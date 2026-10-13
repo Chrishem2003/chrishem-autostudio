@@ -8,6 +8,30 @@ export function withCronSecurityHeaders(response: Response): Response {
 }
 
 /**
+ * Normalize runtime authentication adapter results. Only literal null means
+ * authorization succeeded; malformed values and thrown adapters fail closed.
+ */
+export async function authenticateCronRequestSafely(
+  request: Request,
+  authenticate: (request: Request) => Promise<Response | null>,
+): Promise<Response | null> {
+  let result: unknown;
+  try {
+    result = await authenticate(request);
+  } catch {
+    return withCronSecurityHeaders(
+      Response.json({ error: "Cron task is temporarily unavailable." }, { status: 503 }),
+    );
+  }
+
+  if (result === null) return null;
+  if (result instanceof Response) return withCronSecurityHeaders(result);
+  return withCronSecurityHeaders(
+    Response.json({ error: "Cron task is temporarily unavailable." }, { status: 503 }),
+  );
+}
+
+/**
  * Shared guard for cron-backed tasks. The task callback is intentionally lazy:
  * unauthorized requests must not construct dependencies or touch queue/database
  * adapters before authentication succeeds.
@@ -17,30 +41,7 @@ export async function runCronTaskAfterAuthentication<T>(
   authenticate: (request: Request) => Promise<Response | null>,
   task: () => Promise<T>,
 ): Promise<{ denied: Response; result?: never } | { denied?: never; result: T }> {
-  let denied: Response | null;
-  try {
-    denied = await authenticate(request);
-  } catch {
-    // Authentication adapter failures are not authorization successes. Return a
-    // generic, cache-safe failure and never construct or run the protected task.
-    return {
-      denied: withCronSecurityHeaders(
-        Response.json({ error: "Cron task is temporarily unavailable." }, { status: 503 }),
-      ),
-    };
-  }
-  // Runtime adapters can violate their TypeScript contract. Only literal null
-  // is an authorization success; only an actual Response is a valid denial.
-  // Any malformed value fails closed before the protected task is constructed.
-  if (denied !== null) {
-    if (denied instanceof Response) {
-      return { denied: withCronSecurityHeaders(denied) };
-    }
-    return {
-      denied: withCronSecurityHeaders(
-        Response.json({ error: "Cron task is temporarily unavailable." }, { status: 503 }),
-      ),
-    };
-  }
+  const denied = await authenticateCronRequestSafely(request, authenticate);
+  if (denied !== null) return { denied };
   return { result: await task() };
 }
