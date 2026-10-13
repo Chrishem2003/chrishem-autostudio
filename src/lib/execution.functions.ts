@@ -11,6 +11,7 @@ import { parsePersistedWorkflow } from "@/lib/persisted-workflow";
 import { withPreparedExecutionPlan } from "@/lib/prepared-execution-gate";
 import { firstLivePreflightError } from "@/lib/live-execution-preflight";
 import { sanitizeExecutionAuditValue, sanitizeExecutionError } from "@/lib/execution-error-sanitizer";
+import { confirmExecutionLeaseHeartbeat, runWithExecutionLeaseKeepalive } from "@/lib/execution-lease-keepalive.server";
 
 const MAX_FLOW_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -144,6 +145,21 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
     }
 
     let activeRunId: string | null = null;
+    let executionLeaseLost = false;
+    const confirmManualLease = async (): Promise<boolean> => {
+      if (data.mode !== "live") return true;
+      if (executionLeaseLost || !manualLockToken) return false;
+      const alive = await confirmExecutionLeaseHeartbeat(async () => {
+        const { data: renewed, error: heartbeatError } = await supabaseAdmin.rpc("heartbeat_manual_automation", {
+          _automation_id: row.id,
+          _lock_token: manualLockToken,
+          _lease_seconds: 600,
+        });
+        return !heartbeatError && renewed === true;
+      });
+      if (!alive) executionLeaseLost = true;
+      return alive;
+    };
     let runStartedMs = Date.now();
     try {
     // Reconcile stale runs atomically while holding this request's own lease.
@@ -193,6 +209,16 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
     activeRunId = run.id;
 
     const execution = await executeFlowSteps({
+      execute: async (args) => {
+        if (data.mode !== "live") return executeStep(args);
+        if (!(await confirmManualLease())) {
+          throw new Error("Manual execution lease ownership was lost; stop before starting another external action.");
+        }
+        return runWithExecutionLeaseKeepalive(
+          () => executeStep(args),
+          confirmManualLease,
+        );
+      },
       nodes: connectedOrder,
       flowName: flow.name,
       userId: context.userId,
@@ -200,6 +226,7 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
       startedAtMs: startedMs,
       maxRuntimeMs: MAX_FLOW_RUNTIME_MS,
       persistIntent: async (node, index) => {
+        if (!(await confirmManualLease())) return null;
         const { data: attempt, error: intentError } = await supabaseAdmin
           .from("run_step_logs")
           .insert({
@@ -218,6 +245,7 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
         return { id: attempt.id };
       },
       persistOutcome: async (intentId, step, outcomeState) => {
+        if (!(await confirmManualLease())) return false;
         const { data: persistedStep, error: stepLogError } = await supabaseAdmin.from("run_step_logs").update({
           status: step.status,
           outcome_state: outcomeState,
@@ -249,6 +277,9 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
       },
     });
     const steps = execution.steps;
+    if (!(await confirmManualLease())) {
+      throw new Error("Manual execution lease ownership was lost before run finalization.");
+    }
     const finalization = buildRunFinalization({ steps, mode: data.mode, startedAtMs: startedMs });
     const finalStatus = finalization.status;
     const finishedAt = finalization.finishedAt;
@@ -286,7 +317,7 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
 
     return { runId: run.id, status: finalStatus, mode: data.mode, steps };
     } catch (error) {
-      if (activeRunId) {
+      if (activeRunId && (data.mode !== "live" || (!executionLeaseLost && await confirmManualLease()))) {
         try {
           const failedAt = new Date().toISOString();
           const { error: stepRecoveryError } = await supabaseAdmin
