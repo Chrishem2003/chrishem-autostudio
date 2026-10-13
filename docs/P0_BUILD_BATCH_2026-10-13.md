@@ -159,3 +159,11 @@ CI does not prove these external gates. P0 remains open; P1 is not authorized.
 - The next repository-verifiable batch is a focused review of cron/auth and queue-health behavior, full-repository lint disposition, and any reproducible source-level gaps found by that review. Changes must be regression-tested on the exact resulting head before being described as verified.
 - External acceptance remains outstanding: hosted staging migration/RLS/RPC checks; deployed cron-auth checks; provider sandbox duplicate-effect evidence; interrupted-worker recovery; deployed HTTP/TLS/DNS/redirect/timeout checks; audit-history inspection; and independent acceptance.
 - Release boundary unchanged: P0 remains OPEN; do not merge to `main`, deploy, enable durable producers/workers or outbound transport, or authorize P1 until every required gate has evidence.
+
+
+## Continuation batch — hostile cron Response accessor regressions
+
+- Added two focused tests to `src/lib/__tests__/cron-task-guard.test.ts`: an authentication adapter returning a Response proxy that throws when `headers` is accessed, and another that throws when `body` is accessed.
+- Both assert a generic cache-safe 503 response and that the protected task is never invoked.
+- Code commit: `f7ea76ad66b1317a61516d24e95bf3a35d327699`.
+- Verification status: **pending exact-head CI** at the time of this checkpoint. Do not treat the tests as passing until the CI run for this code commit completes.
