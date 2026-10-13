@@ -24,7 +24,7 @@ export function normalizeScheduledTriggerConfig(
   }
 
   const values = config as Record<string, unknown>;
-  const cadenceValue = values.cadence;
+  const cadenceValue = values["cadence"];
   const cadence = cadenceValue === undefined || cadenceValue === null
     ? "Hourly"
     : typeof cadenceValue === "string"
@@ -33,7 +33,7 @@ export function normalizeScheduledTriggerConfig(
   if (cadence === null || !SUPPORTED_SCHEDULE_CADENCES.has(cadence)) return null;
 
   const candidateTimezone =
-    typeof values.timezone === "string" ? values.timezone.trim() : "";
+    typeof values["timezone"] === "string" ? values.timezone.trim() : "";
   const timezone = candidateTimezone || "UTC";
 
   // Validate the IANA timezone without allowing Intl to throw in the caller.
