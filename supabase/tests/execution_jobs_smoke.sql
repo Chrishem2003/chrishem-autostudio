@@ -46,6 +46,7 @@ begin
        and policyname = 'run_logs_select_own'
        and cmd = 'SELECT'
        and 'authenticated' = any(roles)
+       and qual like '%owns_automation%'
   ) or not exists (
     select 1 from pg_policies
      where schemaname = 'public'
@@ -53,6 +54,7 @@ begin
        and policyname = 'run_step_logs_select_own'
        and cmd = 'SELECT'
        and 'authenticated' = any(roles)
+       and qual like '%owns_run%'
   ) then
     raise exception 'Owner-scoped authenticated execution-audit read policies are missing';
   end if;
