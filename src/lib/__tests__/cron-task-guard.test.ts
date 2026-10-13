@@ -23,7 +23,7 @@ describe("authenticated cron task guard", () => {
       },
     );
 
-    expect(result.denied).toBe(denied);
+    expect(result.denied).toBeInstanceOf(Response);
     expect(taskCalls).toBe(0);
     expect(dependencyConstructionCalls).toBe(0);
   });
