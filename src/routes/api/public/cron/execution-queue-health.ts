@@ -234,27 +234,21 @@ export const Route = createFileRoute("/api/public/cron/execution-queue-health")(
             staleRunSampleTruncated: staleRuns.truncated,
           });
 
-          return Response.json({ ...summary, consistency, expiredLeases: expiredLeaseSummary, staleRuns, alerts }, {
-            headers: {
-              "Cache-Control": "no-store",
-              "Pragma": "no-cache",
-              "X-Content-Type-Options": "nosniff",
-            },
-          });
+          return withCronSecurityHeaders(
+            Response.json({ ...summary, consistency, expiredLeases: expiredLeaseSummary, staleRuns, alerts }),
+          );
         } catch (error) {
           // Database/client exceptions may embed request URLs or other sensitive
           // transport details. Keep operational logs to a non-sensitive error class.
           console.error("[AutoStudio queue health] Monitoring query failed.", {
             errorName: error instanceof Error ? error.name : "UnknownError",
           });
-          return Response.json({ error: "Execution queue health is temporarily unavailable." }, {
-            status: 503,
-            headers: {
-              "Cache-Control": "no-store",
-              "Pragma": "no-cache",
-              "X-Content-Type-Options": "nosniff",
-            },
-          });
+          return withCronSecurityHeaders(
+            Response.json(
+              { error: "Execution queue health is temporarily unavailable." },
+              { status: 503 },
+            ),
+          );
         }
       },
     },
