@@ -22,6 +22,7 @@ describe("normalizeScheduledTriggerConfig", () => {
 
   it("rejects unknown cadence values instead of silently disabling a live schedule", () => {
     expect(normalizeScheduledTriggerConfig({ cadence: "Yearly" })).toBeNull();
+    expect(normalizeScheduledTriggerConfig({ cadence: null })).toBeNull();
     expect(normalizeScheduledTriggerConfig({ cadence: 5 })).toBeNull();
   });
 
