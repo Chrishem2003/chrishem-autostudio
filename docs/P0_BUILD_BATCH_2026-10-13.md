@@ -127,3 +127,11 @@ CI does not prove these external gates. P0 remains open; P1 is not authorized.
 - The unit suite now also verifies retry-policy input snapshotting for hostile getter behavior across side-effect certainty and attempt counters. Getter exceptions fail closed to `needs_review`; changing getters cannot change the policy decision between reads.
 - The PostgreSQL smoke job passed the full disposable migration chain, permission/idempotency/fencing assertions, and concurrent-worker claim checks.
 - This remains repository CI evidence only. The hosted staging acceptance record is still **NOT RUN**; provider-side duplicate-effect verification, deployed interruption/recovery rehearsal, deployed outbound transport verification, and independent acceptance remain blockers. Do not merge, deploy, enable the durable worker/outbound transport, or authorize P1.
+
+## Hostile executor-result boundary verification — 2026-10-13
+
+- Added regression coverage for executor-result getters that throw while the worker reads `status`, `sideEffectCertainty`, `error`, `retryAt`, or `retryable`. A malformed result is parked in `needs_review`; no automatic retry is authorized.
+- Added a snapshot regression proving every result field is read once, so a hostile getter cannot change a success/failure or certainty decision between reads.
+- Exact-head CI passed on code commit `b437f9d20e011dfd972078e82d97d0b15f8f45a9`: [run 38448323254](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38448323254). Typecheck, unit tests, execution-integrity lint, production build, and disposable PostgreSQL migration/permission/idempotency/fencing/concurrency smoke checks passed.
+- This is repository-level evidence only. Hosted staging acceptance remains **NOT RUN**; provider-side duplicate-effect verification, deployed interruption/recovery rehearsal, deployed outbound transport verification, audit-history inspection, repository-wide lint disposition, and independent acceptance remain blockers. Keep P0 open; do not merge, deploy, enable durable workers/outbound transport, or authorize P1.
+
