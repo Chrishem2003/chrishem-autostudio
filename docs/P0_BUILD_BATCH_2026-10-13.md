@@ -135,3 +135,10 @@ CI does not prove these external gates. P0 remains open; P1 is not authorized.
 - Exact-head CI passed on code commit `b437f9d20e011dfd972078e82d97d0b15f8f45a9`: [run 38448323254](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38448323254). Typecheck, unit tests, execution-integrity lint, production build, and disposable PostgreSQL migration/permission/idempotency/fencing/concurrency smoke checks passed.
 - This is repository-level evidence only. Hosted staging acceptance remains **NOT RUN**; provider-side duplicate-effect verification, deployed interruption/recovery rehearsal, deployed outbound transport verification, audit-history inspection, repository-wide lint disposition, and independent acceptance remain blockers. Keep P0 open; do not merge, deploy, enable durable workers/outbound transport, or authorize P1.
 
+## Expired-lease recovery after completed audit — 2026-10-13
+
+- Extended the disposable PostgreSQL smoke test to model a worker whose successful run and step audit were already committed but whose queue finalization response was lost. When the queue lease expires, the job must transition to `needs_review`, while the completed run/step audit fields remain unchanged and repeated claims must not replay the job.
+- Corrected the fixture to use the run-audit success status `success` (the queue status remains `succeeded`).
+- Exact-head CI passed on `dbeef93644127137ddf0c3946755ba224903aedd`: [run 38449594791](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38449594791). Typecheck, unit tests, execution-integrity lint, production build, and the full disposable PostgreSQL migration/permissions/fencing/concurrency smoke test passed.
+- Repository-level verification is not hosted staging acceptance. Staging remains **NOT RUN**; provider-side duplicate-effect verification, deployed interruption/recovery rehearsal, deployed outbound transport verification, audit-history inspection, repository-wide lint disposition, and independent acceptance remain blockers. P0 remains open; do not merge, deploy, enable durable workers/outbound transport, or authorize P1.
+
