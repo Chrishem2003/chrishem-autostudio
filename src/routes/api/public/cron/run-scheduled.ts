@@ -8,9 +8,10 @@ import { withPreparedExecutionPlan } from "@/lib/prepared-execution-gate";
 import { buildRunFinalization } from "@/lib/run-finalization";
 import { enqueueExecutionJob } from "@/lib/execution-job-queue.server";
 import { isDurableQueueEnabled } from "@/lib/runtime-feature-gates";
-import { livePreflightError } from "@/lib/execute-step.server";
+import { executeStep, livePreflightError } from "@/lib/execute-step.server";
 import { sanitizeExecutionAuditValue, sanitizeExecutionError } from "@/lib/execution-error-sanitizer";
 import { firstLivePreflightError } from "@/lib/live-execution-preflight";
+import { confirmExecutionLeaseHeartbeat, runWithExecutionLeaseKeepalive } from "@/lib/execution-lease-keepalive.server";
 
 const MAX_SCHEDULED_FLOW_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -147,6 +148,24 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
           // database/runtime exceptions and early continues.
           let leaseCursor = startedAt;
           let activeRunId: string | null = null;
+          let executionLeaseLost = false;
+          const heartbeatScheduledLease = async (): Promise<boolean> =>
+            confirmExecutionLeaseHeartbeat(async () => {
+              const { data: alive, error: heartbeatError } = await supabaseAdmin.rpc("heartbeat_manual_automation", {
+                _automation_id: row.id,
+                _lock_token: lockToken,
+                _lease_seconds: 900,
+              });
+              return !heartbeatError && alive === true;
+            });
+          const confirmScheduledLease = async (): Promise<boolean> => {
+            if (executionLeaseLost) return false;
+            if (!(await heartbeatScheduledLease())) {
+              executionLeaseLost = true;
+              return false;
+            }
+            return true;
+          };
           try {
           // Persist the run before any external side effects. If audit persistence
           // is unavailable, fail closed and release the lease without executing.
@@ -176,6 +195,15 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
           activeRunId = run.id;
           ran++;
           const execution = await executeFlowSteps({
+            execute: async (args) => {
+              if (!(await confirmScheduledLease())) {
+                throw new Error("Scheduled execution lease ownership was lost; stop before starting another external action.");
+              }
+              return runWithExecutionLeaseKeepalive(
+                () => executeStep(args),
+                confirmScheduledLease,
+              );
+            },
             nodes: executionPlan.nodes,
             flowName: wf.name || row.name,
             userId: row.user_id,
@@ -183,6 +211,7 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
             startedAtMs: started,
             maxRuntimeMs: MAX_SCHEDULED_FLOW_RUNTIME_MS,
             persistIntent: async (node, index) => {
+              if (!(await confirmScheduledLease())) return null;
               const { data: attempt, error: intentError } = await supabaseAdmin
                 .from("run_step_logs")
                 .insert({
@@ -201,6 +230,7 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
               return { id: attempt.id };
             },
             persistOutcome: async (intentId, step, outcomeState) => {
+              if (!(await confirmScheduledLease())) return false;
               const { data: persistedStep, error: stepError } = await supabaseAdmin.from("run_step_logs").update({
                 status: step.status,
                 outcome_state: outcomeState,
@@ -236,6 +266,9 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
           });
           const steps = execution.steps;
 
+          if (!(await confirmScheduledLease())) {
+            throw new Error("Scheduled execution lease ownership was lost before run finalization.");
+          }
           const finalization = buildRunFinalization({ steps, mode: "live", startedAtMs: started });
           if (finalization.status === "failed") failed++;
           const finishedAt = finalization.finishedAt;
@@ -286,7 +319,7 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
               automationId: row.id,
               errorName: error instanceof Error ? error.name : "UnknownError",
             });
-            if (activeRunId) {
+            if (activeRunId && !executionLeaseLost && await confirmScheduledLease()) {
               try {
                 const failedAt = new Date().toISOString();
                 const { error: stepRecoveryError } = await supabaseAdmin
