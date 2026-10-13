@@ -110,6 +110,45 @@ describe("processOneExecutionJob", () => {
     expect(executeCalls).toBe(0);
   });
 
+  test("does not execute jobs with unsupported trigger or malformed idempotency keys", async () => {
+    for (const invalidMetadata of [
+      { triggerType: "internal" },
+      { idempotencyKey: "" },
+      { idempotencyKey: " ".repeat(201) },
+    ]) {
+      let executeCalls = 0;
+      const { deps, calls } = dependencies({
+        claim: async () => ({ ...job, triggerType: "manual", ...invalidMetadata }),
+        execute: async () => {
+          executeCalls++;
+          return { status: "succeeded", sideEffectCertainty: "effect_confirmed" };
+        },
+      });
+      const result = await processOneExecutionJob(deps);
+      expect(result).toEqual({ outcome: "finished", jobId: "job-1", status: "needs_review" });
+      expect(executeCalls).toBe(0);
+      expect(calls.finished).toHaveLength(1);
+      expect(calls.finished[0].status).toBe("needs_review");
+    }
+  });
+
+  test("does not finalize a claim with an unusable fencing identity", async () => {
+    let executeCalls = 0;
+    const { deps, calls } = dependencies({
+      claim: async () => ({ ...job, workerToken: "" }),
+      execute: async () => {
+        executeCalls++;
+        return { status: "succeeded", sideEffectCertainty: "effect_confirmed" };
+      },
+    });
+    expect(await processOneExecutionJob(deps)).toEqual({
+      outcome: "finalization_rejected",
+      jobId: "unknown-claimed-job",
+    });
+    expect(executeCalls).toBe(0);
+    expect(calls.finished).toHaveLength(0);
+  });
+
   test("finalizes successful execution", async () => {
     const { deps, calls } = dependencies();
     const result = await processOneExecutionJob(deps);
