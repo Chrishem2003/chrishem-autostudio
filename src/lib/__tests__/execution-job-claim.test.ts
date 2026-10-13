@@ -73,6 +73,13 @@ describe("parseClaimedExecutionJob", () => {
     }
   });
 
+  test("rejects a missing or undefined payload instead of applying enqueue defaults", () => {
+    const missing = validRow();
+    delete missing.payload;
+    expect(() => parseClaimedExecutionJob(missing)).toThrow("invalid payload");
+    expect(() => parseClaimedExecutionJob({ ...validRow(), payload: undefined })).toThrow("invalid payload");
+  });
+
   test("rejects null, arrays, and non-object RPC results", () => {
     for (const value of [null, [], "job", 42]) {
       expect(() => parseClaimedExecutionJob(value)).toThrow("invalid job row");
