@@ -232,3 +232,10 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Missing/blank job identity, automation identity, or worker token fails closed without attempting finalization with an untrusted fencing identity.
 - Regression tests assert invalid claims never invoke the executor. Exact-head CI passed after updating the shared test fixture to include the required trigger type: [run 38355329532](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38355329532).
 - This protects the worker boundary but does not prove staging adapter correctness or provider idempotency. P0 remains open.
+
+
+## Conservative outcome classification — 2026-10-13
+
+- Safe-to-retry classification now requires recognized preflight/configuration language at the beginning of the error detail; incidental phrases embedded in timeout/provider errors remain uncertain.
+- Regression tests cover misleading embedded phrases, preventing an ambiguous provider failure from being treated as proof that no external effect occurred.
+- This is unit/CI evidence only. Provider-level idempotency and interrupted-side-effect recovery still require controlled staging acceptance.
