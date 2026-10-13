@@ -28,6 +28,16 @@ create table if not exists public.run_logs (
   trigger_type text not null default 'manual'
 );
 
+-- Minimal owner-check stand-ins for policies created by later forward migrations.
+-- Production migrations use the real owner-scoped implementations from the app schema.
+create or replace function public.owns_automation(_automation_id uuid)
+returns boolean language sql stable
+as $owner_stub$ select true $owner_stub$;
+
+create or replace function public.owns_run(_run_id uuid)
+returns boolean language sql stable
+as $owner_stub$ select true $owner_stub$;
+
 create table if not exists public.run_step_logs (
   id uuid primary key,
   run_id uuid not null references public.run_logs(id) on delete cascade,
