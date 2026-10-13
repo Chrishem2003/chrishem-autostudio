@@ -12,6 +12,7 @@ import { executeStep, livePreflightError } from "@/lib/execute-step.server";
 import { sanitizeExecutionAuditValue, sanitizeExecutionError } from "@/lib/execution-error-sanitizer";
 import { firstLivePreflightError } from "@/lib/live-execution-preflight";
 import { confirmExecutionLeaseHeartbeat, runWithExecutionLeaseKeepalive } from "@/lib/execution-lease-keepalive.server";
+import { scheduledExecutionIdempotencyKey } from "@/lib/scheduled-execution-key";
 
 const MAX_SCHEDULED_FLOW_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -84,6 +85,20 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
           // default. With the flag enabled, this branch only enqueues and never
           // executes workflow steps in the scheduler request.
           if (isDurableQueueEnabled()) {
+            // Validate the generation key before claiming a lease. Invalid
+            // cadence/timestamp data must not strand a queue-enqueue lease.
+            let idempotencyKey: string;
+            try {
+              idempotencyKey = scheduledExecutionIdempotencyKey(
+                row.id,
+                cadence,
+                row.last_run_at ? new Date(row.last_run_at) : null,
+              );
+            } catch {
+              failed++;
+              continue;
+            }
+
             const { data: queueLock, error: queueLockError } = await supabaseAdmin.rpc("claim_scheduled_automation", {
               _automation_id: row.id,
               _lease_seconds: 900,
@@ -91,7 +106,6 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
             if (queueLockError || !queueLock) continue;
 
             const enqueuedAt = new Date().toISOString();
-            const idempotencyKey = "schedule:" + row.id + ":" + (row.last_run_at ? Date.parse(row.last_run_at) : 0) + ":" + String(cadence).slice(0, 32);
             let enqueueSucceeded = false;
             try {
               await enqueueExecutionJob({
