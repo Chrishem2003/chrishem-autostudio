@@ -14,7 +14,7 @@ import { firstLivePreflightError } from "@/lib/live-execution-preflight";
 import { confirmExecutionLeaseHeartbeat, runWithExecutionLeaseKeepalive } from "@/lib/execution-lease-keepalive.server";
 import { scheduledExecutionIdempotencyKey } from "@/lib/scheduled-execution-key";
 import { normalizeScheduledTriggerConfig } from "@/lib/scheduled-trigger-config";
-import { runScheduledEnqueueAttempt } from "@/lib/scheduled-enqueue-attempt";
+import { runScheduledEnqueueAttempt, shouldReleaseScheduledLease } from "@/lib/scheduled-enqueue-attempt";
 
 const MAX_SCHEDULED_FLOW_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -152,6 +152,20 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
                 }
               },
               release: async (enqueueSucceeded) => {
+                // On an initial generation, a thrown enqueue can mean the queue
+                // committed the job but its response was lost. Releasing with the
+                // epoch fallback would change "initial" to a different idempotency
+                // key and permit a duplicate. Keep this lease until expiry instead.
+                if (!shouldReleaseScheduledLease({
+                  enqueueSucceeded,
+                  lastRunAt: row.last_run_at,
+                })) {
+                  console.error("[AutoStudio scheduler] Retaining first-run lease after ambiguous enqueue failure to preserve idempotency.", {
+                    automationId: row.id,
+                  });
+                  throw new Error("Retaining initial scheduled generation until lease expiry.");
+                }
+
                 let releaseErrorCode: string | null = null;
                 try {
                   const { error: queueReleaseError } = await supabaseAdmin.rpc("release_scheduled_automation", {
