@@ -1140,3 +1140,61 @@ $privilege_check$;
 
 select status, attempts from public.execution_jobs
 where idempotency_key = 'smoke-idempotency-key';
+
+-- A lost finish-RPC response can occur after the run audit was already committed.
+-- Expiring that queue lease must park the job for review without rewriting the
+-- completed audit record or making the action eligible for automatic replay.
+do $finished_run_expiry_check$
+declare
+  expired_token uuid := '00000000-0000-4000-8000-000000000098';
+  queue_id uuid := '00000000-0000-4000-8000-000000000032';
+  run_id uuid := '00000000-0000-4000-8000-000000000030';
+  step_id uuid := '00000000-0000-4000-8000-000000000031';
+  original_finished_at timestamptz := now() - interval '1 minute';
+begin
+  insert into public.run_logs (
+    id, automation_id, status, started_at, finished_at, error_summary
+  ) values (
+    run_id, '00000000-0000-4000-8000-000000000002',
+    'succeeded', original_finished_at - interval '1 minute',
+    original_finished_at, null
+  );
+
+  insert into public.run_step_logs (
+    id, run_id, status, outcome_state, error_detail
+  ) values (step_id, run_id, 'succeeded', 'confirmed', 'completed before lost queue response');
+
+  insert into public.execution_jobs (
+    id, automation_id, trigger_type, idempotency_key, payload, status,
+    attempts, max_attempts, worker_token, locked_until, started_at, run_id
+  ) values (
+    queue_id, '00000000-0000-4000-8000-000000000002',
+    'manual', 'smoke-expired-after-success', '{}'::jsonb, 'running',
+    1, 3, expired_token, now() - interval '1 second',
+    now() - interval '2 minutes', run_id
+  );
+
+  -- The claim operation performs expired-lease recovery atomically before
+  -- selecting a fresh job; this fixture itself must never be re-claimed.
+  perform * from public.claim_execution_job(300);
+
+  if (select status from public.execution_jobs where id = queue_id) <> 'needs_review'
+     or (select worker_token from public.execution_jobs where id = queue_id) is not null then
+    raise exception 'Expired job with a completed audit run was not parked for review';
+  end if;
+  if (select status from public.run_logs where id = run_id) <> 'succeeded'
+     or (select finished_at from public.run_logs where id = run_id) is distinct from original_finished_at
+     or (select error_summary from public.run_logs where id = run_id) is not null then
+    raise exception 'Expired queue recovery rewrote an already-completed run audit';
+  end if;
+  if (select status from public.run_step_logs where id = step_id) <> 'succeeded'
+     or (select outcome_state from public.run_step_logs where id = step_id) <> 'confirmed'
+     or (select error_detail from public.run_step_logs where id = step_id) <> 'completed before lost queue response' then
+    raise exception 'Expired queue recovery rewrote an already-completed step audit';
+  end if;
+  if exists (select 1 from public.claim_execution_job(300) where id = queue_id) then
+    raise exception 'Expired queue job with a completed effect was automatically replayed';
+  end if;
+end
+$finished_run_expiry_check$;
+
