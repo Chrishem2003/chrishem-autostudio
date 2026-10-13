@@ -171,6 +171,11 @@ export async function processOneExecutionJob(
     }
   };
 
+  // Verify queue ownership before entering any executor code. Executors should
+  // still heartbeat before external actions, but the worker must not rely on an
+  // adapter remembering to perform the very first lease check.
+  if (!(await heartbeat())) return { outcome: "lease_lost", jobId: job.id };
+
   let result: ExecutionJobResult;
   try {
     result = await dependencies.execute(job, { heartbeat });
