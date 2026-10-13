@@ -65,3 +65,9 @@ CI does not prove these external gates. P0 remains open; P1 is not authorized.
 - Corrected the database guard that required a linked run audit status of `succeeded` even though the application finalizer records `success`.
 - Added a forward migration, inserted it into the reviewed CI migration sequence, and updated the SQL smoke test to use the real application status vocabulary.
 - Exact-head CI required; no hosted migration or staging acceptance has been performed.
+
+
+## Migration-chain regression repaired — 2026-10-13
+
+- Full PostgreSQL smoke execution caught that the queue success-status correction had inadvertently removed explicit NULL-status validation in the finalization RPC.
+- Restored `_status IS NULL` rejection in the new forward migration while keeping the corrected application success-status comparison. Re-run the complete migration chain and all smoke tests.

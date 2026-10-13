@@ -14,7 +14,7 @@ security definer
 set search_path = public
 as $$
 begin
-  if _status not in ('succeeded', 'failed', 'queued', 'needs_review', 'dead_letter') then
+  if _status is null or _status not in ('succeeded', 'failed', 'queued', 'needs_review', 'dead_letter') then
     raise exception 'Invalid execution job final status';
   end if;
 

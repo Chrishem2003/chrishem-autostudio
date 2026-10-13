@@ -378,3 +378,9 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Deep review confirmed a mismatch: the shared application finalizer persists successful `run_logs` rows as `success`, while the queue finalization guard required `succeeded`. This could reject a valid queue success after the run audit had been persisted.
 - Added a forward migration that preserves the queue job status `succeeded` but checks the linked audit run for the application's actual `success` status and a non-null finish timestamp. Updated the migration-chain guard and smoke fixture to exercise the real contract.
 - Exact-head CI must pass before considering the fix verified. Staging acceptance remains NOT RUN; P0 stays open.
+
+
+## Queue status-guard regression repair — 2026-10-13
+
+- The first full migration-chain run caught a regression in the new forward migration: its replacement finalizer had omitted the explicit NULL-status check from the preceding guard. Restored the NULL check while retaining the `run_logs.status = success` contract.
+- This illustrates why the entire migration chain, not only the changed SQL function, must pass. The latest exact-head CI is required before this correction is considered verified.
