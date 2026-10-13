@@ -85,7 +85,9 @@ export function parseClaimedExecutionJob(value: unknown): ClaimedExecutionJob {
  * The database contract is zero or one row; multiple rows are a protocol error.
  */
 export function parseClaimedExecutionJobResponse(value: unknown): ClaimedExecutionJob | null {
-  if (value === null) return null;
+  // The RPC returns SETOF rows: an empty result is [], while null means the
+  // adapter/database contract drifted. Do not disguise a malformed response as
+  // an idle queue, or a broken worker can silently stop consuming jobs.
   if (!Array.isArray(value)) {
     throw new Error("Queue claim returned an unexpected response.");
   }
