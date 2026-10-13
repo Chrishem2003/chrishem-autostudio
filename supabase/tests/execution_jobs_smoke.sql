@@ -8,6 +8,12 @@ declare
   table_name text;
 begin
   foreach table_name in array array['run_logs', 'run_step_logs'] loop
+    if has_table_privilege('anon', format('public.%I', table_name), 'SELECT')
+       or has_table_privilege('anon', format('public.%I', table_name), 'INSERT')
+       or has_table_privilege('anon', format('public.%I', table_name), 'UPDATE')
+       or has_table_privilege('anon', format('public.%I', table_name), 'DELETE') then
+      raise exception 'anon retains access to execution audit table %', table_name;
+    end if;
     if has_table_privilege('authenticated', format('public.%I', table_name), 'INSERT')
        or has_table_privilege('authenticated', format('public.%I', table_name), 'UPDATE')
        or has_table_privilege('authenticated', format('public.%I', table_name), 'DELETE') then
@@ -31,6 +37,24 @@ begin
        and cmd in ('INSERT', 'UPDATE', 'DELETE', 'ALL')
   ) then
     raise exception 'Authenticated execution-audit write policy remains enabled';
+  end if;
+
+  if not exists (
+    select 1 from pg_policies
+     where schemaname = 'public'
+       and tablename = 'run_logs'
+       and policyname = 'run_logs_select_own'
+       and cmd = 'SELECT'
+       and 'authenticated' = any(roles)
+  ) or not exists (
+    select 1 from pg_policies
+     where schemaname = 'public'
+       and tablename = 'run_step_logs'
+       and policyname = 'run_step_logs_select_own'
+       and cmd = 'SELECT'
+       and 'authenticated' = any(roles)
+  ) then
+    raise exception 'Owner-scoped authenticated execution-audit read policies are missing';
   end if;
 end $audit_check$;
 
