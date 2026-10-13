@@ -508,3 +508,24 @@ The exact-head CI checkpoint does not change the release decision: **P0 OPEN; P1
 - [ ] Branch synchronization against current `main` remains open; do not merge while the PR is dirty/behind, and rerun CI on the final synchronized head.
 
 **Release decision unchanged: P0 OPEN; P1 is not authorized.** This checkpoint verifies repository code only. Do not merge, deploy, or enable durable queue producers/workers or outbound transport.
+
+
+## Branch reconciliation plan — 2026-10-14
+
+The hardening branch is intentionally **not synchronized automatically**. The GitHub comparison against `main` reports `diverged`, with 797 branch-only commits, 157 main-only commits, and 123 changed paths on the hardening side. Of those paths, 64 overlap files changed on `main` since the common ancestor. This is a material integration risk, not a routine behind-branch update.
+
+### Reconciliation order
+
+1. **Freeze the evidence baseline.** Preserve the current hardening head and its passing exact-head CI before any synchronization attempt.
+2. **Inventory main-only behavior first.** Review the 157 main-only commits and classify their changes by runtime surface; do not assume they are cosmetic or safely replayable.
+3. **Reconcile shared runtime contracts before UI.** Review these overlapping paths as pairs: `.github/workflows/ci.yml`, `package.json`, `src/lib/web-steps.server.ts`, `src/routes/api/public/cron/run-scheduled.ts`, `src/routes/api/public/cron/run-execution-job.ts`, execution-job helpers/tests, and Supabase generated types/migrations. Preserve both branches' intended behavior and migration ordering.
+4. **Do not transplant queue migrations blindly.** Check migration timestamp order, function signatures, grants/revokes, RLS policies, and compatibility with the schema already on `main`. Staging migration execution and RLS/RPC checks are mandatory.
+5. **Re-run focused and full CI after each controlled reconciliation batch.** No production or `main` update until the synchronized branch has green exact-head CI and independent review.
+6. **Keep risky capabilities gated.** Queue producers/workers and outbound transport stay disabled until hosted staging, idempotency, recovery, network-boundary, and audit-history gates pass.
+
+### Evidence checkpoint
+
+- Current reviewed hardening head: `67ac323943ac861912b7587847fb1eceb89757c2`.
+- Exact-head CI: [run 38476560866](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38476560866) — passed.
+- Merge/rebase/synchronization: **not performed**; no `main` or deployment changes were made.
+- Release decision: **P0 OPEN; P1 not authorized**.
