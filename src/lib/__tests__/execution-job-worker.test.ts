@@ -436,32 +436,32 @@ describe("processOneExecutionJob", () => {
     expect(calls.finished).toHaveLength(0);
   });
 
-  test("treats a truthy non-boolean heartbeat response as lease loss", async () => {
+  test("does not enter executor code when heartbeat returns a truthy non-boolean", async () => {
     let executeCalls = 0;
     const { deps, calls } = dependencies({
       heartbeat: async () => ({ alive: true } as any),
-      execute: async (_job, context) => {
+      execute: async () => {
         executeCalls++;
-        expect(await context.heartbeat()).toBe(false);
         return { status: "succeeded", sideEffectCertainty: "effect_confirmed" };
       },
     });
 
     expect(await processOneExecutionJob(deps)).toEqual({ outcome: "lease_lost", jobId: "job-1" });
-    expect(executeCalls).toBe(1);
+    expect(executeCalls).toBe(0);
     expect(calls.finished).toHaveLength(0);
   });
 
-  test("fails closed when heartbeat transport throws", async () => {
+  test("does not enter executor code when the initial heartbeat transport throws", async () => {
+    let executeCalls = 0;
     const { deps, calls } = dependencies({
-      execute: async (_job, context) => {
-        const alive = await context.heartbeat();
-        expect(alive).toBe(false);
+      execute: async () => {
+        executeCalls++;
         return { status: "succeeded", sideEffectCertainty: "effect_confirmed" };
       },
       heartbeat: async () => { throw new Error("database unavailable"); },
     });
     expect(await processOneExecutionJob(deps)).toEqual({ outcome: "lease_lost", jobId: "job-1" });
+    expect(executeCalls).toBe(0);
     expect(calls.finished).toHaveLength(0);
   });
 
