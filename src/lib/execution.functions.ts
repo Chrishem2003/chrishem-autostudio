@@ -115,10 +115,12 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
       return { queued: true as const, jobId: id, status, mode: "live" as const, steps: [] as RunStep[] };
     }
 
+    // Privileged audit writes happen only after the automation was loaded with
+    // the authenticated user's ownership filter above.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     let releaseManualLock: (() => Promise<void>) | null = null;
     let manualLockToken: string | null = null;
     if (data.mode === "live") {
-      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       const { data: lockToken, error: lockError } = await supabaseAdmin.rpc("claim_manual_automation", {
         _automation_id: row.id,
         _lease_seconds: 600,
@@ -146,7 +148,6 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
     // Reconcile stale runs atomically while holding this request's own lease.
     // The database function verifies age, trigger type, run status and lease ownership.
     if (data.mode === "live") {
-      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       const staleBefore = new Date(Date.now() - 20 * 60 * 1000).toISOString();
       const { data: staleRuns, error: staleQueryError } = await supabaseAdmin
         .from("run_logs").select("id").eq("automation_id", row.id)
@@ -172,8 +173,6 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
     }
     // Execution audit writes are server-owned: authenticated clients retain
     // owner-scoped read access, but cannot fabricate or rewrite run history.
-    // The automation owner was checked above before this privileged writer is used.
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const startedAt = new Date().toISOString();
     const startedMs = Date.now();
     runStartedMs = startedMs;
