@@ -97,16 +97,16 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261010160000_step_outcome_certainty.sql
       - name: Apply durable queue migration
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261010170000_durable_execution_jobs.sql
-      - name: Apply enqueue NULL validation migration
-        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261011160000_enqueue_null_validation.sql
-      - name: Apply automation lease heartbeat migration
-        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261011150000_automation_lease_heartbeat.sql
       - name: Apply execution audit reconciliation migration
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261011120000_execution_job_run_reconciliation.sql
       - name: Apply atomic stale-run reconciliation migration
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261011130000_atomic_stale_run_reconciliation.sql
       - name: Apply success/audit consistency guard
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261011140000_execution_success_requires_audit.sql
+      - name: Apply automation lease heartbeat migration
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261011150000_automation_lease_heartbeat.sql
+      - name: Apply enqueue NULL validation migration
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261011160000_enqueue_null_validation.sql
       - name: Apply one-to-one audit-run association guard
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261011170000_execution_job_run_association_guard.sql
       - name: Apply NULL final-status guard
