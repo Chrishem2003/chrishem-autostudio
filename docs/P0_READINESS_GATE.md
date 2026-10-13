@@ -431,3 +431,9 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Extended the disposable PostgreSQL queue smoke test to assert that an expired worker token cannot attach or re-attach an audit run after the lease expires, even before the stale-job recovery pass changes the queue status.
 - This closes a specific audit-mutation assertion alongside existing stale-token heartbeat/finalization checks. The test has been added but is not accepted until exact-head CI passes.
 - Hosted staging interruption/fencing rehearsal remains open; P0 stays open and queue/outbound flags remain disabled.
+
+
+## Interrupted-run recovery ownership recheck — 2026-10-13
+
+- Cross-path review found a narrow gap: if an error occurred after an audit run was created but before the next normal heartbeat, the catch path could begin best-effort audit recovery based only on the previously recorded lease-loss flag. It now confirms both queue and automation leases immediately before recovery mutations; an unconfirmed heartbeat fails closed and leaves the run for authoritative reconciliation.
+- This is a source-level guard, not hosted staging evidence. Exact-head CI and a controlled lease-expiry/interruption rehearsal remain required; P0 stays open and queue/outbound flags remain disabled.
