@@ -482,3 +482,17 @@ The exact-head CI checkpoint does not change the release decision: **P0 OPEN; P1
 - [ ] Final P0 exit review and explicit P1 authorization.
 
 **Decision remains P0 OPEN; P1 is not authorized.** Keep durable queue producer/worker and outbound transport gates disabled until the staging acceptance record is completed and reviewed.
+
+
+## Exact-head CI confirmation — IPv6 NAT64 SSRF guard (2026-10-13)
+
+- [x] Security guard and regression tests passed exact-head CI on `cd105335d78ab4586b1296bdea5fc900e349edc4`: [run 38475519710](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38475519710). The duplicate run `38475446807` was cancelled by GitHub Actions concurrency; the successful run tested the same exact head.
+- [x] Both required jobs passed: typecheck, full unit tests, targeted execution-integrity lint, production build, and disposable PostgreSQL migration/permission/idempotency/fencing/concurrency smoke checks.
+- [x] Added blocking for the well-known `64:ff9b::/96` NAT64 prefix and local-use `64:ff9b:1::/48`, with regressions for loopback/private IPv4 embeddings.
+- [ ] Repository-wide lint disposition remains open (recorded baseline: 3,317 findings, 3,311 errors and 6 warnings; mostly formatting).
+- [ ] Hosted staging migrations/RLS/RPC and deployed cron-auth checks.
+- [ ] Provider sandbox duplicate-effect/idempotency proof and interrupted-worker recovery rehearsal.
+- [ ] Deployed outbound HTTP/TLS/DNS/redirect/timeout verification; audit-history inspection; independent acceptance.
+- [ ] Reconcile branch against current `main` (PR was reported dirty and 157 commits behind), then rerun CI on final synchronized head.
+
+**Decision unchanged: P0 OPEN; P1 is not authorized.** Do not merge, deploy, or enable durable queue producers/workers or outbound transport. This checkpoint records repository CI only, not hosted staging acceptance.
