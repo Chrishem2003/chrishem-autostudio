@@ -83,6 +83,39 @@ export async function processOneExecutionJob(
     payload: freezeExecutionPayload(claimedJob.payload),
   });
 
+  // Validate the claim envelope at the adapter boundary. Invalid identity
+  // cannot be safely finalized because the database fencing key itself is not
+  // trustworthy; malformed non-identity metadata can be parked for review.
+  if (
+    typeof job.id !== "string" || job.id.trim().length === 0 ||
+    typeof job.automationId !== "string" || job.automationId.trim().length === 0 ||
+    typeof job.workerToken !== "string" || job.workerToken.trim().length === 0
+  ) {
+    return { outcome: "finalization_rejected", jobId: "unknown-claimed-job" };
+  }
+
+  if (
+    !["manual", "scheduled", "webhook"].includes(job.triggerType) ||
+    typeof job.idempotencyKey !== "string" ||
+    job.idempotencyKey.trim().length === 0 ||
+    job.idempotencyKey.length > 200
+  ) {
+    let finalized = false;
+    try {
+      finalized = (await dependencies.finish(
+        job,
+        "needs_review",
+        "Claimed job metadata is invalid. Verify the queue record before retrying.",
+        null,
+      )) === true;
+    } catch {
+      // Invalid request metadata must never be allowed to reach the executor.
+    }
+    return finalized
+      ? { outcome: "finished", jobId: job.id, status: "needs_review" }
+      : { outcome: "finalization_rejected", jobId: job.id };
+  }
+
   // A successful database claim must have incremented attempts to a positive
   // integer and must respect the database's bounded retry policy. If an adapter
   // returns malformed counters, do not execute external effects or let the
