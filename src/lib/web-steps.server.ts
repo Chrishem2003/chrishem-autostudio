@@ -192,7 +192,7 @@ async function requestOnce(url: URL, data: WebInput, target: PinnedAddress): Pro
       headers["content-type"] = "application/json";
       headers["content-length"] = String(Buffer.byteLength(body));
     }
-    const tlsHostname = url.hostname.replace(/^\\[|\\]$/g, "");
+    const tlsHostname = url.hostname.replace(/^\[|\]$/g, "");
     const req = requestFn(url, {
       method: data.method,
       headers,
