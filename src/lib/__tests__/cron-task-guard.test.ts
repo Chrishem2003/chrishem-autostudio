@@ -24,6 +24,9 @@ describe("authenticated cron task guard", () => {
     );
 
     expect(result.denied).toBeInstanceOf(Response);
+    expect(result.denied?.headers.get("Cache-Control")).toBe("no-store");
+    expect(result.denied?.headers.get("Pragma")).toBe("no-cache");
+    expect(result.denied?.headers.get("X-Content-Type-Options")).toBe("nosniff");
     expect(taskCalls).toBe(0);
     expect(dependencyConstructionCalls).toBe(0);
   });
