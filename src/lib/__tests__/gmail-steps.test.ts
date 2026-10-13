@@ -1,6 +1,6 @@
 // @ts-nocheck -- vitest types are resolved at test time
 import { describe, it, expect } from "bun:test";
-import { buildGmailMessage, isGmailSendStep, parseRecipients } from "../gmail-steps";
+import { buildGmailMessage, isGmailSendStep, parseRecipients, toRawEmail } from "../gmail-steps";
 describe("gmail send rules", () => {
   it("sends from Send Gmail and Gmail create-email steps", () => {
     expect(isGmailSendStep("action.gmail")).toBe(true);
