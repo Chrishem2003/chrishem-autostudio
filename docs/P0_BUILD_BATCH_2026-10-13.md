@@ -176,3 +176,13 @@ CI does not prove these external gates. P0 remains open; P1 is not authorized.
 - Verified jobs: typecheck, full unit test suite, execution-integrity lint, production build, and durable execution queue migration/permission/idempotency/fencing/concurrency smoke tests.
 - The new cron guard tests confirm that throwing `headers` or `body` accessors on a malformed Response proxy are normalized to a generic cache-safe 503 and never invoke the protected task.
 - Hosted staging acceptance remains **NOT RUN**. Provider sandbox duplicate-effect verification, deployed interrupted-worker recovery, deployed outbound transport checks, audit-history inspection, repository-wide lint disposition, and independent acceptance remain blockers. P0 remains OPEN; do not merge, deploy, enable durable workers/outbound transport, or authorize P1.
+
+
+## Exact-head CI — Gmail raw-header control-character regression
+
+- Code head: `fd526ebe01ec83632b32a7d7769241dbbd2a2931`.
+- Exact-head CI passed: [run 38473193054](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38473193054).
+- Both required jobs passed: typecheck/unit tests/targeted execution-integrity lint/production build, and the disposable PostgreSQL migration/permission/idempotency/fencing/concurrency smoke suite.
+- Gmail raw-message header encoding now treats all non-printable/non-ASCII subject values as encoded words; the regression test includes a NUL control character and verifies it never appears raw in the emitted Subject header.
+- Repository-wide `bun run lint` is still non-blocking and not green: the recorded baseline is 3,317 findings (3,311 errors and 6 warnings), predominantly Prettier formatting. A small `prefer-const` finding and a control-character regex finding were corrected in this batch; do not represent the full-repository lint gate as passed.
+- This checkpoint is code/CI evidence only. Hosted staging acceptance remains NOT RUN. P0 stays OPEN; do not merge, deploy, enable durable queue producers/workers or outbound transport, or authorize P1.
