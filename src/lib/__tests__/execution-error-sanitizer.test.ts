@@ -92,6 +92,16 @@ describe("sanitizeExecutionAuditValue", () => {
     expect(JSON.stringify(result)).toContain("[CIRCULAR]");
     expect(JSON.stringify(result)).toContain("[TRUNCATED]");
   });
+  test("preserves prototype-named output keys as inert data", () => {
+    const input = JSON.parse('{"__proto__":{"token":"secret-value"},"constructor":{"safe":"visible"}}');
+    const result = sanitizeExecutionAuditValue(input) as Record<string, unknown>;
+    expect(Object.getPrototypeOf(result)).toBeNull();
+    expect(Object.prototype.hasOwnProperty.call(result, "__proto__")).toBe(true);
+    expect((result["__proto__"] as Record<string, unknown>).token).toBe("[REDACTED_SECRET]");
+    expect(JSON.stringify(result)).not.toContain("secret-value");
+    expect(JSON.stringify(result)).toContain('"__proto__"');
+  });
+
   test("fails closed for throwing getters and hostile proxy traps", () => {
     const getterValue = Object.defineProperty({}, "message", {
       enumerable: true,

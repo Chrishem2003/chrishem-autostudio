@@ -56,7 +56,9 @@ export function sanitizeExecutionAuditValue(value: unknown): unknown {
       return item.slice(0, 50).map((entry) => visit(entry, depth + 1));
     }
 
-    const result: Record<string, unknown> = {};
+    // A null-prototype dictionary treats keys such as `__proto__` as data,
+    // not as mutators of the returned object's prototype.
+    const result: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
     for (const [childKey, childValue] of Object.entries(item).slice(0, 50)) {
       result[childKey.slice(0, 100)] = visit(childValue, depth + 1, childKey);
     }

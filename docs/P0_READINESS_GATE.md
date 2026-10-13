@@ -384,3 +384,10 @@ Do not mark any unchecked item as passed based on code inspection alone.
 
 - The first full migration-chain run caught a regression in the new forward migration: its replacement finalizer had omitted the explicit NULL-status check from the preceding guard. Restored the NULL check while retaining the `run_logs.status = success` contract.
 - This illustrates why the entire migration chain, not only the changed SQL function, must pass. The latest exact-head CI is required before this correction is considered verified.
+
+
+## Sanitizer dictionary-key hardening — 2026-10-13
+
+- Cross-path audit sanitization now builds sanitized objects with a null prototype, so attacker-controlled keys such as `__proto__` are treated as inert data rather than prototype setters.
+- Added regression coverage for prototype-named keys, sensitive nested values, and serialization. Exact-head CI must pass before this checkpoint is accepted.
+- This is repository-level validation only; staging acceptance remains open and queue/outbound flags remain disabled.
