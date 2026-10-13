@@ -467,3 +467,18 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - [ ] Final P0 exit review and explicit P1 authorization.
 
 The exact-head CI checkpoint does not change the release decision: **P0 OPEN; P1 not authorized**. Keep durable queue producer/worker and outbound transport gates disabled until the staging acceptance record is completed and reviewed.
+
+
+## Exact-head checkpoint — Gmail subject header-injection regression (2026-10-13)
+
+- [x] Exact-head CI passed on `2f79c6a33cc71c9af29ec92081b672f41488aa01`: [run 38474905024](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38474905024).
+- [x] Typecheck, full unit suite, targeted execution-integrity lint, production build, configured disposable PostgreSQL migration chain, RPC permission/idempotency/fencing checks, and concurrent-worker claim smoke test all passed.
+- [x] Gmail raw-message regression covers NUL plus CRLF/Bcc header injection and asserts the unsafe subject is encoded instead of creating a raw header.
+- [ ] Repository-wide lint remains non-blocking and not green: 3,317 recorded findings (3,311 errors and 6 warnings), predominantly Prettier formatting.
+- [ ] Hosted staging migrations/RLS/RPC and deployed cron-auth checks.
+- [ ] Provider sandbox duplicate-effect/idempotency proof and interrupted-worker recovery rehearsal.
+- [ ] Deployed outbound HTTP/TLS/DNS/redirect/timeout verification.
+- [ ] Audit-history inspection and independent acceptance.
+- [ ] Final P0 exit review and explicit P1 authorization.
+
+**Decision remains P0 OPEN; P1 is not authorized.** Keep durable queue producer/worker and outbound transport gates disabled until the staging acceptance record is completed and reviewed.
