@@ -62,7 +62,12 @@ export const Route = createFileRoute("/api/public/cron/execution-queue-health")(
     handlers: {
       GET: async ({ request }) => {
         const denied = await authenticateCronRequest(request);
-        if (denied) return denied;
+        if (denied) {
+          denied.headers.set("Cache-Control", "no-store");
+          denied.headers.set("Pragma", "no-cache");
+          denied.headers.set("X-Content-Type-Options", "nosniff");
+          return denied;
+        }
 
         try {
           // The durable queue migration is newer than the generated Supabase
