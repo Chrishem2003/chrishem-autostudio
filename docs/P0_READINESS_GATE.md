@@ -254,3 +254,10 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - [ ] P0 exit review and explicit P1 authorization.
 
 **Decision remains: P0 OPEN; P1 is not yet authorized.** Green CI validates code and disposable PostgreSQL behavior, but the staging environment and provider-side evidence have not been verified. Keep durable queue and outbound transport flags disabled until the open acceptance gates are evidenced.
+
+
+## Scheduler response-header hardening — 2026-10-13
+
+- Scheduler success responses and the stale-run reconciliation/query failure responses now pass through the shared cron response-header helper, alongside authentication denial and authentication-adapter failure responses.
+- Exact-head CI passed on `ed4678726ac2dc6e3cbbbb54f90e4581c45319fe`: typecheck, unit tests, targeted execution-integrity lint, production build, and disposable PostgreSQL migration/concurrency smoke test. See [CI run 38361519365](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38361519365).
+- The exact-head run verifies the code change only. Staging migrations, real provider idempotency/duplicate-effect checks, interrupted-worker recovery, and audit-history acceptance remain open. Do not enable durable queue consumers or outbound transport.
