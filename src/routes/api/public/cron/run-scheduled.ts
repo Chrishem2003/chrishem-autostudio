@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { authenticateCronRequest } from "@/integrations/supabase/cron-auth";
+import { withCronSecurityHeaders } from "@/lib/cron-task-guard";
 import { isDue } from "@/lib/schedule";
 import type { Workflow } from "@/lib/workflow";
 import { executeFlowSteps } from "@/lib/execute-flow-steps.server";
@@ -16,8 +17,20 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const denied = await authenticateCronRequest(request);
-        if (denied) return denied;
+        // Keep authentication failures on the same generic, no-cache response path.
+        // A thrown auth adapter error must not escape as an unhandled route failure.
+        let denied: Response | null;
+        try {
+          denied = await authenticateCronRequest(request);
+        } catch (error) {
+          console.error("[AutoStudio scheduler] Cron authentication failed unexpectedly.", {
+            errorName: error instanceof Error ? error.name : "UnknownError",
+          });
+          return withCronSecurityHeaders(
+            Response.json({ error: "Scheduler is temporarily unavailable." }, { status: 503 }),
+          );
+        }
+        if (denied) return withCronSecurityHeaders(denied);
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
