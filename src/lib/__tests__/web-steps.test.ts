@@ -229,6 +229,25 @@ describe("outbound HTTP resilience with injected transport", () => {
     });
   });
 
+  it("preserves the final HTTP status when safe retries are exhausted", async () => {
+    await withReadyTransport(async () => {
+      const { callWeb } = await import("../web-steps.server");
+      let requests = 0;
+      const result = await callWeb(
+        { method: "GET", url: "https://example.com/unavailable", timeoutSec: 2 },
+        {
+          resolveTarget: safeTarget,
+          requestOnce: async () => { requests++; return { status: 503 }; },
+          wait: noWait,
+        },
+      );
+      expect(result.ok).toBe(false);
+      expect(result.status).toBe(503);
+      expect(result.attempts).toBe(3);
+      expect(requests).toBe(3);
+    });
+  });
+
   it("does not retry timeout failures for side-effecting POST requests", async () => {
     await withReadyTransport(async () => {
       const { callWeb } = await import("../web-steps.server");
