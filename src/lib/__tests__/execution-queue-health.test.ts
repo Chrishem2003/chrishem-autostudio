@@ -120,3 +120,61 @@ describe("summarizeStaleRunCandidates", () => {
     expect(summary).toMatchObject({ totalCount: 1, sampledCount: 1, truncated: false });
   });
 });
+
+
+describe("buildExecutionQueueAlerts", () => {
+  const base = () => ({
+    counts: emptyCounts(),
+    sampledAt: "2026-10-13T10:00:00.000Z",
+    oldestQueuedAt: null,
+    expiredLeaseCount: 0,
+    auditFindingCount: 0,
+    auditScanTruncated: false,
+    jobCountMismatch: false,
+    staleRunCount: 0,
+    staleRunSampleTruncated: false,
+  });
+
+  test("reports healthy only when no operational thresholds are breached", async () => {
+    const { buildExecutionQueueAlerts } = await import("@/lib/execution-queue-health");
+    expect(buildExecutionQueueAlerts(base())).toEqual({ status: "healthy", alerts: [] });
+  });
+
+  test("marks uncertain jobs and expired leases critical without suggesting automatic recovery", async () => {
+    const { buildExecutionQueueAlerts } = await import("@/lib/execution-queue-health");
+    const input = base();
+    input.counts.needs_review = 2;
+    input.expiredLeaseCount = 1;
+    const result = buildExecutionQueueAlerts(input);
+    expect(result.status).toBe("critical");
+    expect(result.alerts.map((alert) => alert.code)).toContain("jobs_needing_review");
+    expect(result.alerts.map((alert) => alert.code)).toContain("expired_execution_leases");
+    expect(result.alerts.find((alert) => alert.code === "expired_execution_leases")?.message).toContain("inspect audit records");
+  });
+
+  test("warns on queue age, failed jobs, and incomplete diagnostic snapshots", async () => {
+    const { buildExecutionQueueAlerts } = await import("@/lib/execution-queue-health");
+    const input = base();
+    input.counts.queued = 3;
+    input.counts.failed = 1;
+    input.oldestQueuedAt = "2026-10-13T09:50:00.000Z";
+    input.auditScanTruncated = true;
+    input.jobCountMismatch = true;
+    const result = buildExecutionQueueAlerts(input);
+    expect(result.status).toBe("warning");
+    expect(result.alerts.map((alert) => alert.code)).toEqual(expect.arrayContaining([
+      "failed_jobs",
+      "queue_wait_over_five_minutes",
+      "audit_scan_incomplete",
+      "queue_snapshot_mismatch",
+    ]));
+  });
+
+  test("does not invent queue-age alerts for invalid timestamps", async () => {
+    const { buildExecutionQueueAlerts } = await import("@/lib/execution-queue-health");
+    const input = base();
+    input.counts.queued = 4;
+    input.oldestQueuedAt = "not-a-timestamp";
+    expect(buildExecutionQueueAlerts(input).alerts).toHaveLength(0);
+  });
+});
