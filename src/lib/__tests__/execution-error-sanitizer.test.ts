@@ -73,11 +73,10 @@ describe("sanitizeExecutionAuditValue", () => {
     expect(serialized).not.toContain("private-material");
     expect(serialized).not.toContain("signing-material");
     expect(result).toMatchObject({
-      token: "[REDACTED_SECRET]",
-      private_key: "[REDACTED_SECRET]",
-      signing_key: "[REDACTED_SECRET]",
+      "[REDACTED_KEY]": "[REDACTED_SECRET]",
       safe: "visible",
     });
+    expect(Object.keys(result).filter((key) => key === "[REDACTED_KEY]")).toHaveLength(1);
   });
 
   test("bounds nested arrays, object entries, depth, and circular references", () => {
@@ -114,7 +113,7 @@ describe("sanitizeExecutionAuditValue", () => {
     const result = sanitizeExecutionAuditValue(input) as Record<string, unknown>;
     expect(Object.getPrototypeOf(result)).toBeNull();
     expect(Object.prototype.hasOwnProperty.call(result, "__proto__")).toBe(true);
-    expect((result["__proto__"] as Record<string, unknown>).token).toBe("[REDACTED_SECRET]");
+    expect((result["__proto__"] as Record<string, unknown>)["[REDACTED_KEY]"]).toBe("[REDACTED_SECRET]");
     expect(JSON.stringify(result)).not.toContain("secret-value");
     expect(JSON.stringify(result)).toContain('"__proto__"');
   });

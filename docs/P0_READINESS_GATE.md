@@ -398,3 +398,6 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Extended audit sanitization to inspect object property names as untrusted provider output, not just values. Sensitive-key labels are replaced and URL/email/secret-like content in other keys is sanitized before persistence.
 - Added regression coverage for query-bearing URLs, email addresses, sensitive labels, and preservation of a safe field. Exact-head CI must pass before accepting this checkpoint.
 - Staging acceptance remains open; queue consumers and outbound transports stay disabled.
+
+
+- Regression follow-up: the first output-key-redaction CI run correctly exposed two tests that still expected sensitive keys to remain unchanged. Updated those assertions to the new redacted-key contract and to confirm nested prototype-named data remains inert; rerun exact-head CI before accepting.
