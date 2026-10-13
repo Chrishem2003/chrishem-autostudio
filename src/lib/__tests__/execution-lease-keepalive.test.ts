@@ -1,6 +1,21 @@
 // @ts-nocheck -- Bun's test runner supplies test types at runtime
 import { describe, expect, test } from "bun:test";
-import { runWithExecutionLeaseKeepalive } from "../execution-lease-keepalive.server";
+import { confirmExecutionLeaseHeartbeat, runWithExecutionLeaseKeepalive } from "../execution-lease-keepalive.server";
+
+describe("confirmExecutionLeaseHeartbeat", () => {
+  test("accepts only literal true", async () => {
+    expect(await confirmExecutionLeaseHeartbeat(async () => true)).toBe(true);
+    expect(await confirmExecutionLeaseHeartbeat(async () => false)).toBe(false);
+    expect(await confirmExecutionLeaseHeartbeat(async () => ({ alive: true }))).toBe(false);
+    expect(await confirmExecutionLeaseHeartbeat(async () => "true")).toBe(false);
+  });
+
+  test("converts thrown heartbeat transport errors into lost ownership", async () => {
+    expect(await confirmExecutionLeaseHeartbeat(async () => {
+      throw new Error("heartbeat transport failed");
+    })).toBe(false);
+  });
+});
 
 describe("runWithExecutionLeaseKeepalive", () => {
   test("renews the lease while an action remains pending", async () => {

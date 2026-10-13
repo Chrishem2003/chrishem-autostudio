@@ -9,6 +9,20 @@
  * database/network request must not pin the worker forever or silently prevent
  * subsequent lease checks; a timeout is treated as lost ownership.
  */
+/**
+ * Confirm lease ownership at an adapter boundary. Transport exceptions and
+ * malformed/truthy responses are not evidence that a lease remains valid.
+ */
+export async function confirmExecutionLeaseHeartbeat(
+  heartbeat: () => Promise<unknown>,
+): Promise<boolean> {
+  try {
+    return (await heartbeat()) === true;
+  } catch {
+    return false;
+  }
+}
+
 export async function runWithExecutionLeaseKeepalive<T>(
   action: () => Promise<T>,
   heartbeat: () => Promise<boolean>,

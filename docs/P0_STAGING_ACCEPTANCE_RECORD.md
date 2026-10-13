@@ -138,3 +138,9 @@ For `POST /api/public/cron/run-scheduled`, `POST /api/public/cron/run-execution-
 - Repository verification found that completed manual/scheduled audit rows use `run_logs.status = 'success'`, while durable queue jobs use `execution_jobs.status = 'succeeded'`.
 - Queue-health consistency checks now recognize canonical audit `success` and legacy-compatible `succeeded`. Regression coverage verifies successful jobs are not falsely flagged and mismatched `needs_review`/`running` jobs are flagged.
 - Exact-head CI passed: [run 38420760154](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38420760154). This is code and disposable-database CI evidence only; staging acceptance remains NOT RUN until real non-production deployment evidence is recorded.
+
+
+## Dual-lease heartbeat transport failure — 2026-10-13
+
+- Queue worker now treats a thrown per-automation heartbeat RPC as lost lease ownership, not as an ordinary execution exception. The worker must not write recovery/finalization audit records when ownership cannot be verified.
+- Added unit coverage for thrown heartbeat errors and non-literal-true results. Exact-head CI and controlled staging interruption rehearsal are required; this record is not staging acceptance evidence.

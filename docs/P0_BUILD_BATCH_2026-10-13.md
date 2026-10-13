@@ -78,3 +78,9 @@ CI does not prove these external gates. P0 remains open; P1 is not authorized.
 - Fixed a diagnostic vocabulary mismatch: audit run success is stored as `success`, but queue success is stored as `succeeded`. The consistency analyzer now understands both values and includes regressions for canonical successful and mismatched queue/audit states.
 - Exact-head CI passed on `4692e3a57c5d54998edd78456170f6d35354a228`: unit/typecheck/build and PostgreSQL migration/concurrency smoke jobs. See [run 38420760154](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38420760154).
 - No staging checks were claimed as complete; queue worker and outbound transport remain disabled.
+
+
+## Batch checkpoint — fail-closed automation heartbeat
+
+- Closed a lease-loss edge case: if the per-automation heartbeat RPC throws, the worker now normalizes that result to `false`, marks ownership lost, and skips best-effort audit recovery writes. Added helper-level regression tests for thrown and malformed responses.
+- This batch requires exact-head CI; real interrupted-worker rehearsal is still a P0 blocker.

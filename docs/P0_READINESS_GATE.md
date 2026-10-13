@@ -410,3 +410,10 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - This defect was found by code-path review; exact-head CI must pass before accepting the correction. Staging acceptance remains open.
 
 - [x] Queue-health diagnostics recognize the canonical audit status `success` (while retaining compatibility with `succeeded`) for successful run consistency, including mismatched non-success and still-running queue jobs. Exact-head CI passed on `4692e3a57c5d54998edd78456170f6d35354a228`; see [CI run 38420760154](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38420760154).
+
+
+## Dual-lease heartbeat exception handling — 2026-10-13
+
+- Cross-path review found that the per-automation lease heartbeat could throw a transport exception before setting the worker's `executionLeaseLost` flag. That could incorrectly allow the catch path to attempt audit recovery writes without verified lease ownership.
+- Added a fail-closed heartbeat confirmation helper that accepts only literal `true` and converts thrown transport errors to lost ownership. Queue-worker recovery then skips audit writes after either lease cannot be confirmed. Unit tests cover thrown errors and malformed responses.
+- Exact-head CI is required; staging interruption rehearsal remains open.

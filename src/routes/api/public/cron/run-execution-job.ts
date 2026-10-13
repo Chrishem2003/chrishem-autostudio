@@ -14,7 +14,7 @@ import { executeStep, livePreflightError } from "@/lib/execute-step.server";
 import type { Workflow } from "@/lib/workflow";
 import { createAndAttachExecutionJobRun } from "@/lib/execution-run-association";
 import { firstLivePreflightError } from "@/lib/live-execution-preflight";
-import { runWithExecutionLeaseKeepalive } from "@/lib/execution-lease-keepalive.server";
+import { confirmExecutionLeaseHeartbeat, runWithExecutionLeaseKeepalive } from "@/lib/execution-lease-keepalive.server";
 
 const MAX_JOB_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -91,14 +91,15 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
           // The queue lease and per-automation lease are separate fences. Renew
           // both before each new step so a long multi-step flow cannot outlive the
           // lock that prevents manual/scheduled overlap.
-          const heartbeatAutomationLease = async (): Promise<boolean> => {
-            const { data: alive, error } = await supabaseAdmin.rpc("heartbeat_manual_automation", {
-              _automation_id: automation.id,
-              _lock_token: executionLock,
-              _lease_seconds: 300,
+          const heartbeatAutomationLease = async (): Promise<boolean> =>
+            confirmExecutionLeaseHeartbeat(async () => {
+              const { data: alive, error } = await supabaseAdmin.rpc("heartbeat_manual_automation", {
+                _automation_id: automation.id,
+                _lock_token: executionLock,
+                _lease_seconds: 300,
+              });
+              return !error && alive === true;
             });
-            return !error && alive === true;
-          };
           let executionLeaseLost = false;
           const heartbeatBothLeases = async (): Promise<boolean> => {
             if (!(await context.heartbeat())) {
