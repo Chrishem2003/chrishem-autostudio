@@ -1,6 +1,6 @@
 // @ts-nocheck -- Bun's test runner supplies test types at runtime
 import { describe, expect, it } from "bun:test";
-import { runCronTaskAfterAuthentication } from "../cron-task-guard";
+import { runCronTaskAfterAuthentication, withCronSecurityHeaders } from "../cron-task-guard";
 import { processOneExecutionJob } from "../execution-job-worker";
 
 function request() {
@@ -8,6 +8,19 @@ function request() {
 }
 
 describe("authenticated cron task guard", () => {
+  it("applies no-store security headers to authorized cron responses without changing status or body", async () => {
+    const response = withCronSecurityHeaders(new Response("queue empty", {
+      status: 503,
+      headers: { "Content-Type": "text/plain", "Cache-Control": "public, max-age=600" },
+    }));
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(response.headers.get("Pragma")).toBe("no-cache");
+    expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(response.headers.get("Content-Type")).toBe("text/plain");
+    expect(await response.text()).toBe("queue empty");
+  });
+
   it("returns authentication failures without constructing or running the worker task", async () => {
     let taskCalls = 0;
     let dependencyConstructionCalls = 0;
