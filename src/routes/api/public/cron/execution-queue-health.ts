@@ -7,6 +7,7 @@ import {
   summarizeExecutionQueueHealth,
   summarizeExpiredExecutionLeases,
   summarizeStaleRunCandidates,
+  buildExecutionQueueAlerts,
   type ExecutionQueueHealthRow,
   type ExecutionQueueStatus,
 } from "@/lib/execution-queue-health";
@@ -220,7 +221,19 @@ export const Route = createFileRoute("/api/public/cron/execution-queue-health")(
             staleRunCutoff,
           );
 
-          return Response.json({ ...summary, consistency, expiredLeases: expiredLeaseSummary, staleRuns }, {
+          const alerts = buildExecutionQueueAlerts({
+            counts,
+            sampledAt: summary.sampledAt,
+            oldestQueuedAt: summary.oldestQueuedAt,
+            expiredLeaseCount: expiredLeaseSummary.totalCount,
+            auditFindingCount: findings.length,
+            auditScanTruncated: consistency.findingsTruncated,
+            jobCountMismatch: consistency.jobCountMismatch,
+            staleRunCount: staleRuns.totalCount,
+            staleRunSampleTruncated: staleRuns.truncated,
+          });
+
+          return Response.json({ ...summary, consistency, expiredLeases: expiredLeaseSummary, staleRuns, alerts }, {
             headers: {
               "Cache-Control": "no-store",
               "X-Content-Type-Options": "nosniff",
