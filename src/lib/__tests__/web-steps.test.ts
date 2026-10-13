@@ -351,6 +351,19 @@ describe("DNS pinning resolver contract", () => {
     ])).rejects.toThrow(/private, local, or special-use address/i);
   });
 
+  it("rejects NAT64 destinations returned by DNS, including mixed answer sets", async () => {
+    for (const address of ["64:ff9b::7f00:1", "64:ff9b:1::c0a8:101"]) {
+      await expect(resolvePublicTarget("nat64.example", async () => [
+        { address, family: 6 },
+      ])).rejects.toThrow(/private, local, or special-use address/i);
+    }
+
+    await expect(resolvePublicTarget("mixed-nat64.example", async () => [
+      { address: "2001:4860:4860::8888", family: 6 },
+      { address: "64:ff9b::808:808", family: 6 },
+    ])).rejects.toThrow(/private, local, or special-use address/i);
+  });
+
 
   it("rejects resolver results that are hostnames rather than literal IP addresses", async () => {
     await expect(resolvePublicTarget("malformed.example", async () => [
