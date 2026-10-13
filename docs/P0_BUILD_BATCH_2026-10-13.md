@@ -167,3 +167,12 @@ CI does not prove these external gates. P0 remains open; P1 is not authorized.
 - Both assert a generic cache-safe 503 response and that the protected task is never invoked.
 - Code commit: `f7ea76ad66b1317a61516d24e95bf3a35d327699`.
 - Verification status: **pending exact-head CI** at the time of this checkpoint. Do not treat the tests as passing until the CI run for this code commit completes.
+
+
+## Exact-head CI confirmation — hostile cron Response accessor regressions
+
+- Current branch head at verification: `f205008ef3bf866b428d6e83588fe60f63ab87aa` (the code regression tests are in immediately preceding commit `f7ea76ad66b1317a61516d24e95bf3a35d327699`).
+- Exact-head CI passed: [run 38469439624](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38469439624).
+- Verified jobs: typecheck, full unit test suite, execution-integrity lint, production build, and durable execution queue migration/permission/idempotency/fencing/concurrency smoke tests.
+- The new cron guard tests confirm that throwing `headers` or `body` accessors on a malformed Response proxy are normalized to a generic cache-safe 503 and never invoke the protected task.
+- Hosted staging acceptance remains **NOT RUN**. Provider sandbox duplicate-effect verification, deployed interrupted-worker recovery, deployed outbound transport checks, audit-history inspection, repository-wide lint disposition, and independent acceptance remain blockers. P0 remains OPEN; do not merge, deploy, enable durable workers/outbound transport, or authorize P1.
