@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { authenticateCronRequest } from "@/integrations/supabase/cron-auth";
-import { runCronTaskAfterAuthentication } from "@/lib/cron-task-guard";
+import { runCronTaskAfterAuthentication, withCronSecurityHeaders } from "@/lib/cron-task-guard";
 import { isDurableQueueWorkerEnabled } from "@/lib/runtime-feature-gates";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { classifyExecutionOutcome } from "@/lib/execution-outcome";
@@ -363,8 +363,8 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
           return new Response("Queue worker failed safely", { status: 500 });
         }
         });
-        if (guarded.denied) return guarded.denied;
-        return guarded.result;
+        if (guarded.denied) return withCronSecurityHeaders(guarded.denied);
+        return withCronSecurityHeaders(guarded.result);
       },
     },
   },
