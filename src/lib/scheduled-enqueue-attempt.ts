@@ -33,3 +33,17 @@ export async function runScheduledEnqueueAttempt(input: {
 
   return { enqueueSucceeded, releaseSucceeded };
 }
+
+/**
+ * Releasing after a failed enqueue is safe only when a prior cursor exists.
+ * For an initial generation, a thrown enqueue can mean the database committed
+ * the job but its response was lost. Keep the lease until expiry so retries
+ * retain the same "initial" idempotency key instead of changing it to an epoch
+ * cursor and accidentally creating a second job.
+ */
+export function shouldReleaseScheduledLease(input: {
+  enqueueSucceeded: boolean;
+  lastRunAt: string | null | undefined;
+}): boolean {
+  return input.enqueueSucceeded || Boolean(input.lastRunAt);
+}
