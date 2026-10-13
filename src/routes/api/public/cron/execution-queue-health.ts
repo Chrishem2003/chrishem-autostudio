@@ -12,6 +12,7 @@ import {
   type ExecutionQueueStatus,
 } from "@/lib/execution-queue-health";
 import { findExecutionAuditConsistencyIssues } from "@/lib/execution-audit-consistency";
+import { withCronSecurityHeaders } from "@/lib/cron-task-guard";
 
 interface CountResult {
   count: number | null;
@@ -62,12 +63,7 @@ export const Route = createFileRoute("/api/public/cron/execution-queue-health")(
     handlers: {
       GET: async ({ request }) => {
         const denied = await authenticateCronRequest(request);
-        if (denied) {
-          denied.headers.set("Cache-Control", "no-store");
-          denied.headers.set("Pragma", "no-cache");
-          denied.headers.set("X-Content-Type-Options", "nosniff");
-          return denied;
-        }
+        if (denied) return withCronSecurityHeaders(denied);
 
         try {
           // The durable queue migration is newer than the generated Supabase
