@@ -31,6 +31,45 @@ function dependencies(overrides = {}) {
 }
 
 describe("processOneExecutionJob", () => {
+  test("fails closed when claimed envelope access or payload traversal throws", async () => {
+    const hostileEnvelope = { ...job };
+    Object.defineProperty(hostileEnvelope, "payload", {
+      enumerable: true,
+      get() { throw new Error("hostile payload getter"); },
+    });
+    const hostileNestedPayload = {};
+    Object.defineProperty(hostileNestedPayload, "secret", {
+      enumerable: true,
+      get() { throw new Error("hostile nested payload getter"); },
+    });
+
+    for (const malformedClaim of [
+      hostileEnvelope,
+      { ...job, payload: hostileNestedPayload },
+    ]) {
+      let executeCalls = 0;
+      let finishCalls = 0;
+      const { deps } = dependencies({
+        claim: async () => malformedClaim as any,
+        execute: async () => {
+          executeCalls++;
+          return { status: "succeeded", sideEffectCertainty: "effect_confirmed" };
+        },
+        finish: async () => {
+          finishCalls++;
+          return true;
+        },
+      });
+
+      expect(await processOneExecutionJob(deps)).toEqual({
+        outcome: "finalization_rejected",
+        jobId: "unknown-claimed-job",
+      });
+      expect(executeCalls).toBe(0);
+      expect(finishCalls).toBe(0);
+    }
+  });
+
   test("returns empty when no job is ready", async () => {
     const { deps } = dependencies({ claim: async () => null });
     expect(await processOneExecutionJob(deps)).toEqual({ outcome: "empty" });
