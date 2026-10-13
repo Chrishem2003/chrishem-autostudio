@@ -28,6 +28,16 @@ describe("external step outcome certainty", () => {
     expect(classifyExecutionOutcome("failed", "Unsupported HTTP method.")).toBe("not_attempted");
     expect(classifyExecutionOutcome("failed", "Preflight failed: credentials missing.")).toBe("not_attempted");
     expect(classifyExecutionOutcome("failed", "Could not persist intent. No action was attempted.")).toBe("not_attempted");
+    expect(classifyExecutionOutcome("failed", "Gmail is not connected.")).toBe("not_attempted");
+  });
+
+  it("does not infer safe retry from preflight phrases embedded in uncertain errors", () => {
+    expect(classifyExecutionOutcome("failed", "Request timed out after submission; Gmail is not connected.")).toBe("uncertain");
+    expect(classifyExecutionOutcome("failed", "Provider returned: unsupported HTTP method after receiving request.")).toBe("uncertain");
+    expect(classifyExecutionOutcome("failed", "Timeout while checking missing required configuration")).toBe("uncertain");
+  });
+
+  it("continues treating thrown executor errors and missing audit writes conservatively", () => {
   });
 
   it("treats thrown executor errors and missing audit writes conservatively", () => {
