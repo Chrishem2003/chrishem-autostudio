@@ -106,6 +106,64 @@ begin
     if sqlerrm <> 'Invalid automation lease duration' then raise; end if;
   end;
 
+  -- A heartbeat may renew only a current, unexpired automation lease.
+  -- Expired and replaced tokens must never revive or extend stale ownership.
+  declare
+    old_token uuid;
+    current_token uuid;
+    renewed boolean;
+    expired_until timestamptz;
+  begin
+    old_token := public.claim_manual_automation(
+      '00000000-0000-4000-8000-000000000002', 300
+    );
+    if old_token is null then
+      raise exception 'Could not claim heartbeat-fencing fixture';
+    end if;
+
+    update public.scheduled_run_locks
+       set locked_until = now() - interval '1 second'
+     where automation_id = '00000000-0000-4000-8000-000000000002'
+       and lock_token = old_token;
+    select locked_until into expired_until
+      from public.scheduled_run_locks
+     where automation_id = '00000000-0000-4000-8000-000000000002';
+
+    renewed := public.heartbeat_manual_automation(
+      '00000000-0000-4000-8000-000000000002', old_token, 300
+    );
+    if renewed is distinct from false then
+      raise exception 'Expired automation lease heartbeat was accepted';
+    end if;
+    if (select locked_until from public.scheduled_run_locks
+         where automation_id = '00000000-0000-4000-8000-000000000002')
+       is distinct from expired_until then
+      raise exception 'Expired automation lease heartbeat changed its expiry';
+    end if;
+
+    current_token := public.claim_manual_automation(
+      '00000000-0000-4000-8000-000000000002', 300
+    );
+    if current_token is null or current_token = old_token then
+      raise exception 'Expired automation lease was not reclaimed with a new token';
+    end if;
+    if public.heartbeat_manual_automation(
+      '00000000-0000-4000-8000-000000000002', old_token, 300
+    ) then
+      raise exception 'Superseded automation token renewed the current lease';
+    end if;
+    if not public.heartbeat_manual_automation(
+      '00000000-0000-4000-8000-000000000002', current_token, 300
+    ) then
+      raise exception 'Current automation token could not renew its active lease';
+    end if;
+    if not public.release_manual_automation(
+      '00000000-0000-4000-8000-000000000002', current_token
+    ) then
+      raise exception 'Could not release heartbeat-fencing fixture';
+    end if;
+  end;
+
   -- Scheduled release must reject a NULL cadence cursor before releasing
   -- the lease; otherwise a caller could clear last_run_at and reset schedule progress.
   declare

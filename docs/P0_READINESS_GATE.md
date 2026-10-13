@@ -365,3 +365,9 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Cross-path review found that manual-run step details were sanitized but nested step outputs were still persisted directly in output snapshots. Provider outputs may contain access tokens, cookies, or other sensitive values even when the error text is clean.
 - Manual execution now applies the bounded shared nested-output sanitizer before persisting output snapshots, aligning manual, scheduled, and durable-queue paths.
 - Exact-head CI and controlled staging audit inspection remain required; P0 remains open.
+
+
+## Automation heartbeat fencing smoke coverage — 2026-10-13
+
+- Expanded the disposable PostgreSQL smoke test to verify expired lease tokens cannot renew their expiry, superseded tokens cannot renew a replacement lease, and the current unexpired token can renew/release normally.
+- Exact-head CI must pass; this remains disposable-database evidence, not hosted staging acceptance.

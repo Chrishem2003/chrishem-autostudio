@@ -120,3 +120,8 @@ For `POST /api/public/cron/run-scheduled`, `POST /api/public/cron/run-execution-
 
 - Manual step output snapshots now pass through the shared bounded nested-output sanitizer, including redaction of credential-like object keys and truncation of excessive nesting/size.
 - In staging, verify that safe output fields remain useful while token-like values are redacted before P0 acceptance.
+
+
+## Automation lease heartbeat fencing
+
+- Disposable PostgreSQL CI now explicitly exercises heartbeat behavior for expired, superseded, and current lease tokens. Hosted staging should still verify the same contract on the intended project before release.

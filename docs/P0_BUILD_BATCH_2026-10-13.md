@@ -52,3 +52,9 @@ CI does not prove these external gates. P0 remains open; P1 is not authorized.
 - Review found manual-run output snapshots were not using the shared nested-output sanitizer even though error details were redacted.
 - Aligned manual execution with the scheduled and durable-queue paths so nested outputs are sanitized before durable audit persistence.
 - Exact-head CI and staging audit inspection are required; P0 remains open.
+
+
+## Automation lease heartbeat fencing regression — 2026-10-13
+
+- Added SQL smoke coverage that an expired automation lease cannot be renewed, an old token cannot renew a replacement lease, and the current token can heartbeat and release successfully.
+- Exact-head CI must pass; staging acceptance remains open.
