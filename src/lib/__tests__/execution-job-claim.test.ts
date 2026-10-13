@@ -14,8 +14,7 @@ const validRow = () => ({
 });
 
 describe("parseClaimedExecutionJobResponse", () => {
-  test("treats null and empty arrays as no available job", () => {
-    expect(parseClaimedExecutionJobResponse(null)).toBeNull();
+  test("treats an empty array as no available job", () => {
     expect(parseClaimedExecutionJobResponse([])).toBeNull();
   });
 
@@ -24,7 +23,7 @@ describe("parseClaimedExecutionJobResponse", () => {
   });
 
   test("rejects malformed envelopes and multiple claimed rows", () => {
-    for (const value of ["job", 42, {}]) {
+    for (const value of [null, "job", 42, {}]) {
       expect(() => parseClaimedExecutionJobResponse(value)).toThrow("unexpected response");
     }
     expect(() => parseClaimedExecutionJobResponse([validRow(), validRow()])).toThrow("multiple job rows");
