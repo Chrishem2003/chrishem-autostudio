@@ -73,7 +73,7 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
             // disabling a live automation; invalid timezones fall back to UTC.
             const normalizedConfig = normalizeScheduledTriggerConfig(trigger.config);
             if (!normalizedConfig) {
-              return { prepared, trigger, cadence: null, due: false, preflightError: "Invalid schedule configuration." };
+              return { prepared, trigger, cadence: null, due: true, preflightError: "Invalid schedule configuration." };
             }
             const { cadence, timezone } = normalizedConfig;
             const due = isDue(
