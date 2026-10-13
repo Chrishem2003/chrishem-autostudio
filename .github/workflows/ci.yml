@@ -52,6 +52,9 @@ jobs:
           src/lib/cron-task-guard.ts
           src/lib/execution-run-association.ts
           --rule 'prettier/prettier: off'
+      - name: Audit repository-wide lint baseline (non-blocking until P0 disposition)
+        continue-on-error: true
+        run: bun run lint
       - name: Production build
         run: bun run build
 
