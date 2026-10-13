@@ -607,4 +607,57 @@ describe("processOneExecutionJob", () => {
       jobId: "job-1",
     });
   });
+
+  test("does not claim finalization succeeded when the database response is lost after an external effect", async () => {
+    let executeCalls = 0;
+    let finishCalls = 0;
+    const { deps } = dependencies({
+      execute: async () => {
+        executeCalls++;
+        return {
+          status: "succeeded",
+          sideEffectCertainty: "effect_confirmed",
+        };
+      },
+      finish: async () => {
+        finishCalls++;
+        // Simulate a committed/unknown DB result whose response was lost.
+        throw new Error("connection reset after commit");
+      },
+    });
+
+    expect(await processOneExecutionJob(deps)).toEqual({
+      outcome: "finalization_rejected",
+      jobId: "job-1",
+    });
+    expect(executeCalls).toBe(1);
+    expect(finishCalls).toBe(1);
+  });
+
+  test("treats an explicit rejected finalization as unknown and never reruns within the same worker call", async () => {
+    let executeCalls = 0;
+    let finishCalls = 0;
+    const { deps } = dependencies({
+      execute: async () => {
+        executeCalls++;
+        return {
+          status: "failed",
+          sideEffectCertainty: "uncertain",
+          error: "Provider may have accepted the request",
+        };
+      },
+      finish: async () => {
+        finishCalls++;
+        return false;
+      },
+    });
+
+    expect(await processOneExecutionJob(deps)).toEqual({
+      outcome: "finalization_rejected",
+      jobId: "job-1",
+    });
+    expect(executeCalls).toBe(1);
+    expect(finishCalls).toBe(1);
+  });
+
 });
