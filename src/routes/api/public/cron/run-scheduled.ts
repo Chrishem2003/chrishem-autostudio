@@ -14,6 +14,7 @@ import { firstLivePreflightError } from "@/lib/live-execution-preflight";
 import { confirmExecutionLeaseHeartbeat, runWithExecutionLeaseKeepalive } from "@/lib/execution-lease-keepalive.server";
 import { scheduledExecutionIdempotencyKey } from "@/lib/scheduled-execution-key";
 import { normalizeScheduledTriggerConfig } from "@/lib/scheduled-trigger-config";
+import { runScheduledEnqueueAttempt } from "@/lib/scheduled-enqueue-attempt";
 
 const MAX_SCHEDULED_FLOW_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -129,40 +130,51 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
             if (!queueLock) continue;
 
             const enqueuedAt = new Date().toISOString();
-            let enqueueSucceeded = false;
-            try {
-              await enqueueExecutionJob({
-                automationId: row.id,
-                triggerType: "scheduled",
-                idempotencyKey,
-                requestedBy: row.user_id,
-                // Keep the payload stable for a given idempotency key. If enqueue succeeds
-                // but lease release fails, the next scheduler pass must receive the same
-                // logical request instead of conflicting on a fresh wall-clock timestamp.
-                payload: { triggerType: "schedule" },
-              });
-              enqueueSucceeded = true;
-              ran++;
-            } catch (queueError) {
-              failed++;
-              console.error("[AutoStudio scheduler] Durable job enqueue failed.", {
-                automationId: row.id,
-                errorName: queueError instanceof Error ? queueError.name : "UnknownError",
-              });
-            }
-
-            const { error: queueReleaseError } = await supabaseAdmin.rpc("release_scheduled_automation", {
-              _automation_id: row.id,
-              _lock_token: queueLock,
-              _last_run_at: enqueueSucceeded ? enqueuedAt : (row.last_run_at ?? "1970-01-01T00:00:00.000Z"),
+            const attempt = await runScheduledEnqueueAttempt({
+              enqueue: async () => {
+                try {
+                  await enqueueExecutionJob({
+                    automationId: row.id,
+                    triggerType: "scheduled",
+                    idempotencyKey,
+                    requestedBy: row.user_id,
+                    // Keep the payload stable for a given idempotency key. If enqueue succeeds
+                    // but lease release fails, the next scheduler pass must receive the same
+                    // logical request instead of conflicting on a fresh wall-clock timestamp.
+                    payload: { triggerType: "schedule" },
+                  });
+                } catch (queueError) {
+                  console.error("[AutoStudio scheduler] Durable job enqueue failed.", {
+                    automationId: row.id,
+                    errorName: queueError instanceof Error ? queueError.name : "UnknownError",
+                  });
+                  throw queueError;
+                }
+              },
+              release: async (enqueueSucceeded) => {
+                let releaseErrorCode: string | null = null;
+                try {
+                  const { error: queueReleaseError } = await supabaseAdmin.rpc("release_scheduled_automation", {
+                    _automation_id: row.id,
+                    _lock_token: queueLock,
+                    _last_run_at: enqueueSucceeded ? enqueuedAt : (row.last_run_at ?? "1970-01-01T00:00:00.000Z"),
+                  });
+                  if (queueReleaseError) releaseErrorCode = queueReleaseError.code ?? "UNKNOWN_ERROR";
+                } catch {
+                  releaseErrorCode = "TRANSPORT_ERROR";
+                }
+                if (releaseErrorCode) {
+                  console.error("[AutoStudio scheduler] Could not release queue-enqueue lease.", {
+                    automationId: row.id,
+                    errorCode: releaseErrorCode,
+                  });
+                  throw new Error("Scheduled queue lease release failed.");
+                }
+              },
             });
-            if (queueReleaseError) {
-              console.error("[AutoStudio scheduler] Could not release queue-enqueue lease.", {
-                automationId: row.id,
-                errorCode: queueReleaseError.code,
-              });
-              failed++;
-            }
+            if (attempt.enqueueSucceeded) ran++;
+            else failed++;
+            if (!attempt.releaseSucceeded) failed++;
             continue;
           }
 
