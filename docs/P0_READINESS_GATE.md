@@ -39,6 +39,8 @@ This checklist is the release gate for P0 execution-integrity hardening. A code 
 
 ## C. Deployment and integrations
 
+- Staging procedure: follow [`docs/P0_STAGING_RUNBOOK.md`](./P0_STAGING_RUNBOOK.md) only against an independently verified non-production Supabase project. The runbook is operational guidance, not evidence that staging checks have passed.
+
 - [ ] Complete and review the evidence record in [`docs/P0_STAGING_ACCEPTANCE_RECORD.md`](./P0_STAGING_ACCEPTANCE_RECORD.md); the template itself is not evidence that staging passed.
 
 - [ ] Confirm migrations apply cleanly to a disposable/staging database.
