@@ -1156,7 +1156,7 @@ begin
     id, automation_id, status, started_at, finished_at, error_summary
   ) values (
     run_id, '00000000-0000-4000-8000-000000000002',
-    'succeeded', original_finished_at - interval '1 minute',
+    'success', original_finished_at - interval '1 minute',
     original_finished_at, null
   );
 
@@ -1182,7 +1182,7 @@ begin
      or (select worker_token from public.execution_jobs where id = queue_id) is not null then
     raise exception 'Expired job with a completed audit run was not parked for review';
   end if;
-  if (select status from public.run_logs where id = run_id) <> 'succeeded'
+  if (select status from public.run_logs where id = run_id) <> 'success'
      or (select finished_at from public.run_logs where id = run_id) is distinct from original_finished_at
      or (select error_summary from public.run_logs where id = run_id) is not null then
     raise exception 'Expired queue recovery rewrote an already-completed run audit';
