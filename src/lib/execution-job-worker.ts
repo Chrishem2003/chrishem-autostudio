@@ -78,10 +78,18 @@ export async function processOneExecutionJob(
   // The executor receives the job object. Snapshot and freeze its identity so
   // an adapter cannot mutate the job ID or fencing token before heartbeat or
   // finalization; those RPCs must refer to the exact claim originally returned.
-  const job: ClaimedExecutionJob = Object.freeze({
-    ...claimedJob,
-    payload: freezeExecutionPayload(claimedJob.payload),
-  });
+  let job: ClaimedExecutionJob;
+  try {
+    job = Object.freeze({
+      ...claimedJob,
+      payload: freezeExecutionPayload(claimedJob.payload),
+    });
+  } catch {
+    // A hostile/malformed adapter envelope can throw during property access
+    // or payload traversal. We cannot trust its fencing identity to finalize,
+    // so fail closed without executing or issuing an RPC against that identity.
+    return { outcome: "finalization_rejected", jobId: "unknown-claimed-job" };
+  }
 
   // Validate the claim envelope at the adapter boundary. Invalid identity
   // cannot be safely finalized because the database fencing key itself is not
