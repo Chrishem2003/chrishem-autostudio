@@ -385,18 +385,54 @@ describe("processOneExecutionJob", () => {
     expect(calls.finished[0].retryAt).toBeNull();
   });
 
-  test("normalizes valid executor retry timestamps to ISO format", async () => {
+  test("normalizes a reasonable executor retry timestamp to ISO format", async () => {
+    const retryAt = new Date(Date.now() + 30_000).toISOString().replace("Z", "+03:00");
+    const expected = new Date(retryAt).toISOString();
     const { deps, calls } = dependencies({
       execute: async () => ({
         status: "failed",
         sideEffectCertainty: "not_attempted",
-        retryAt: "2030-01-01T12:00:00+03:00",
+        retryAt,
         error: "Temporary failure",
       }),
     });
     const result = await processOneExecutionJob(deps);
     expect(result.status).toBe("queued");
-    expect(calls.finished[0].retryAt).toBe("2030-01-01T09:00:00.000Z");
+    expect(calls.finished[0].retryAt).toBe(expected);
+  });
+
+  test("falls back to bounded backoff when an executor retry timestamp is in the past", async () => {
+    const { deps, calls } = dependencies({
+      execute: async () => ({
+        status: "failed",
+        sideEffectCertainty: "not_attempted",
+        retryAt: new Date(Date.now() - 60_000).toISOString(),
+        error: "Temporary failure",
+      }),
+    });
+    const before = Date.now();
+    const result = await processOneExecutionJob(deps);
+    const retryAt = Date.parse(calls.finished[0].retryAt);
+    expect(result.status).toBe("queued");
+    expect(retryAt).toBeGreaterThanOrEqual(before + 4_000);
+    expect(retryAt).toBeLessThanOrEqual(Date.now() + 6_000);
+  });
+
+  test("caps executor retry timestamps at 24 hours", async () => {
+    const { deps, calls } = dependencies({
+      execute: async () => ({
+        status: "failed",
+        sideEffectCertainty: "not_attempted",
+        retryAt: "2030-01-01T12:00:00.000Z",
+        error: "Provider requested a long delay",
+      }),
+    });
+    const before = Date.now();
+    const result = await processOneExecutionJob(deps);
+    const retryAt = Date.parse(calls.finished[0].retryAt);
+    expect(result.status).toBe("queued");
+    expect(retryAt).toBeGreaterThanOrEqual(before + 24 * 60 * 60 * 1_000 - 1_000);
+    expect(retryAt).toBeLessThanOrEqual(Date.now() + 24 * 60 * 60 * 1_000);
   });
 
   test("preserves scheduled retry time for transient lock contention", async () => {
