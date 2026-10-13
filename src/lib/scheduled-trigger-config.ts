@@ -25,7 +25,9 @@ export function normalizeScheduledTriggerConfig(
 
   const values = config as Record<string, unknown>;
   const cadenceValue = values["cadence"];
-  const cadence = cadenceValue === undefined || cadenceValue === null
+  // Only an absent field gets the legacy default. Explicit null is malformed
+  // persisted configuration and must not silently turn into an hourly schedule.
+  const cadence = cadenceValue === undefined
     ? "Hourly"
     : typeof cadenceValue === "string"
       ? cadenceValue
