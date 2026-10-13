@@ -263,3 +263,12 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Scheduler success responses and the stale-run reconciliation/query failure responses now pass through the shared cron response-header helper, alongside authentication denial and authentication-adapter failure responses.
 - Exact-head CI passed on `ed4678726ac2dc6e3cbbbb54f90e4581c45319fe`: typecheck, unit tests, targeted execution-integrity lint, production build, and disposable PostgreSQL migration/concurrency smoke test. See [CI run 38361519365](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38361519365).
 - The exact-head run verifies the code change only. Staging migrations, real provider idempotency/duplicate-effect checks, interrupted-worker recovery, and audit-history acceptance remain open. Do not enable durable queue consumers or outbound transport.
+
+## Complete migration-chain CI checkpoint — 2026-10-13
+
+- Commit `d431fcb5717f5985b43313fd75d41ae06ee32bb2` passed both required CI jobs: [run 38363868791](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38363868791).
+- The database workflow now applies the P0 migrations in chronological order, including scheduler/audit reconciliation, shared automation lease heartbeat, enqueue validation, association guards, and later NULL-contract protections.
+- The successful disposable PostgreSQL run exercised the complete configured migration chain, idempotency/lease-fencing/RPC-permission smoke checks, and concurrent-worker claim test.
+- This evidence is limited to GitHub Actions and a disposable PostgreSQL instance. It is **not** evidence of a live staging migration, protected deployed cron authentication, provider-side idempotency, or interruption-recovery acceptance.
+- Re-run exact-head CI after this documentation update. P0 remains open; do not merge into `main` or enable durable queue/outbound transport until the staging acceptance record is completed and reviewed.
+
