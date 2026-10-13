@@ -13,10 +13,11 @@ describe("gmail send rules", () => {
   it("rejects unfilled placeholders", () => expect(buildGmailMessage({ to: "{{email}}" }, "F")).toHaveProperty("error"));
   it("strips newlines from subject", () => expect(buildGmailMessage({ to: "a@b.com", subject: "hi\nBcc: x@y.com" }, "F")).toMatchObject({ subject: "hi Bcc: x@y.com" }));
   it("encodes control characters instead of placing them in raw mail headers", () => {
-    const raw = toRawEmail({ to: ["a@b.com"], subject: "hello\u0000world", body: "body" });
+    const raw = toRawEmail({ to: ["a@b.com"], subject: "hello\u0000\r\nBcc: victim@example.com", body: "body" });
     const padded = raw.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - raw.length % 4) % 4);
     const decoded = atob(padded);
     expect(decoded).toContain("Subject: =?UTF-8?B?");
-    expect(decoded).not.toContain("hello\u0000world");
+    expect(decoded).not.toContain("hello\u0000\r\nBcc: victim@example.com");
+    expect(decoded).not.toContain("\r\nBcc: victim@example.com");
   });
 });
