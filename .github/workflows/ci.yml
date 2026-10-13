@@ -122,6 +122,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261011210000_scheduled_release_null_cursor_guard.sql
       - name: Lock authenticated execution-audit writes
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261013100000_lock_execution_audit_writes.sql
+      - name: Align queue success with run audit status
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261013110000_execution_success_accepts_success_status.sql
       - name: Verify idempotency, lease fencing and RPC permissions
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/execution_jobs_smoke.sql
       - name: Verify concurrent workers claim distinct jobs

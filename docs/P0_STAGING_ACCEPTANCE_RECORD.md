@@ -125,3 +125,9 @@ For `POST /api/public/cron/run-scheduled`, `POST /api/public/cron/run-execution-
 ## Automation lease heartbeat fencing
 
 - Disposable PostgreSQL CI now explicitly exercises heartbeat behavior for expired, superseded, and current lease tokens. Hosted staging should still verify the same contract on the intended project before release.
+
+
+## Queue success/audit vocabulary contract
+
+- A forward migration now aligns the queue finalization guard with the application audit vocabulary: `run_logs.status = success`, while `execution_jobs.status = succeeded`.
+- The disposable PostgreSQL smoke test checks the positive success path with the application status. Confirm the same path in controlled staging before P0 acceptance.

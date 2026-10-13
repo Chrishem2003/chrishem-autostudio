@@ -58,3 +58,10 @@ CI does not prove these external gates. P0 remains open; P1 is not authorized.
 
 - Added SQL smoke coverage that an expired automation lease cannot be renewed, an old token cannot renew a replacement lease, and the current token can heartbeat and release successfully.
 - Exact-head CI must pass; staging acceptance remains open.
+
+
+## Queue success status-contract fix — 2026-10-13
+
+- Corrected the database guard that required a linked run audit status of `succeeded` even though the application finalizer records `success`.
+- Added a forward migration, inserted it into the reviewed CI migration sequence, and updated the SQL smoke test to use the real application status vocabulary.
+- Exact-head CI required; no hosted migration or staging acceptance has been performed.

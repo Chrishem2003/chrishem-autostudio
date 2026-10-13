@@ -399,10 +399,12 @@ begin
   if public.finish_execution_job(claimed.id, claimed.worker_token, 'succeeded', null, null) then
     raise exception 'Queue job succeeded while its audit run was still running';
   end if;
-  update public.run_logs set status = 'succeeded', finished_at = now()
+  -- The app's shared run finalizer persists "success"; the durable job
+  -- status is "succeeded". The guard must recognize the audit vocabulary.
+  update public.run_logs set status = 'success', finished_at = now()
    where id = '00000000-0000-4000-8000-000000000015' and status = 'running';
   if not public.finish_execution_job(claimed.id, claimed.worker_token, 'succeeded', null, null) then
-    raise exception 'Current worker could not finalize after confirmed audit success';
+    raise exception 'Current worker could not finalize after confirmed run_logs status=success audit';
   end if;
   if public.finish_execution_job(claimed.id, claimed.worker_token, 'succeeded', null, null) then
     raise exception 'Finalization accepted a stale/reused worker token';

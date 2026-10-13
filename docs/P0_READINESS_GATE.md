@@ -371,3 +371,10 @@ Do not mark any unchecked item as passed based on code inspection alone.
 
 - Expanded the disposable PostgreSQL smoke test to verify expired lease tokens cannot renew their expiry, superseded tokens cannot renew a replacement lease, and the current unexpired token can renew/release normally.
 - Exact-head CI must pass; this remains disposable-database evidence, not hosted staging acceptance.
+
+
+## Queue success status-contract correction — 2026-10-13
+
+- Deep review confirmed a mismatch: the shared application finalizer persists successful `run_logs` rows as `success`, while the queue finalization guard required `succeeded`. This could reject a valid queue success after the run audit had been persisted.
+- Added a forward migration that preserves the queue job status `succeeded` but checks the linked audit run for the application's actual `success` status and a non-null finish timestamp. Updated the migration-chain guard and smoke fixture to exercise the real contract.
+- Exact-head CI must pass before considering the fix verified. Staging acceptance remains NOT RUN; P0 stays open.
