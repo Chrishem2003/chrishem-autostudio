@@ -149,3 +149,13 @@ CI does not prove these external gates. P0 remains open; P1 is not authorized.
 - Exact-head CI passed on `bcd31201df0b96b188def692cc05780ab09c5a7b`: [run 38450959562](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38450959562). Typecheck, unit tests, execution-integrity lint, production build, and disposable PostgreSQL migration/permission/fencing/concurrency smoke checks passed.
 - This is repository-level evidence, not hosted staging acceptance. Staging remains **NOT RUN**; provider-side duplicate-effect verification, deployed interruption/recovery rehearsal, deployed outbound transport verification, audit-history inspection, repository-wide lint disposition, and independent acceptance remain blockers. P0 remains open; do not merge, deploy, enable durable workers/outbound transport, or authorize P1.
 
+
+
+## Continuation checkpoint — exact-head evidence and next batch — 2026-10-13
+
+- Live branch review confirmed the current PR head is `2103d21959a888eda997835cae0758605c69756a` (documentation-only commit: bounded retry timestamp verification). Do not assume this documentation commit itself has a passing exact-head CI result.
+- The most recent explicitly documented passing code checkpoint remains `bcd31201df0b96b188def692cc05780ab09c5a7b`, CI run [38450959562](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38450959562). That run covered typecheck, unit tests, execution-integrity lint, production build, and disposable PostgreSQL migration/permission/fencing/concurrency smoke tests.
+- Source review re-confirmed the worker validates claim identity and retry counters before execution, freezes the payload, verifies literal-true lease heartbeats, treats malformed/uncertain executor outcomes as review-needed, bounds retry hints, and accepts finalization only when the adapter returns literal `true`.
+- The next repository-verifiable batch is a focused review of cron/auth and queue-health behavior, full-repository lint disposition, and any reproducible source-level gaps found by that review. Changes must be regression-tested on the exact resulting head before being described as verified.
+- External acceptance remains outstanding: hosted staging migration/RLS/RPC checks; deployed cron-auth checks; provider sandbox duplicate-effect evidence; interrupted-worker recovery; deployed HTTP/TLS/DNS/redirect/timeout checks; audit-history inspection; and independent acceptance.
+- Release boundary unchanged: P0 remains OPEN; do not merge to `main`, deploy, enable durable producers/workers or outbound transport, or authorize P1 until every required gate has evidence.
