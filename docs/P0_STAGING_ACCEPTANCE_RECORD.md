@@ -21,13 +21,16 @@ Do not paste secret values, access tokens, full provider payloads, personal data
 - Evidence link(s) / safe notes:
 
 ## Protected cron endpoint
-For both `POST /api/public/cron/run-execution-job` and `GET /api/public/cron/execution-queue-health`:
+For `POST /api/public/cron/run-scheduled`, `POST /api/public/cron/run-execution-job`, and `GET /api/public/cron/execution-queue-health`:
 - [ ] Missing bearer token is denied.
 - [ ] Incorrect bearer token is denied.
-- [ ] Denied response includes `Cache-Control: no-store`, `Pragma: no-cache`, and `X-Content-Type-Options: nosniff`.
+- [ ] Denied responses include `Cache-Control: no-store`, `Pragma: no-cache`, and `X-Content-Type-Options: nosniff`.
+- [ ] Scheduler success and failure responses also include the same security headers; verify stale-run reconciliation and query failures explicitly.
+- [ ] Authentication adapter failure returns a generic `503`, includes security headers, and does not start scheduled work or claim a queue job.
 - [ ] Denied requests do not construct the worker or query queue state.
+- [ ] `AUTOSTUDIO_DURABLE_QUEUE_ENABLED` and `AUTOSTUDIO_DURABLE_QUEUE_WORKER_ENABLED` remain disabled during baseline acceptance.
 - [ ] With the worker flag disabled, valid auth returns the expected disabled response and no job is claimed.
-- [ ] With producers disabled and worker enabled, valid auth against an empty queue returns `outcome: empty`.
+- [ ] Only during the explicitly approved isolated worker test, enable the worker flag while producers remain disabled; valid auth against an empty queue returns `outcome: empty`, then restore the worker flag to disabled.
 - [ ] Responses/logs do not reveal secrets, workflow payloads, or provider response bodies.
 - Evidence link(s) / safe notes:
 
