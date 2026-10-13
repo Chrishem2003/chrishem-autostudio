@@ -26,7 +26,7 @@ export function buildGmailMessage(config: Record<string, string>, flowName: stri
 }
 
 const b64 = (s: string) => btoa(Array.from(new TextEncoder().encode(s), (b) => String.fromCharCode(b)).join(""));
-const header = (v: string) => (/^[\x00-\x7F]*$/.test(v) ? v : `=?UTF-8?B?${b64(v)}?=`);
+const header = (v: string) => (/^[\x20-\x7E]*$/.test(v) ? v : `=?UTF-8?B?${b64(v)}?=`);
 
 export function toRawEmail(m: { to: string[]; subject: string; body: string }): string {
   const email = [`To: ${m.to.join(", ")}`, `Subject: ${header(m.subject)}`, "MIME-Version: 1.0", 'Content-Type: text/plain; charset="UTF-8"', "", m.body].join("\r\n");
