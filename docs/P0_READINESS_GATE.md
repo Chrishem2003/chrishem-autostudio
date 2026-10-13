@@ -449,3 +449,6 @@ Do not mark any unchecked item as passed based on code inspection alone.
 
 - Manual live execution now renews its automation lease before each provider action, keeps the lease alive during long provider calls, and checks lease ownership before step-intent/outcome writes and parent-run finalization. If ownership cannot be confirmed, catch-path recovery writes are skipped so stale-run reconciliation can handle the uncertain run.
 - This is code-level hardening only. Exact-head CI and controlled staging interruption/lease-expiry testing remain required; P0 stays open and durable queue/outbound transport flags remain disabled.
+
+
+- Manual and scheduled live paths now re-confirm the current automation lease immediately before inserting the parent run audit record, after preflight/reconciliation work. This closes a stale-ownership window before the run is even created. Exact-head CI and staging fault-injection remain required; no staging acceptance is implied.
