@@ -188,6 +188,11 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
         }
       }
     }
+    // Reconfirm the lease after preflight/reconciliation database work and before
+    // creating a run that could later be mistaken for an active owned execution.
+    if (!(await confirmManualLease())) {
+      throw new Error("Manual execution lease ownership could not be confirmed before run creation.");
+    }
     // Execution audit writes are server-owned: authenticated clients retain
     // owner-scoped read access, but cannot fabricate or rewrite run history.
     const startedAt = new Date().toISOString();
