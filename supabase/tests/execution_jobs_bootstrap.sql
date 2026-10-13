@@ -3,6 +3,13 @@
 -- Minimal disposable schema to exercise the real migration and RPC contracts.
 create schema if not exists auth;
 create table if not exists auth.users (id uuid primary key);
+
+-- Minimal Supabase auth helper required when policy-bearing migrations are applied.
+create or replace function auth.uid()
+returns uuid
+language sql
+stable
+as $ select null::uuid $;
 create table if not exists public.automations (
   id uuid primary key,
   status text not null,
@@ -23,7 +30,6 @@ create table if not exists public.run_step_logs (
   id uuid primary key,
   run_id uuid not null references public.run_logs(id) on delete cascade,
   status text not null,
-  outcome_state text,
   error_detail text,
   output_snapshot jsonb not null default '{}'::jsonb
 );
