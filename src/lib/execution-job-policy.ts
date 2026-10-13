@@ -32,36 +32,57 @@ export type RetryDecision =
  * integrated into this policy; caller-provided claims are not sufficient.
  */
 export function decideExecutionRetry(input: RetryPolicyInput): RetryDecision {
-  if (!input || typeof input !== "object" || ![
+  // This policy sits at a runtime boundary. Snapshot all values exactly once:
+  // malformed adapters can pass proxies/getters even though TypeScript forbids it.
+  let sideEffectCertainty: unknown;
+  let attempts: unknown;
+  let maxAttempts: unknown;
+  try {
+    if (!input || typeof input !== "object") {
+      throw new Error("Invalid retry policy input");
+    }
+    const candidate = input as unknown as Record<string, unknown>;
+    sideEffectCertainty = candidate["sideEffectCertainty"];
+    attempts = candidate["attempts"];
+    maxAttempts = candidate["maxAttempts"];
+  } catch {
+    return {
+      status: "needs_review",
+      retryAllowed: false,
+      reason: "Retry policy input could not be read safely; verify the external outcome before retrying.",
+    };
+  }
+
+  if (![
     "not_attempted",
     "confirmed_no_effect",
     "uncertain",
     "effect_confirmed",
-  ].includes(input.sideEffectCertainty)) {
+  ].includes(sideEffectCertainty as SideEffectCertainty)) {
     return {
       status: "needs_review",
       retryAllowed: false,
       reason: "Side-effect certainty is invalid; verify the external outcome before retrying.",
     };
   }
-  if (!Number.isInteger(input.attempts) || input.attempts < 1) {
+  if (!Number.isInteger(attempts) || (attempts as number) < 1) {
     throw new Error("attempts must be a positive integer");
   }
-  if (!Number.isInteger(input.maxAttempts) || input.maxAttempts < 1 || input.maxAttempts > 10) {
+  if (!Number.isInteger(maxAttempts) || (maxAttempts as number) < 1 || (maxAttempts as number) > 10) {
     throw new Error("maxAttempts must be an integer between 1 and 10");
   }
-  if (input.attempts > input.maxAttempts) {
+  if ((attempts as number) > (maxAttempts as number)) {
     throw new Error("attempts cannot exceed maxAttempts");
   }
 
-  if (input.sideEffectCertainty === "uncertain") {
+  if (sideEffectCertainty === "uncertain") {
     return {
       status: "needs_review",
       retryAllowed: false,
       reason: "The side effect may already have occurred; verify it before retrying.",
     };
   }
-  if (input.sideEffectCertainty === "effect_confirmed") {
+  if (sideEffectCertainty === "effect_confirmed") {
     return {
       status: "needs_review",
       retryAllowed: false,
@@ -69,7 +90,7 @@ export function decideExecutionRetry(input: RetryPolicyInput): RetryDecision {
     };
   }
 
-  if (input.attempts >= input.maxAttempts) {
+  if ((attempts as number) >= (maxAttempts as number)) {
     return {
       status: "dead_letter",
       retryAllowed: false,
