@@ -85,6 +85,33 @@ describe("authenticated cron task guard", () => {
     expect(taskCalls).toBe(0);
   });
 
+  it("fails closed when a malformed proxy throws during Response identity checks", async () => {
+    const hostileResponse = new Proxy(new Response("must not pass", { status: 200 }), {
+      getPrototypeOf() {
+        throw new Error("untrusted response prototype");
+      },
+    });
+    let taskCalls = 0;
+    const result = await runCronTaskAfterAuthentication(
+      request(),
+      async () => hostileResponse as any,
+      async () => {
+        taskCalls++;
+        return "must not run";
+      },
+    );
+
+    expect(result.denied).toBeInstanceOf(Response);
+    expect(result.denied?.status).toBe(503);
+    expect(result.denied?.headers.get("Cache-Control")).toBe("no-store");
+    expect(result.denied?.headers.get("Pragma")).toBe("no-cache");
+    expect(result.denied?.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(await result.denied?.text()).toBe(JSON.stringify({
+      error: "Cron task is temporarily unavailable.",
+    }));
+    expect(taskCalls).toBe(0);
+  });
+
   it("normalizes malformed falsy authentication results to a generic 503", async () => {
     for (const malformed of [undefined, false, 0, ""]) {
       const denied = await authenticateCronRequestSafely(

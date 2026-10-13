@@ -25,7 +25,15 @@ export async function authenticateCronRequestSafely(
   }
 
   if (result === null) return null;
-  if (result instanceof Response) return withCronSecurityHeaders(result);
+  try {
+    // A malformed runtime adapter can return a Proxy that throws during the
+    // instanceof/prototype check, or a Response-shaped object that throws while
+    // its headers/body are inspected. Treat both as adapter failure, not as an
+    // uncaught route error or an authorization result.
+    if (result instanceof Response) return withCronSecurityHeaders(result);
+  } catch {
+    // Fall through to the same generic fail-closed response used for bad values.
+  }
   return withCronSecurityHeaders(
     Response.json({ error: "Cron task is temporarily unavailable." }, { status: 503 }),
   );
