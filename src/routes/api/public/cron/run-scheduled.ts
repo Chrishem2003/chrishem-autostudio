@@ -44,7 +44,7 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
           .order("started_at", { ascending: true }).limit(100);
         if (staleQueryError) {
           console.error("[AutoStudio scheduler] Could not inspect stale runs; refusing to schedule new work.", { errorCode: staleQueryError.code });
-          return new Response("stale-run reconciliation failed", { status: 500 });
+          return withCronSecurityHeaders(new Response("stale-run reconciliation failed", { status: 500 }));
         }
         for (const stale of staleRuns ?? []) {
           const { data: recoveryResult, error: recoveryError } = await supabaseAdmin.rpc(
@@ -55,7 +55,7 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
             console.error("[AutoStudio scheduler] Stale run reconciliation was not safe to complete; refusing to schedule new work.", {
               runId: stale.id, errorCode: recoveryError?.code ?? String(recoveryResult ?? "NO_RECOVERY_RESULT"),
             });
-            return new Response("stale-run reconciliation failed", { status: 500 });
+            return withCronSecurityHeaders(new Response("stale-run reconciliation failed", { status: 500 }));
           }
         }
         const { data: rows, error } = await supabaseAdmin
@@ -63,7 +63,7 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
           .select("id, user_id, name, flow_json, last_run_at, workspace_id")
           .eq("status", "live")
           .limit(500);
-        if (error) return new Response("query failed", { status: 500 });
+        if (error) return withCronSecurityHeaders(new Response("query failed", { status: 500 }));
 
         const now = new Date();
         let ran = 0;
@@ -361,7 +361,7 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
           }
         }
 
-        return Response.json({ checked: rows?.length ?? 0, ran, failed, finishedAt: now.toISOString() });
+        return withCronSecurityHeaders(Response.json({ checked: rows?.length ?? 0, ran, failed, finishedAt: now.toISOString() }));
       },
     },
   },
