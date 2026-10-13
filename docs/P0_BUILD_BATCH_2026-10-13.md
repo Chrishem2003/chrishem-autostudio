@@ -24,3 +24,11 @@ CI does not prove these external gates. P0 remains open; P1 is not authorized.
 - Extended the disposable PostgreSQL smoke test to simulate a worker attempting to finalize after its lease has expired and recovery has already moved the job to `needs_review`.
 - The test now requires the stale worker's original token to be rejected and asserts that neither the recovered queue status nor the reconciled audit run can be overwritten.
 - This supplements the existing checks for expired-lease recovery, uncertain in-flight steps, and no automatic replay. It is still CI evidence only; deployed staging recovery and provider-side duplicate-effect rehearsal remain mandatory.
+
+
+## Bounded lease-heartbeat transport — 2026-10-13
+
+- Review found that the keepalive helper awaited an in-flight heartbeat without a deadline. If the database/network request never settled, a provider action could finish while the worker remained stuck awaiting heartbeat state, preventing a timely uncertainty decision.
+- Added a bounded heartbeat wait (15 seconds by default). A timeout, rejection, malformed result, or explicit lost-lease response is treated as lost ownership; the provider action is allowed to settle, then the helper throws so the caller does not report success or blindly retry an uncertain effect.
+- Added regression tests for a never-settling heartbeat and invalid timeout configuration. Exact-head CI is required before treating this change as verified.
+- This is repository code hardening only. Hosted staging acceptance remains NOT RUN; P0 remains open and P1 is not authorized.

@@ -95,3 +95,10 @@ For `POST /api/public/cron/run-scheduled`, `POST /api/public/cron/run-execution-
 - Verified jobs: typecheck, unit tests, targeted execution-integrity lint, production build, and disposable PostgreSQL durable-queue migration/concurrency smoke tests.
 - The latest SQL regression confirms a stale worker's original fencing token cannot finalize a job after lease recovery has moved it to `needs_review`; the associated audit run remains failed and is not rewritten by the stale worker.
 - This is repository CI evidence only. Hosted staging acceptance remains **NOT RUN**; provider-side duplicate-effect checks, interrupted-worker rehearsal, deployed outbound transport verification and independent review remain required. Keep queue producer/worker and outbound transport flags disabled; P0 stays open and P1 is not authorized.
+
+
+## Repository hardening checkpoint — bounded lease heartbeat
+
+- Source review found that an unresolved heartbeat request could keep the worker waiting indefinitely after the provider action settled.
+- Added a bounded heartbeat timeout and regression tests. This checkpoint is source-only until exact-head CI reports success.
+- Hosted staging acceptance remains **NOT RUN**. Do not enable queue producers/workers or outbound transport based on this change alone.

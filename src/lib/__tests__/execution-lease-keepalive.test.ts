@@ -66,7 +66,37 @@ describe("runWithExecutionLeaseKeepalive", () => {
     expect(actionSettled).toBe(true);
   });
 
-  test("never runs overlapping lease heartbeat requests", async () => {
+  test("treats a heartbeat request that never settles as lost ownership", async () => {
+    let heartbeats = 0;
+    let actionSettled = false;
+    await expect(runWithExecutionLeaseKeepalive(
+      () => new Promise((resolve) => setTimeout(() => {
+        actionSettled = true;
+        resolve("provider result");
+      }, 30)),
+      () => {
+        heartbeats += 1;
+        return new Promise(() => {});
+      },
+      5,
+      8,
+    )).rejects.toThrow("outcome requires review");
+    expect(heartbeats).toBe(1);
+    expect(actionSettled).toBe(true);
+  });
+
+  test("rejects an invalid heartbeat timeout before starting the action", async () => {
+    let called = false;
+    await expect(runWithExecutionLeaseKeepalive(
+      async () => { called = true; return "done"; },
+      async () => true,
+      5,
+      0,
+    )).rejects.toThrow("Invalid execution lease heartbeat timeout");
+    expect(called).toBe(false);
+  });
+
+  test("never runs overlapping lease heartbeat requests", async () =>
     let active = 0;
     let maximumActive = 0;
     let heartbeats = 0;

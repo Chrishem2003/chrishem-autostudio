@@ -337,3 +337,10 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Verified jobs: typecheck, unit tests, targeted execution-integrity lint, production build, and disposable PostgreSQL durable-queue migration/concurrency smoke tests.
 - The latest SQL regression confirms a stale worker's original fencing token cannot finalize a job after lease recovery has moved it to `needs_review`; the associated audit run remains failed and is not rewritten by the stale worker.
 - This is repository CI evidence only. Hosted staging acceptance remains **NOT RUN**; provider-side duplicate-effect checks, interrupted-worker rehearsal, deployed outbound transport verification and independent review remain required. Keep queue producer/worker and outbound transport flags disabled; P0 stays open and P1 is not authorized.
+
+
+## Bounded lease-heartbeat transport — 2026-10-13
+
+- Source review identified an unbounded wait when an automation/queue heartbeat promise never settled. The keepalive helper now races each heartbeat against a bounded timeout (15 seconds by default) and treats timeout as lost lease ownership.
+- Added regression coverage for a stalled heartbeat request and invalid timeout values. The action is still awaited before returning an uncertainty error because a dispatched external side effect cannot safely be cancelled or assumed absent.
+- Exact-head CI must pass after this change. This does not replace deployed staging checks or provider-side idempotency evidence; P0 remains open and P1 is not authorized.
