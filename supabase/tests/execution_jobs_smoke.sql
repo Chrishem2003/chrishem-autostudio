@@ -1,5 +1,39 @@
 \set ON_ERROR_STOP on
 
+-- Authenticated clients may inspect their own execution history, but must not
+-- fabricate, rewrite, or delete audit records. Server-side service_role retains
+-- the write permissions required by guarded execution and recovery.
+do $
+declare
+  table_name text;
+begin
+  foreach table_name in array array['run_logs', 'run_step_logs'] loop
+    if has_table_privilege('authenticated', format('public.%I', table_name), 'INSERT')
+       or has_table_privilege('authenticated', format('public.%I', table_name), 'UPDATE')
+       or has_table_privilege('authenticated', format('public.%I', table_name), 'DELETE') then
+      raise exception 'authenticated retains write privileges on %', table_name;
+    end if;
+    if not has_table_privilege('authenticated', format('public.%I', table_name), 'SELECT') then
+      raise exception 'authenticated lost read access to %', table_name;
+    end if;
+    if not has_table_privilege('service_role', format('public.%I', table_name), 'INSERT')
+       or not has_table_privilege('service_role', format('public.%I', table_name), 'UPDATE')
+       or not has_table_privilege('service_role', format('public.%I', table_name), 'DELETE') then
+      raise exception 'service_role lost required write privileges on %', table_name;
+    end if;
+  end loop;
+
+  if exists (
+    select 1 from pg_policies
+     where schemaname = 'public'
+       and tablename in ('run_logs', 'run_step_logs')
+       and 'authenticated' = any(roles)
+       and cmd in ('INSERT', 'UPDATE', 'DELETE', 'ALL')
+  ) then
+    raise exception 'Authenticated execution-audit write policy remains enabled';
+  end if;
+end $;
+
 insert into auth.users (id)
 values ('00000000-0000-4000-8000-000000000001')
 on conflict do nothing;

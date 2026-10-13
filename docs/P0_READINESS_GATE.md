@@ -289,3 +289,11 @@ Do not mark any unchecked item as passed based on code inspection alone.
 
 - Follow-up review found the secret-protected queue-health endpoint also used a truthiness check for its authentication adapter result. It now uses the same shared fail-closed normalizer as the scheduled producer and queue worker, so malformed falsy results cannot expose queue counts, failure summaries, lease details, or audit-consistency diagnostics.
 - Regression tests for the shared normalizer cover malformed falsy values and security headers. Exact-head CI must pass after this route change; deployed endpoint authentication remains an open staging gate.
+
+
+## Client-side execution-audit write boundary — 2026-10-13
+
+- Review of the original schema found authenticated users had direct INSERT/UPDATE/DELETE privileges and owner-all RLS policies on `run_logs` and `run_step_logs`. This allowed a client to fabricate or rewrite audit evidence even though the application routes used server-owned execution.
+- Added forward-only migration `20261013100000_lock_execution_audit_writes.sql`: authenticated users retain owner-scoped SELECT access, while all audit writes are restricted to the server-side `service_role` guarded paths.
+- Extended the disposable PostgreSQL migration chain and smoke assertions to verify client write privileges/policies are absent while required service-role writes remain available.
+- This is database/CI verification only; hosted staging migration and live audit-history acceptance remain open.
