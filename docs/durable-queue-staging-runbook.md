@@ -142,3 +142,10 @@ The cron-secret-protected `/api/public/cron/execution-queue-health` response now
 - [ ] Create non-production fixtures for each alert condition and confirm the response code/severity matches the observed state.
 - [ ] Confirm alerts remain diagnostic only: the endpoint must not release leases, mutate audit history, retry jobs, or expose payloads/provider secrets.
 - [ ] Verify alert behavior when queue counts and sampled rows change between queries; treat mismatch warnings as a prompt to repeat the read, not proof of corruption.
+
+
+### Claimed-job envelope checks
+
+- [ ] In staging, inject malformed trigger metadata and malformed/oversized idempotency keys through a controlled test adapter; confirm no external step starts and the job is parked for review.
+- [ ] Confirm a missing/blank fencing identity cannot be used to finalize a queue row and that the alerting/operations path makes the rejected finalization visible.
+- [ ] Verify the deployed database adapter returns the complete expected claim envelope for manual, scheduled, and webhook jobs.
