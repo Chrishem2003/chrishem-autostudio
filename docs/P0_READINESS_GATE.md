@@ -272,3 +272,10 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - This evidence is limited to GitHub Actions and a disposable PostgreSQL instance. It is **not** evidence of a live staging migration, protected deployed cron authentication, provider-side idempotency, or interruption-recovery acceptance.
 - Re-run exact-head CI after this documentation update. P0 remains open; do not merge into `main` or enable durable queue/outbound transport until the staging acceptance record is completed and reviewed.
 
+## P0 migration-chain guard verification — 2026-10-13
+
+- Added `supabase/tests/assert_p0_migration_chain.sh` and wired it into the disposable PostgreSQL CI job before migration application.
+- The guard asserts the reviewed 16-file P0 sequence matches the workflow, remains chronologically sorted, and references existing migration files. It is scoped to this P0 smoke chain; it does not claim to apply every migration in the repository.
+- Exact-head CI passed on `94544236ace5a9c702b1e071ef154384fff8bebb`: [run 38365100889](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38365100889). Both required jobs passed: typecheck/tests/targeted lint/production build and the PostgreSQL migration/concurrency smoke test, including the new chain assertion.
+- This remains CI-only evidence. Hosted staging migration/authentication, provider-side exact-once evidence, interrupted-worker recovery, audit-history verification, and final acceptance review are still open. P0 remains open and P1 is not authorized.
+
