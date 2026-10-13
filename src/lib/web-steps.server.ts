@@ -192,10 +192,15 @@ async function requestOnce(url: URL, data: WebInput, target: PinnedAddress): Pro
       headers["content-type"] = "application/json";
       headers["content-length"] = String(Buffer.byteLength(body));
     }
+    const tlsHostname = url.hostname.replace(/^\\[|\\]$/g, "");
     const req = requestFn(url, {
       method: data.method,
       headers,
       lookup: pinnedLookup(target),
+      // Keep TLS certificate-chain and hostname verification enabled even when
+      // the socket is pinned to a separately-resolved IP address.
+      rejectUnauthorized: true,
+      ...(url.protocol === "https:" && isIP(tlsHostname) === 0 ? { servername: tlsHostname } : {}),
       signal: AbortSignal.timeout(Math.max(1, Math.min(120, data.timeoutSec)) * 1000),
     }, (res) => {
       let size = 0;
