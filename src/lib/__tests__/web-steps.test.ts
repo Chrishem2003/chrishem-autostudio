@@ -34,6 +34,9 @@ describe("web step address rules", () => {
     expect(isBlockedHost("3fff::1")).toBe(true);
     expect(isBlockedHost("3fff:0fff::1")).toBe(true);
     expect(isBlockedHost("2002:c000:0201::1")).toBe(true);
+    expect(isBlockedHost("64:ff9b::7f00:1")).toBe(true); // NAT64 embedding of 127.0.0.1
+    expect(isBlockedHost("64:ff9b::808:808")).toBe(true); // block the whole well-known NAT64 /96
+    expect(isBlockedHost("64:ff9b:1::c0a8:101")).toBe(true); // local-use NAT64 prefix
     expect(isBlockedHost("2001::1::2")).toBe(true);
   });
   it("does not confuse public hostnames with IPv6 prefixes", () => {
