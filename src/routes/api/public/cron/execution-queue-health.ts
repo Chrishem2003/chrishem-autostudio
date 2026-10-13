@@ -62,10 +62,12 @@ export const Route = createFileRoute("/api/public/cron/execution-queue-health")(
   server: {
     handlers: {
       GET: async ({ request }) => {
-        const denied = await authenticateCronRequest(request);
-        if (denied) return withCronSecurityHeaders(denied);
-
         try {
+          // Treat authentication adapter failures as a generic unavailable response;
+          // do not let unexpected auth exceptions bypass the endpoint's safe response path.
+          const denied = await authenticateCronRequest(request);
+          if (denied) return withCronSecurityHeaders(denied);
+
           // The durable queue migration is newer than the generated Supabase
           // Database type snapshot, so isolate that temporary typing gap here.
           const fromQueue = () => supabaseAdmin.from("execution_jobs" as never) as unknown as QueueQuery;
