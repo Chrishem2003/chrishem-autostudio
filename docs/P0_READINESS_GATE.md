@@ -39,6 +39,8 @@ This checklist is the release gate for P0 execution-integrity hardening. A code 
 
 ## C. Deployment and integrations
 
+- [ ] Complete and review the evidence record in [`docs/P0_STAGING_ACCEPTANCE_RECORD.md`](./P0_STAGING_ACCEPTANCE_RECORD.md); the template itself is not evidence that staging passed.
+
 - [ ] Confirm migrations apply cleanly to a disposable/staging database.
 - [ ] Run integration tests against staging Supabase with non-production test data.
 - [ ] Verify secrets are never exposed to client code, logs, or test artifacts.
