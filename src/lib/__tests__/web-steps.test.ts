@@ -267,6 +267,28 @@ describe("outbound HTTP resilience with injected transport", () => {
     });
   });
 
+  it("does not retry a side-effecting POST after a 429 or 5xx response", async () => {
+    await withReadyTransport(async () => {
+      const { callWeb } = await import("../web-steps.server");
+      for (const status of [429, 500, 503]) {
+        let requests = 0;
+        const result = await callWeb(
+          { method: "POST", url: "https://example.com/submit", body: "{}", timeoutSec: 2 },
+          {
+            resolveTarget: safeTarget,
+            requestOnce: async () => { requests++; return { status }; },
+            wait: noWait,
+          },
+        );
+        expect(result.ok).toBe(false);
+        expect(result.status).toBe(status);
+        expect(result.attempts).toBe(1);
+        expect(requests).toBe(1);
+        expect(result.detail).toMatch(/Automatic retry was suppressed/i);
+      }
+    });
+  });
+
   it("stops immediately when the response-size guard is triggered", async () => {
     await withReadyTransport(async () => {
       const { callWeb } = await import("../web-steps.server");
