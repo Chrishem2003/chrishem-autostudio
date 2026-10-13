@@ -82,4 +82,33 @@ describe("decideExecutionRetry", () => {
       maxAttempts: 11,
     })).toThrow("maxAttempts must be an integer between 1 and 10");
   });
+
+  test("fails closed when a retry-policy field getter throws", () => {
+    const input = {
+      get sideEffectCertainty() {
+        throw new Error("hostile getter");
+      },
+      attempts: 1,
+      maxAttempts: 3,
+    };
+    const decision = decideExecutionRetry(input as any);
+    expect(decision.status).toBe("needs_review");
+    expect(decision.retryAllowed).toBe(false);
+  });
+
+  test("snapshots retry-policy getters only once", () => {
+    let certaintyReads = 0;
+    const input = {
+      get sideEffectCertainty() {
+        certaintyReads++;
+        return certaintyReads === 1 ? "confirmed_no_effect" : "uncertain";
+      },
+      attempts: 1,
+      maxAttempts: 3,
+    };
+    const decision = decideExecutionRetry(input as any);
+    expect(decision.status).toBe("queued");
+    expect(certaintyReads).toBe(1);
+  });
+
 });
