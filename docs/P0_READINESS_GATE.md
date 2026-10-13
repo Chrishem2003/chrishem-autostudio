@@ -313,3 +313,10 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Updated the server-side manual executor to use the privileged server-only client for run/step audit inserts, finalization, and interrupted-run recovery, after the automation has been loaded with the authenticated user's ownership filter. Owner-scoped history reads and user-owned automation updates remain on the authenticated client.
 - Exact-head CI passed after the correction at commit `79d681b97a1a3f56dec18f1a6f507e021f2f5f87`: [run 38374624825](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38374624825).
 - This verifies typecheck/tests/build and disposable PostgreSQL smoke tests, not live Supabase runtime behavior. Staging manual/dry/live run checks must confirm audit writes work and history remains owner-scoped before P0 can close.
+
+
+## DNS pinning resolver-contract hardening — 2026-10-13
+
+- Added strict validation that every DNS result is a literal IPv4/IPv6 address and its declared address family matches the parsed address before the result can be pinned to a socket.
+- Added regression tests for hostname-shaped resolver output, IPv4/IPv6 family mismatches, and mixed answer sets containing malformed entries. Unsafe or malformed results fail closed before a network request.
+- CI must pass on the exact resulting commit. This is repository-level evidence only; deployed DNS/TLS/timeout/redirect smoke tests remain staging acceptance requirements.

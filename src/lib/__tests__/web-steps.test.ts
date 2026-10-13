@@ -290,3 +290,28 @@ describe("outbound HTTP resilience with injected transport", () => {
     });
   });
 });
+
+
+describe("DNS pinning resolver contract", () => {
+  it("rejects resolver results that are hostnames rather than literal IP addresses", async () => {
+    await expect(resolvePublicTarget("malformed.example", async () => [
+      { address: "public.example", family: 4 },
+    ])).rejects.toThrow(/valid IP address/i);
+  });
+
+  it("rejects resolver results whose declared address family disagrees with the IP literal", async () => {
+    await expect(resolvePublicTarget("family-mismatch.example", async () => [
+      { address: "8.8.8.8", family: 6 },
+    ])).rejects.toThrow(/valid IP address/i);
+    await expect(resolvePublicTarget("family-mismatch-v6.example", async () => [
+      { address: "2001:4860:4860::8888", family: 4 },
+    ])).rejects.toThrow(/valid IP address/i);
+  });
+
+  it("rejects malformed entries even when another DNS answer is public", async () => {
+    await expect(resolvePublicTarget("mixed-malformed.example", async () => [
+      { address: "8.8.8.8", family: 4 },
+      { address: "public.example", family: 4 },
+    ])).rejects.toThrow(/valid IP address/i);
+  });
+});

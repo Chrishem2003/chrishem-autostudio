@@ -621,3 +621,10 @@ The latest work strengthens P0 security and execution integrity; it does not com
 - Moved manual run/step audit insertion, outcome persistence, finalization and interruption recovery to the server-only Supabase admin client after the automation is verified against the authenticated user's ID. User-scoped audit reads and user-owned automation updates remain on the authenticated client.
 - Exact-head CI passed at `79d681b97a1a3f56dec18f1a6f507e021f2f5f87` ([run 38374624825](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38374624825)).
 - Staging acceptance still must exercise manual execution and verify owner-scoped audit reads under the actual Supabase roles. P0 remains open.
+
+
+## Outbound DNS pinning contract — 2026-10-13
+
+- Strengthened `resolvePublicTarget` to reject malformed resolver answers and address-family mismatches for every returned DNS record before selecting a pinned socket destination.
+- Added regression coverage for hostname-shaped results, IPv4/IPv6 family mismatches, and mixed public/malformed answers. Existing private-address rejection and DNS pinning tests remain in place.
+- Staging must still verify real DNS pinning, TLS hostname validation, timeout and redirect behavior. Outbound transport remains disabled pending the release gate.
