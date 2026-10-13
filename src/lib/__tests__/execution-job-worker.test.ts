@@ -660,4 +660,78 @@ describe("processOneExecutionJob", () => {
     expect(finishCalls).toBe(1);
   });
 
+
+  test("fails closed when an executor result getter throws", async () => {
+    for (const field of ["status", "sideEffectCertainty", "error", "retryAt", "retryable"]) {
+      let executeCalls = 0;
+      const malformedResult: Record<string, unknown> = {};
+      Object.defineProperty(malformedResult, field, {
+        enumerable: true,
+        get() { throw new Error("hostile executor result getter"); },
+      });
+      // Provide the other required fields so the selected getter is reached
+      // during the worker's runtime-boundary snapshot.
+      if (field !== "status") malformedResult.status = "failed";
+      if (field !== "sideEffectCertainty") malformedResult.sideEffectCertainty = "uncertain";
+      const { deps, calls } = dependencies({
+        execute: async () => {
+          executeCalls++;
+          return malformedResult as any;
+        },
+      });
+
+      const result = await processOneExecutionJob(deps);
+      expect(result).toEqual({ outcome: "finished", jobId: "job-1", status: "needs_review" });
+      expect(executeCalls).toBe(1);
+      expect(calls.finished).toHaveLength(1);
+      expect(calls.finished[0].status).toBe("needs_review");
+      expect(calls.finished[0].retryAt).toBeNull();
+    }
+  });
+
+  test("snapshots each executor result property once before making a finalization decision", async () => {
+    const reads: Record<string, number> = {
+      status: 0,
+      sideEffectCertainty: 0,
+      error: 0,
+      retryAt: 0,
+      retryable: 0,
+    };
+    const resultEnvelope = {};
+    const values: Record<string, unknown> = {
+      status: "succeeded",
+      sideEffectCertainty: "effect_confirmed",
+      error: null,
+      retryAt: "2030-01-01T00:00:00.000Z",
+      retryable: false,
+    };
+    for (const [field, value] of Object.entries(values)) {
+      Object.defineProperty(resultEnvelope, field, {
+        enumerable: true,
+        get() {
+          reads[field]++;
+          return reads[field] === 1 ? value : (field === "status" ? "failed" : "uncertain");
+        },
+      });
+    }
+
+    const { deps, calls } = dependencies({
+      execute: async () => resultEnvelope as any,
+    });
+    expect(await processOneExecutionJob(deps)).toEqual({
+      outcome: "finished",
+      jobId: "job-1",
+      status: "succeeded",
+    });
+    expect(reads).toEqual({
+      status: 1,
+      sideEffectCertainty: 1,
+      error: 1,
+      retryAt: 1,
+      retryable: 1,
+    });
+    expect(calls.finished).toHaveLength(1);
+    expect(calls.finished[0].status).toBe("succeeded");
+  });
+
 });
