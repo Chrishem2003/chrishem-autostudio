@@ -284,3 +284,8 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Review found the scheduled producer route used a truthiness check for its authentication adapter result, unlike the worker's stricter runtime boundary. A malformed falsy value such as `undefined` or `false` could otherwise be mistaken for authorization success by a runtime adapter that violates its TypeScript contract.
 - Added one shared authentication normalizer for scheduler and worker routes. Only literal `null` permits protected work; actual `Response` denials preserve their status/body with required security headers; thrown or malformed adapter results return a generic cache-safe 503 before protected work runs.
 - Added regression coverage for malformed falsy values, valid denial, literal-null success, and the existing worker task-laziness contract. Exact-head CI is required; staging authentication remains an independent release gate.
+
+## Queue-health authentication boundary — 2026-10-13
+
+- Follow-up review found the secret-protected queue-health endpoint also used a truthiness check for its authentication adapter result. It now uses the same shared fail-closed normalizer as the scheduled producer and queue worker, so malformed falsy results cannot expose queue counts, failure summaries, lease details, or audit-consistency diagnostics.
+- Regression tests for the shared normalizer cover malformed falsy values and security headers. Exact-head CI must pass after this route change; deployed endpoint authentication remains an open staging gate.

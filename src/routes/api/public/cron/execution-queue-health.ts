@@ -12,7 +12,7 @@ import {
   type ExecutionQueueStatus,
 } from "@/lib/execution-queue-health";
 import { findExecutionAuditConsistencyIssues } from "@/lib/execution-audit-consistency";
-import { withCronSecurityHeaders } from "@/lib/cron-task-guard";
+import { authenticateCronRequestSafely, withCronSecurityHeaders } from "@/lib/cron-task-guard";
 
 interface CountResult {
   count: number | null;
@@ -63,10 +63,10 @@ export const Route = createFileRoute("/api/public/cron/execution-queue-health")(
     handlers: {
       GET: async ({ request }) => {
         try {
-          // Treat authentication adapter failures as a generic unavailable response;
-          // do not let unexpected auth exceptions bypass the endpoint's safe response path.
-          const denied = await authenticateCronRequest(request);
-          if (denied) return withCronSecurityHeaders(denied);
+          // Use the shared runtime boundary: malformed falsy auth results must
+          // not expose protected queue/audit diagnostics.
+          const denied = await authenticateCronRequestSafely(request, authenticateCronRequest);
+          if (denied !== null) return denied;
 
           // The durable queue migration is newer than the generated Supabase
           // Database type snapshot, so isolate that temporary typing gap here.
