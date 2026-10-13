@@ -328,3 +328,12 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Centralized sanitization for shared run summaries and applied the same sanitization before manual step details are persisted. The redaction covers authorization tokens, credential-like assignments, query-bearing URLs, JWTs and email addresses; safe static fallback text is used when the remaining detail is not useful.
 - Added regression coverage for sensitive values in persisted run summaries. Exact-head CI passed at commit `ea5efc1ffe9f000aea13ae50850af591933302e0`: [run 38379158465](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38379158465).
 - This is source/CI evidence only. Actual staging checks, second-person review and all previously open P0 acceptance gates remain outstanding; P0 stays open.
+
+
+## Exact-head verification — 2026-10-13 (stale-worker fencing)
+
+- Code checkpoint: `1c446748d0e3902c66e33a6ad3d4b38a80acceb2`.
+- Exact-head CI: [run 38385124681 — passed](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38385124681).
+- Verified jobs: typecheck, unit tests, targeted execution-integrity lint, production build, and disposable PostgreSQL durable-queue migration/concurrency smoke tests.
+- The latest SQL regression confirms a stale worker's original fencing token cannot finalize a job after lease recovery has moved it to `needs_review`; the associated audit run remains failed and is not rewritten by the stale worker.
+- This is repository CI evidence only. Hosted staging acceptance remains **NOT RUN**; provider-side duplicate-effect checks, interrupted-worker rehearsal, deployed outbound transport verification and independent review remain required. Keep queue producer/worker and outbound transport flags disabled; P0 stays open and P1 is not authorized.

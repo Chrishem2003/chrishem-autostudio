@@ -636,3 +636,12 @@ The latest work strengthens P0 security and execution integrity; it does not com
 - Added regression coverage for bearer tokens, query-bearing URLs and email addresses in run summaries.
 - Exact-head CI passed at `ea5efc1ffe9f000aea13ae50850af591933302e0` ([run 38379158465](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38379158465)).
 - All hosted staging, provider-side duplicate-effect, interrupted-worker, deployed transport and independent-review gates remain open. P0 is not passed; P1 is not authorized.
+
+
+## Exact-head verification — 2026-10-13 (stale-worker fencing)
+
+- Code checkpoint: `1c446748d0e3902c66e33a6ad3d4b38a80acceb2`.
+- Exact-head CI: [run 38385124681 — passed](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38385124681).
+- Verified jobs: typecheck, unit tests, targeted execution-integrity lint, production build, and disposable PostgreSQL durable-queue migration/concurrency smoke tests.
+- The latest SQL regression confirms a stale worker's original fencing token cannot finalize a job after lease recovery has moved it to `needs_review`; the associated audit run remains failed and is not rewritten by the stale worker.
+- This is repository CI evidence only. Hosted staging acceptance remains **NOT RUN**; provider-side duplicate-effect checks, interrupted-worker rehearsal, deployed outbound transport verification and independent review remain required. Keep queue producer/worker and outbound transport flags disabled; P0 stays open and P1 is not authorized.
