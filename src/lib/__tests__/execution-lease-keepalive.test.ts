@@ -96,7 +96,7 @@ describe("runWithExecutionLeaseKeepalive", () => {
     expect(called).toBe(false);
   });
 
-  test("never runs overlapping lease heartbeat requests", async () =>
+  test("never runs overlapping lease heartbeat requests", async () => {
     let active = 0;
     let maximumActive = 0;
     let heartbeats = 0;
