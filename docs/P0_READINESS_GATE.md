@@ -529,3 +529,15 @@ The hardening branch is intentionally **not synchronized automatically**. The Gi
 - Exact-head CI: [run 38476560866](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38476560866) — passed.
 - Merge/rebase/synchronization: **not performed**; no `main` or deployment changes were made.
 - Release decision: **P0 OPEN; P1 not authorized**.
+
+
+### Focused overlap review — scheduler producer contract (2026-10-14)
+
+A first side-by-side review of `main` and `audit/p0-hardening` found a behavior-level conflict that must be resolved before synchronization:
+
+- **Current `main` scheduler is queue-only:** it returns 503 when the durable queue feature gate is off, validates persisted workflows with `preparePersistedExecutionPlan`, uses `scheduledExecutionIdempotencyKey`, enqueues, and only then advances `last_run_at`.
+- **Hardening branch scheduler retains a legacy inline-execution path** when the queue gate is off, in addition to stale-run reconciliation, per-automation lease heartbeats, audit recovery, and live capability preflight. That path must not be discarded blindly, but it must also not be reintroduced into a queue-only producer contract without an explicit architecture decision.
+- **Idempotency implementation differs:** `main` uses the shared helper, which rejects unsupported cadences and invalid timestamps. The branch constructs a key inline using `Date.parse(last_run_at)` and a truncated cadence string. During reconciliation, prefer the shared validated helper and add regression coverage for invalid timestamps/cadences and repeat/concurrent scheduler calls.
+- **Plan-validation wrappers are not themselves the main conflict:** branch `withPreparedExecutionPlan` delegates to `preparePersistedExecutionPlan`; reconcile the route's preflight/recovery behavior around that shared trust boundary rather than duplicating or weakening validation.
+
+**Required resolution before a sync commit:** retain `main`'s fail-closed queue-only producer contract unless a reviewed rollout design explicitly authorizes a legacy mode; preserve the branch's stale-run recovery, live preflight, lease fencing, and audit-sanitization protections where compatible; replace ad-hoc idempotency construction with the shared helper; test that enqueue failure does not advance the schedule marker and that repeat calls for one schedule generation do not duplicate jobs. No route rewrite or branch synchronization was performed in this review.
