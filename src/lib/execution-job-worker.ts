@@ -254,9 +254,20 @@ export async function processOneExecutionJob(
   // Normalize valid timestamps and discard invalid values; safe queued retries get
   // the worker's bounded backoff below when no usable timestamp remains.
   const parsedRetryAt = typeof result.retryAt === "string" ? Date.parse(result.retryAt) : Number.NaN;
-  let finalRetryAt = Number.isFinite(parsedRetryAt)
-    ? new Date(parsedRetryAt).toISOString()
-    : null;
+  const retryClockMs = Date.now();
+  const minimumRetryDelayMs = 1_000;
+  const maximumRetryDelayMs = 24 * 60 * 60 * 1_000;
+  let finalRetryAt: string | null = null;
+  if (Number.isFinite(parsedRetryAt)) {
+    if (parsedRetryAt >= retryClockMs + minimumRetryDelayMs) {
+      // Preserve provider/lock retry hints, but never let an adapter request an
+      // unbounded delay. A past/near-immediate timestamp falls back to backoff;
+      // a very distant timestamp is capped at 24 hours.
+      finalRetryAt = new Date(
+        Math.min(parsedRetryAt, retryClockMs + maximumRetryDelayMs),
+      ).toISOString();
+    }
+  }
   let error = result.error
     ? sanitizeExecutionError(result.error, "Execution failed; inspect the run details and verify external outcome before retrying.")
     : null;
