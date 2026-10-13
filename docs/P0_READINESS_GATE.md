@@ -215,3 +215,12 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Added a forward-only guard rejecting NULL _last_run_at in release_scheduled_automation before the lock is deleted. This prevents clearing cadence progress, which could reset scheduled idempotency-key derivation.
 - Added a regression test proving a NULL cursor is rejected and the lease remains held, followed by a valid release test; wired the migration into PostgreSQL CI.
 - Live staging migration and scheduled end-to-end acceptance remain open. Keep producer, worker, and outbound transport gates disabled until the staging runbook is completed.
+
+
+## Queue health alerts and malformed-claim fail-closed behavior — 2026-10-13
+
+- Added a read-only alert summary to the cron-secret-protected queue-health endpoint: critical alerts for human-review jobs, dead letters, expired leases, and queue/audit consistency findings; warnings for failed jobs, queue wait beyond five minutes, stale open runs, incomplete bounded scans, and snapshot mismatches.
+- Alert evaluation is a pure function with regression tests. It does not mutate queue state, release leases, authorize retries, or infer provider idempotency.
+- Hardened the worker to reject malformed claim retry counters before invoking the executor; invalid metadata is finalized to `needs_review` when possible, and a rejected finalization is reported without executing the job.
+- Both CI jobs passed for implementation commit `c7d2017b3451ce8f489142f70dacfc76d851aef8`: [GitHub Actions run 38354868220](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38354868220). Documentation changes and any later code changes still require exact-head CI.
+- These are code and disposable-CI checks only. All staging acceptance gates remain open; do not enable durable queue consumers or outbound transport.
