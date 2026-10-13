@@ -119,3 +119,11 @@ CI does not prove these external gates. P0 remains open; P1 is not authorized.
 
 
 - Manual and scheduled live paths now re-confirm the current automation lease immediately before inserting the parent run audit record, after preflight/reconciliation work. This closes a stale-ownership window before the run is even created. Exact-head CI and staging fault-injection remain required; no staging acceptance is implied.
+
+
+## Exact-head retry-boundary verification — 2026-10-13
+
+- Code head `271cf233f37796627a9b7c40b9027ed16213cbf6` passed both required CI jobs: [run 38441710623](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38441710623).
+- The unit suite now also verifies retry-policy input snapshotting for hostile getter behavior across side-effect certainty and attempt counters. Getter exceptions fail closed to `needs_review`; changing getters cannot change the policy decision between reads.
+- The PostgreSQL smoke job passed the full disposable migration chain, permission/idempotency/fencing assertions, and concurrent-worker claim checks.
+- This remains repository CI evidence only. The hosted staging acceptance record is still **NOT RUN**; provider-side duplicate-effect verification, deployed interruption/recovery rehearsal, deployed outbound transport verification, and independent acceptance remain blockers. Do not merge, deploy, enable the durable worker/outbound transport, or authorize P1.
