@@ -191,3 +191,60 @@ describe("authenticated cron task guard", () => {
     await expect(result).rejects.toThrow("queue transport unavailable");
   });
 });
+
+
+describe("malformed Response accessors at the cron authentication boundary", () => {
+  it("fails closed when a Response proxy throws while its headers are inspected", async () => {
+    const hostile = new Proxy(new Response("must not pass", { status: 200 }), {
+      get(target, property) {
+        if (property === "headers") throw new Error("hostile headers accessor");
+        return Reflect.get(target, property, target);
+      },
+    });
+    let taskCalls = 0;
+
+    const result = await runCronTaskAfterAuthentication(
+      request(),
+      async () => hostile as any,
+      async () => {
+        taskCalls++;
+        return "must not run";
+      },
+    );
+
+    expect(result.denied).toBeInstanceOf(Response);
+    expect(result.denied?.status).toBe(503);
+    expect(result.denied?.headers.get("Cache-Control")).toBe("no-store");
+    expect(await result.denied?.text()).toBe(JSON.stringify({
+      error: "Cron task is temporarily unavailable.",
+    }));
+    expect(taskCalls).toBe(0);
+  });
+
+  it("fails closed when a Response proxy throws while its body is inspected", async () => {
+    const hostile = new Proxy(new Response("must not pass", { status: 200 }), {
+      get(target, property) {
+        if (property === "body") throw new Error("hostile body accessor");
+        return Reflect.get(target, property, target);
+      },
+    });
+    let taskCalls = 0;
+
+    const result = await runCronTaskAfterAuthentication(
+      request(),
+      async () => hostile as any,
+      async () => {
+        taskCalls++;
+        return "must not run";
+      },
+    );
+
+    expect(result.denied).toBeInstanceOf(Response);
+    expect(result.denied?.status).toBe(503);
+    expect(result.denied?.headers.get("Cache-Control")).toBe("no-store");
+    expect(await result.denied?.text()).toBe(JSON.stringify({
+      error: "Cron task is temporarily unavailable.",
+    }));
+    expect(taskCalls).toBe(0);
+  });
+});
