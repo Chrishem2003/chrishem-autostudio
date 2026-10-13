@@ -116,7 +116,17 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
               _automation_id: row.id,
               _lease_seconds: 900,
             });
-            if (queueLockError || !queueLock) continue;
+            if (queueLockError) {
+              console.error("[AutoStudio scheduler] Could not claim queue-enqueue lease.", {
+                automationId: row.id,
+                errorCode: queueLockError.code,
+              });
+              failed++;
+              continue;
+            }
+            // A missing token without an RPC error means another scheduler owns
+            // the lease; do not count normal concurrency as a failed automation.
+            if (!queueLock) continue;
 
             const enqueuedAt = new Date().toISOString();
             let enqueueSucceeded = false;
@@ -165,6 +175,7 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
               automationId: row.id,
               errorCode: claimError.code,
             });
+            failed++;
             continue;
           }
           if (!lockToken) continue; // Another scheduler already owns this run or the lease is still active.
