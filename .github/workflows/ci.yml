@@ -85,6 +85,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - name: Prepare disposable Supabase-like schema
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/execution_jobs_bootstrap.sql
+      - name: Verify P0 migration chain completeness and order
+        run: bash supabase/tests/assert_p0_migration_chain.sh
       - name: Apply server-only connections and AI usage migration
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261010120000_p0_ai_usage_and_connection_storage.sql
       - name: Apply scheduler lease migration
