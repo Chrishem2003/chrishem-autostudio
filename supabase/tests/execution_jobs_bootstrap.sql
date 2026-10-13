@@ -9,7 +9,8 @@ create or replace function auth.uid()
 returns uuid
 language sql
 stable
-as $ select null::uuid $;
+as $$ select null::uuid $$;
+
 create table if not exists public.automations (
   id uuid primary key,
   status text not null,
@@ -26,6 +27,7 @@ create table if not exists public.run_logs (
   error_summary text,
   trigger_type text not null default 'manual'
 );
+
 create table if not exists public.run_step_logs (
   id uuid primary key,
   run_id uuid not null references public.run_logs(id) on delete cascade,
