@@ -452,3 +452,18 @@ Do not mark any unchecked item as passed based on code inspection alone.
 
 
 - Manual and scheduled live paths now re-confirm the current automation lease immediately before inserting the parent run audit record, after preflight/reconciliation work. This closes a stale-ownership window before the run is even created. Exact-head CI and staging fault-injection remain required; no staging acceptance is implied.
+
+
+## Exact-head checkpoint — Gmail raw-header control-character regression (2026-10-13)
+
+- [x] Exact-head CI passed on `fd526ebe01ec83632b32a7d7769241dbbd2a2931`: [run 38473193054](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38473193054).
+- [x] Both required CI jobs passed: typecheck, full unit suite, targeted execution-integrity lint, production build, complete configured disposable PostgreSQL migration chain, RPC permission/idempotency/fencing checks, and concurrent-worker claim smoke test.
+- [x] Added regression coverage proving a NUL control character in a Gmail subject is encoded rather than emitted raw in a mail header.
+- [ ] Repository-wide lint is not green. Recorded baseline: 3,317 findings (3,311 errors and 6 warnings), predominantly Prettier formatting. The CI step is explicitly non-blocking; this must be remediated or explicitly dispositioned before release.
+- [ ] Hosted staging migrations/RLS/RPC and deployed cron-auth checks.
+- [ ] Provider sandbox duplicate-effect/idempotency proof and interrupted-worker recovery rehearsal.
+- [ ] Deployed outbound HTTP/TLS/DNS/redirect/timeout verification.
+- [ ] Audit-history inspection and independent acceptance.
+- [ ] Final P0 exit review and explicit P1 authorization.
+
+The exact-head CI checkpoint does not change the release decision: **P0 OPEN; P1 not authorized**. Keep durable queue producer/worker and outbound transport gates disabled until the staging acceptance record is completed and reviewed.
