@@ -131,3 +131,10 @@ For `POST /api/public/cron/run-scheduled`, `POST /api/public/cron/run-execution-
 
 - A forward migration now aligns the queue finalization guard with the application audit vocabulary: `run_logs.status = success`, while `execution_jobs.status = succeeded`.
 - The disposable PostgreSQL smoke test checks the positive success path with the application status. Confirm the same path in controlled staging before P0 acceptance.
+
+
+## Queue-health audit status vocabulary — 2026-10-13
+
+- Repository verification found that completed manual/scheduled audit rows use `run_logs.status = 'success'`, while durable queue jobs use `execution_jobs.status = 'succeeded'`.
+- Queue-health consistency checks now recognize canonical audit `success` and legacy-compatible `succeeded`. Regression coverage verifies successful jobs are not falsely flagged and mismatched `needs_review`/`running` jobs are flagged.
+- Exact-head CI passed: [run 38420760154](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38420760154). This is code and disposable-database CI evidence only; staging acceptance remains NOT RUN until real non-production deployment evidence is recorded.

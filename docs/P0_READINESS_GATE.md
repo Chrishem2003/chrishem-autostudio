@@ -408,3 +408,5 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Cross-path review found that manual and scheduled run finalization persists the canonical audit status `success`, while the queue status is `succeeded`. The queue-health consistency checker had only accepted `succeeded` for audit rows, which could report healthy completed jobs as inconsistent.
 - Updated diagnostics to recognize canonical `success` and retain `succeeded` compatibility for existing snapshots. Added a regression for a succeeded queue job linked to a completed `success` audit run.
 - This defect was found by code-path review; exact-head CI must pass before accepting the correction. Staging acceptance remains open.
+
+- [x] Queue-health diagnostics recognize the canonical audit status `success` (while retaining compatibility with `succeeded`) for successful run consistency, including mismatched non-success and still-running queue jobs. Exact-head CI passed on `4692e3a57c5d54998edd78456170f6d35354a228`; see [CI run 38420760154](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38420760154).

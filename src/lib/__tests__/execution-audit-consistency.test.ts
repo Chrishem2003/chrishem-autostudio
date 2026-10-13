@@ -43,6 +43,19 @@ describe("findExecutionAuditConsistencyIssues", () => {
     ]);
   });
 
+  test("flags non-success and running queue jobs linked to canonical success audit rows", () => {
+    expect(findExecutionAuditConsistencyIssues(
+      [
+        { id: "review-job", status: "needs_review", run_id: "run-success" },
+        { id: "running-job", status: "running", run_id: "run-success" },
+      ],
+      [{ id: "run-success", status: "success", finished_at: "2026-10-13T12:00:00Z" }],
+    )).toEqual([
+      { issue: "non_successful_job_with_successful_audit_run", jobId: "review-job", runId: "run-success" },
+      { issue: "running_job_with_terminal_audit_run", jobId: "running-job", runId: "run-success" },
+    ]);
+  });
+
   test("accepts the canonical manual/scheduled audit status success for a succeeded queue job", () => {
     expect(findExecutionAuditConsistencyIssues(
       [{

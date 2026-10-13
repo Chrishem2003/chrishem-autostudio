@@ -71,3 +71,10 @@ CI does not prove these external gates. P0 remains open; P1 is not authorized.
 
 - Full PostgreSQL smoke execution caught that the queue success-status correction had inadvertently removed explicit NULL-status validation in the finalization RPC.
 - Restored `_status IS NULL` rejection in the new forward migration while keeping the corrected application success-status comparison. Re-run the complete migration chain and all smoke tests.
+
+
+## Batch checkpoint — queue/audit status alignment
+
+- Fixed a diagnostic vocabulary mismatch: audit run success is stored as `success`, but queue success is stored as `succeeded`. The consistency analyzer now understands both values and includes regressions for canonical successful and mismatched queue/audit states.
+- Exact-head CI passed on `4692e3a57c5d54998edd78456170f6d35354a228`: unit/typecheck/build and PostgreSQL migration/concurrency smoke jobs. See [run 38420760154](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38420760154).
+- No staging checks were claimed as complete; queue worker and outbound transport remain disabled.
