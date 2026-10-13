@@ -17,7 +17,18 @@ export async function runCronTaskAfterAuthentication<T>(
   authenticate: (request: Request) => Promise<Response | null>,
   task: () => Promise<T>,
 ): Promise<{ denied: Response; result?: never } | { denied?: never; result: T }> {
-  const denied = await authenticate(request);
+  let denied: Response | null;
+  try {
+    denied = await authenticate(request);
+  } catch {
+    // Authentication adapter failures are not authorization successes. Return a
+    // generic, cache-safe failure and never construct or run the protected task.
+    return {
+      denied: withCronSecurityHeaders(
+        Response.json({ error: "Cron task is temporarily unavailable." }, { status: 503 }),
+      ),
+    };
+  }
   if (denied) {
     return { denied: withCronSecurityHeaders(denied) };
   }
