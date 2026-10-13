@@ -319,4 +319,4 @@ Do not mark any unchecked item as passed based on code inspection alone.
 
 - Added strict validation that every DNS result is a literal IPv4/IPv6 address and its declared address family matches the parsed address before the result can be pinned to a socket.
 - Added regression tests for hostname-shaped resolver output, IPv4/IPv6 family mismatches, and mixed answer sets containing malformed entries. Unsafe or malformed results fail closed before a network request.
-- CI must pass on the exact resulting commit. This is repository-level evidence only; deployed DNS/TLS/timeout/redirect smoke tests remain staging acceptance requirements.
+- Exact-head CI passed at commit `ad91a53bb5842ae5bd6cc6098e750c3eac7b9a73`: [run 38376964605](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38376964605). This is repository-level evidence only; deployed DNS/TLS/timeout/redirect smoke tests remain staging acceptance requirements.

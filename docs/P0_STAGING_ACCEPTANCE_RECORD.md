@@ -71,3 +71,10 @@ For `POST /api/public/cron/run-scheduled`, `POST /api/public/cron/run-execution-
 - Notes:
 
 **Do not enable production queue consumers or outbound transports based only on this record's existence.** P0 remains open until evidence is completed, reviewed, and explicitly accepted.
+
+## Repository CI checkpoint — 2026-10-13
+
+- Code checkpoint: `ad91a53bb5842ae5bd6cc6098e750c3eac7b9a73`
+- Exact-head CI: [run 38376964605 — passed](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38376964605)
+- Passed: typecheck, unit tests, targeted execution-integrity lint, production build, disposable PostgreSQL migration/permission smoke tests, and concurrent job-claim smoke tests.
+- Staging acceptance remains **NOT RUN**. This CI checkpoint does not authorize enabling queue workers/outbound transport or closing P0.
