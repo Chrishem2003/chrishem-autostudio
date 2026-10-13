@@ -66,6 +66,25 @@ describe("authenticated cron task guard", () => {
     expect(taskCalls).toBe(0);
   });
 
+  it("fails closed when authentication returns a malformed non-Response value", async () => {
+    let taskCalls = 0;
+    const result = await runCronTaskAfterAuthentication(
+      request(),
+      async () => ({ status: 200 } as any),
+      async () => {
+        taskCalls++;
+        return "must not run";
+      },
+    );
+
+    expect(result.denied).toBeInstanceOf(Response);
+    expect(result.denied?.status).toBe(503);
+    expect(result.denied?.headers.get("Cache-Control")).toBe("no-store");
+    expect(result.denied?.headers.get("Pragma")).toBe("no-cache");
+    expect(result.denied?.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(taskCalls).toBe(0);
+  });
+
   it("runs the worker exactly once after successful authentication", async () => {
     let authCalls = 0;
     let taskCalls = 0;
