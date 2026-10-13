@@ -239,3 +239,16 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Safe-to-retry classification now requires recognized preflight/configuration language at the beginning of the error detail; incidental phrases embedded in timeout/provider errors remain uncertain.
 - Regression tests cover misleading embedded phrases, preventing an ambiguous provider failure from being treated as proof that no external effect occurred.
 - This is unit/CI evidence only. Provider-level idempotency and interrupted-side-effect recovery still require controlled staging acceptance.
+
+## Exact-head checkpoint — 2026-10-13
+
+- [x] Latest exact-head CI passed on `c2312469606bba63977b0c56fa094b58064751e8`: typecheck, unit tests, execution-integrity lint, production build, and disposable PostgreSQL queue migration/concurrency smoke test. See [CI run 38358756478](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38358756478).
+- [x] Execution-worker responses now pass through a shared helper that enforces `Cache-Control: no-store`, `Pragma: no-cache`, and `X-Content-Type-Options: nosniff`; regression coverage verifies authorized response status/body preservation and required headers.
+- [x] Queue-health authentication denials use the same response helper rather than mutating headers directly.
+- [ ] Re-run exact-head CI after any later code/document changes.
+- [ ] Complete the staging Supabase migration and protected cron authentication checks.
+- [ ] Complete controlled staging provider idempotency, duplicate-effect, interrupted-worker, and audit-history acceptance checks.
+- [ ] Remediate or explicitly accept the documented repository-wide lint baseline before release.
+- [ ] P0 exit review and explicit P1 authorization.
+
+**Decision remains: P0 OPEN; P1 is not yet authorized.** Green CI validates code and disposable PostgreSQL behavior, but the staging environment and provider-side evidence have not been verified. Keep durable queue and outbound transport flags disabled until the open acceptance gates are evidenced.
