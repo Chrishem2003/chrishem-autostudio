@@ -32,7 +32,10 @@ export interface AuditConsistencyFinding {
   runId: string | null;
 }
 
+const isSuccessfulAuditRun = (status: string) => status === "success" || status === "succeeded";
+
 const TERMINAL_AUDIT_RUN_STATUSES = new Set([
+  "success",
   "succeeded",
   "failed",
   "cancelled",
@@ -90,15 +93,15 @@ export function findExecutionAuditConsistencyIssues(
       continue;
     }
 
-    if (run.status === "succeeded" && !run.finished_at) {
+    if (isSuccessfulAuditRun(run.status) && !run.finished_at) {
       findings.push({ issue: "successful_audit_run_without_completion_timestamp", jobId: job.id, runId: run.id });
     }
-    if (job.status === "succeeded" && (run.status !== "succeeded" || !run.finished_at)) {
+    if (job.status === "succeeded" && (!isSuccessfulAuditRun(run.status) || !run.finished_at)) {
       findings.push({ issue: "succeeded_job_without_confirmed_successful_run", jobId: job.id, runId: run.id });
     }
     if (
       ["queued", "failed", "needs_review", "dead_letter"].includes(job.status) &&
-      run.status === "succeeded" &&
+      isSuccessfulAuditRun(run.status) &&
       Boolean(run.finished_at)
     ) {
       findings.push({ issue: "non_successful_job_with_successful_audit_run", jobId: job.id, runId: run.id });

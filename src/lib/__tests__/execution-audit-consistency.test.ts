@@ -43,6 +43,22 @@ describe("findExecutionAuditConsistencyIssues", () => {
     ]);
   });
 
+  test("accepts the canonical manual/scheduled audit status success for a succeeded queue job", () => {
+    expect(findExecutionAuditConsistencyIssues(
+      [{
+        id: "successful-job",
+        status: "succeeded",
+        run_id: "run-success",
+        finished_at: "2026-10-13T12:00:01Z",
+      }],
+      [{
+        id: "run-success",
+        status: "success",
+        finished_at: "2026-10-13T12:00:00Z",
+      }],
+    )).toEqual([]);
+  });
+
   test("requires a confirmed successful audit run before accepting queue success", () => {
     expect(findExecutionAuditConsistencyIssues(
       [

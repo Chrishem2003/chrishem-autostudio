@@ -401,3 +401,10 @@ Do not mark any unchecked item as passed based on code inspection alone.
 
 
 - Regression follow-up: the first output-key-redaction CI run correctly exposed two tests that still expected sensitive keys to remain unchanged. Updated those assertions to the new redacted-key contract and to confirm nested prototype-named data remains inert; rerun exact-head CI before accepting.
+
+
+## Queue/audit success vocabulary alignment — 2026-10-13
+
+- Cross-path review found that manual and scheduled run finalization persists the canonical audit status `success`, while the queue status is `succeeded`. The queue-health consistency checker had only accepted `succeeded` for audit rows, which could report healthy completed jobs as inconsistent.
+- Updated diagnostics to recognize canonical `success` and retain `succeeded` compatibility for existing snapshots. Added a regression for a succeeded queue job linked to a completed `success` audit run.
+- This defect was found by code-path review; exact-head CI must pass before accepting the correction. Staging acceptance remains open.
