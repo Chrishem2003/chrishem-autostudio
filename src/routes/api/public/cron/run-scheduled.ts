@@ -292,6 +292,12 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
               runId: run.id,
               errorCode: finishError?.code ?? "NO_ROW_UPDATED",
             });
+            // The initial finalization request may have stalled long enough for
+            // this worker's lease to expire. Reconfirm ownership before any fallback
+            // audit mutation; otherwise leave the run for stale-run reconciliation.
+            if (!(await confirmScheduledLease())) {
+              throw new Error("Scheduled execution lease ownership was lost before finalization fallback.");
+            }
             const { data: fallbackRun, error: fallbackError } = await supabaseAdmin
               .from("run_logs")
               .update({
