@@ -55,4 +55,21 @@ describe("shared run finalization", () => {
     });
     expect(result.durationMs).toBe(0);
   });
+  it("redacts credentials, query URLs, and email addresses from persisted run summaries", () => {
+    const result = buildRunFinalization({
+      mode: "live",
+      startedAtMs,
+      finishedAt: new Date(2_000),
+      steps: [{
+        status: "failed",
+        detail: "Authorization: Bearer abcdefghijklmnop https://provider.example.test/send?token=private123 contact chris@example.com",
+      }],
+    });
+    expect(result.status).toBe("failed");
+    expect(result.errorSummary).not.toContain("abcdefghijklmnop");
+    expect(result.errorSummary).not.toContain("private123");
+    expect(result.errorSummary).not.toContain("chris@example.com");
+    expect(result.errorSummary).toContain("[REDACTED");
+  });
+
 });

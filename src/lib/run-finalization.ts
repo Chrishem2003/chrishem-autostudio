@@ -1,4 +1,5 @@
 import type { ExecutedStep, ExecutionMode } from "@/lib/execute-step.server";
+import { sanitizeExecutionError } from "@/lib/execution-error-sanitizer";
 
 export type RunFinalStatus = "success" | "failed" | "dry_run";
 
@@ -22,6 +23,6 @@ export function buildRunFinalization(input: {
     status: failedStep ? "failed" : input.mode === "dry" ? "dry_run" : "success",
     finishedAt: finishedAt.toISOString(),
     durationMs: Math.max(0, finishedAt.getTime() - input.startedAtMs),
-    errorSummary: failedStep ? failedStep.detail.slice(0, 500) : null,
+    errorSummary: failedStep ? sanitizeExecutionError(failedStep.detail, "Execution failed; inspect run details and verify the external outcome before retrying.") : null,
   };
 }

@@ -10,6 +10,7 @@ import { isDurableQueueEnabled } from "@/lib/runtime-feature-gates";
 import { parsePersistedWorkflow } from "@/lib/persisted-workflow";
 import { withPreparedExecutionPlan } from "@/lib/prepared-execution-gate";
 import { firstLivePreflightError } from "@/lib/live-execution-preflight";
+import { sanitizeExecutionError } from "@/lib/execution-error-sanitizer";
 
 const MAX_FLOW_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -221,8 +222,8 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
           status: step.status,
           outcome_state: outcomeState,
           duration_ms: Math.max(0, Math.round(step.ms)),
-          error_detail: step.status === "failed" ? step.detail.slice(0, 500) : null,
-          output_snapshot: { detail: step.detail.slice(0, 500), outcomeState, ...(step.outputs ? { outputs: step.outputs } : {}) },
+          error_detail: step.status === "failed" ? sanitizeExecutionError(step.detail, "Step failed; inspect the run details and verify the external outcome before retrying.") : null,
+          output_snapshot: { detail: sanitizeExecutionError(step.detail, "Step completed without safe detail."), outcomeState, ...(step.outputs ? { outputs: step.outputs } : {}) },
         }).eq("id", intentId).eq("run_id", run.id).select("id").maybeSingle();
         return !stepLogError && Boolean(persistedStep);
       },
