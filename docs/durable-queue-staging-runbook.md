@@ -149,3 +149,9 @@ The cron-secret-protected `/api/public/cron/execution-queue-health` response now
 - [ ] In staging, inject malformed trigger metadata and malformed/oversized idempotency keys through a controlled test adapter; confirm no external step starts and the job is parked for review.
 - [ ] Confirm a missing/blank fencing identity cannot be used to finalize a queue row and that the alerting/operations path makes the rejected finalization visible.
 - [ ] Verify the deployed database adapter returns the complete expected claim envelope for manual, scheduled, and webhook jobs.
+
+
+### Cron endpoint response-cache checks
+
+- [ ] Confirm authorized and denied responses from both `POST /api/public/cron/run-execution-job` and `GET /api/public/cron/execution-queue-health` include `Cache-Control: no-store`, `Pragma: no-cache`, and `X-Content-Type-Options: nosniff`.
+- [ ] Verify denied requests do not construct the worker or query queue state, and confirm an intermediary/browser cache never replays monitoring data.
