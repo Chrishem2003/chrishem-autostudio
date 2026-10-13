@@ -11,7 +11,7 @@ export function classifyExecutionOutcome(status: StepStatus, detail: string): Ou
   if (status === "dry_run") return "not_attempted";
 
   // These messages identify known failures before any provider request starts.
-  if (/\b(?:preflight failed|not connected|unsupported HTTP method|missing required configuration|invalid local configuration|no action was attempted)\b/i.test(detail)) {
+  if (/^\s*(?:preflight failed\b|[A-Za-z0-9 _-]{1,60}\s+is not connected\b|unsupported HTTP method\b|missing required configuration\b|invalid local configuration\b|no action was attempted\b)/i.test(detail)) {
     return "not_attempted";
   }
 
