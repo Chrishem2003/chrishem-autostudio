@@ -186,3 +186,13 @@ CI does not prove these external gates. P0 remains open; P1 is not authorized.
 - Gmail raw-message header encoding now treats all non-printable/non-ASCII subject values as encoded words; the regression test includes a NUL control character and verifies it never appears raw in the emitted Subject header.
 - Repository-wide `bun run lint` is still non-blocking and not green: the recorded baseline is 3,317 findings (3,311 errors and 6 warnings), predominantly Prettier formatting. A small `prefer-const` finding and a control-character regex finding were corrected in this batch; do not represent the full-repository lint gate as passed.
 - This checkpoint is code/CI evidence only. Hosted staging acceptance remains NOT RUN. P0 stays OPEN; do not merge, deploy, enable durable queue producers/workers or outbound transport, or authorize P1.
+
+
+## Exact-head CI — Gmail subject header-injection regression
+
+- Code head: `2f79c6a33cc71c9af29ec92081b672f41488aa01`.
+- Exact-head CI passed: [run 38474905024](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38474905024).
+- Both required jobs passed: typecheck, unit tests, targeted execution-integrity lint, production build, complete configured disposable PostgreSQL migration chain, RPC permission/idempotency/fencing checks, and concurrent-worker claim smoke test.
+- Extended the raw Gmail message regression to include NUL and CRLF followed by a forged `Bcc:` line. The decoded message must not contain that injected raw header line; the entire unsafe subject is encoded as a header word.
+- Repository-wide lint remains non-blocking and not green: 3,317 recorded findings (3,311 errors and 6 warnings), predominantly Prettier formatting. The small security-focused lint checks pass, but the full baseline still needs remediation or explicit release disposition.
+- Staging acceptance remains NOT RUN. P0 remains OPEN; do not merge, deploy, enable durable queue producers/workers or outbound transport, or authorize P1.
