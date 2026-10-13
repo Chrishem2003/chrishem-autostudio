@@ -241,6 +241,7 @@ export const Route = createFileRoute("/api/public/cron/execution-queue-health")(
           return Response.json({ ...summary, consistency, expiredLeases: expiredLeaseSummary, staleRuns, alerts }, {
             headers: {
               "Cache-Control": "no-store",
+              "Pragma": "no-cache",
               "X-Content-Type-Options": "nosniff",
             },
           });
@@ -252,7 +253,11 @@ export const Route = createFileRoute("/api/public/cron/execution-queue-health")(
           });
           return Response.json({ error: "Execution queue health is temporarily unavailable." }, {
             status: 503,
-            headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" },
+            headers: {
+              "Cache-Control": "no-store",
+              "Pragma": "no-cache",
+              "X-Content-Type-Options": "nosniff",
+            },
           });
         }
       },
