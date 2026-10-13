@@ -417,3 +417,10 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Cross-path review found that the per-automation lease heartbeat could throw a transport exception before setting the worker's `executionLeaseLost` flag. That could incorrectly allow the catch path to attempt audit recovery writes without verified lease ownership.
 - Added a fail-closed heartbeat confirmation helper that accepts only literal `true` and converts thrown transport errors to lost ownership. Queue-worker recovery then skips audit writes after either lease cannot be confirmed. Unit tests cover thrown errors and malformed responses.
 - Exact-head CI is required; staging interruption rehearsal remains open.
+
+
+## Intent-persistence lease-loss recovery guard — 2026-10-13
+
+- Cross-path review found that the queue worker's `persistIntent` callback renewed the queue and automation leases directly, but did not set the shared `executionLeaseLost` flag when either heartbeat failed. A subsequent catch path could therefore attempt recovery writes after ownership had become unverifiable.
+- Intent persistence now uses the shared dual-lease heartbeat function, which records lease loss before returning. The catch path consequently skips best-effort audit recovery when either fence fails, leaving reconciliation to the authoritative stale-run recovery path.
+- Exact-head CI and a controlled staging interruption rehearsal remain required. This is not staging evidence; P0 remains open.

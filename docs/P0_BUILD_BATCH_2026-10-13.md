@@ -84,3 +84,10 @@ CI does not prove these external gates. P0 remains open; P1 is not authorized.
 
 - Closed a lease-loss edge case: if the per-automation heartbeat RPC throws, the worker now normalizes that result to `false`, marks ownership lost, and skips best-effort audit recovery writes. Added helper-level regression tests for thrown and malformed responses.
 - This batch requires exact-head CI; real interrupted-worker rehearsal is still a P0 blocker.
+
+
+## Intent-persistence lease-loss recovery guard — 2026-10-13
+
+- Cross-path review found that the queue worker's `persistIntent` callback renewed the queue and automation leases directly, but did not set the shared `executionLeaseLost` flag when either heartbeat failed. A subsequent catch path could therefore attempt recovery writes after ownership had become unverifiable.
+- Intent persistence now uses the shared dual-lease heartbeat function, which records lease loss before returning. The catch path consequently skips best-effort audit recovery when either fence fails, leaving reconciliation to the authoritative stale-run recovery path.
+- Exact-head CI and a controlled staging interruption rehearsal remain required. This is not staging evidence; P0 remains open.

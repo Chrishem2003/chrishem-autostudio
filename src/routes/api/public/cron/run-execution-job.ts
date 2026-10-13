@@ -172,10 +172,10 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
               );
             },
             persistIntent: async (node, index) => {
-              const queueLeaseAlive = await context.heartbeat();
-              if (!queueLeaseAlive) return null;
-              const automationLeaseAlive = await heartbeatAutomationLease();
-              if (!automationLeaseAlive) return null;
+              // Persisting an intent is an audit mutation too: record lease loss in
+              // the shared flag so the catch path cannot recover/finalize this run
+              // through a worker whose queue or automation ownership is unverified.
+              if (!(await heartbeatBothLeases())) return null;
               const { data: intent, error } = await supabaseAdmin
                 .from("run_step_logs")
                 .insert({

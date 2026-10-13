@@ -144,3 +144,10 @@ For `POST /api/public/cron/run-scheduled`, `POST /api/public/cron/run-execution-
 
 - Queue worker now treats a thrown per-automation heartbeat RPC as lost lease ownership, not as an ordinary execution exception. The worker must not write recovery/finalization audit records when ownership cannot be verified.
 - Added unit coverage for thrown heartbeat errors and non-literal-true results. Exact-head CI and controlled staging interruption rehearsal are required; this record is not staging acceptance evidence.
+
+
+## Intent-persistence lease-loss recovery guard — 2026-10-13
+
+- Cross-path review found that the queue worker's `persistIntent` callback renewed the queue and automation leases directly, but did not set the shared `executionLeaseLost` flag when either heartbeat failed. A subsequent catch path could therefore attempt recovery writes after ownership had become unverifiable.
+- Intent persistence now uses the shared dual-lease heartbeat function, which records lease loss before returning. The catch path consequently skips best-effort audit recovery when either fence fails, leaving reconciliation to the authoritative stale-run recovery path.
+- Exact-head CI and a controlled staging interruption rehearsal remain required. This is not staging evidence; P0 remains open.
