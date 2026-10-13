@@ -170,10 +170,14 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
         }
       }
     }
+    // Execution audit writes are server-owned: authenticated clients retain
+    // owner-scoped read access, but cannot fabricate or rewrite run history.
+    // The automation owner was checked above before this privileged writer is used.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const startedAt = new Date().toISOString();
     const startedMs = Date.now();
     runStartedMs = startedMs;
-    const { data: run, error: runError } = await context.supabase
+    const { data: run, error: runError } = await supabaseAdmin
       .from("run_logs")
       .insert({
         automation_id: row.id,
@@ -196,7 +200,7 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
       startedAtMs: startedMs,
       maxRuntimeMs: MAX_FLOW_RUNTIME_MS,
       persistIntent: async (node, index) => {
-        const { data: attempt, error: intentError } = await context.supabase
+        const { data: attempt, error: intentError } = await supabaseAdmin
           .from("run_step_logs")
           .insert({
             run_id: run.id,
@@ -214,7 +218,7 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
         return { id: attempt.id };
       },
       persistOutcome: async (intentId, step, outcomeState) => {
-        const { data: persistedStep, error: stepLogError } = await context.supabase.from("run_step_logs").update({
+        const { data: persistedStep, error: stepLogError } = await supabaseAdmin.from("run_step_logs").update({
           status: step.status,
           outcome_state: outcomeState,
           duration_ms: Math.max(0, Math.round(step.ms)),
@@ -242,7 +246,7 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
     const finalization = buildRunFinalization({ steps, mode: data.mode, startedAtMs: startedMs });
     const finalStatus = finalization.status;
     const finishedAt = finalization.finishedAt;
-    const { data: finalizedRun, error: finishError } = await context.supabase
+    const { data: finalizedRun, error: finishError } = await supabaseAdmin
       .from("run_logs")
       .update({
         status: finalization.status,
@@ -279,7 +283,7 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
       if (activeRunId) {
         try {
           const failedAt = new Date().toISOString();
-          const { error: stepRecoveryError } = await context.supabase
+          const { error: stepRecoveryError } = await supabaseAdmin
             .from("run_step_logs")
             .update({
               status: "failed",
@@ -299,7 +303,7 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
             // could not be reconciled. A later stale-run pass must retry this safely.
             throw new Error("Interrupted step recovery failed; run remains open for reconciliation.");
           }
-          const { data: recoveredRun, error: auditError } = await context.supabase
+          const { data: recoveredRun, error: auditError } = await supabaseAdmin
             .from("run_logs")
             .update({
               status: "failed",
