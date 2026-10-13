@@ -40,7 +40,8 @@ For `POST /api/public/cron/run-scheduled`, `POST /api/public/cron/run-execution-
 - Run ID:
 - Provider sandbox/reference ID (non-secret):
 - Provider-side audit/history evidence link:
-- [ ] One controlled manual run completes and audit history matches its outcome.
+- [ ] One controlled manual run completes using server-owned audit writes and audit history matches its outcome.
+- [ ] Authenticated users can read only their own run/step history and cannot insert, update, or delete audit rows through the Supabase API.
 - [ ] One scheduled run follows enqueue-then-worker execution and audit history matches its outcome.
 - [ ] Replaying the same logical enqueue returns the existing job.
 - [ ] Reusing an idempotency key with changed logical input is rejected.

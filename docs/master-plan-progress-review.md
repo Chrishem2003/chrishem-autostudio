@@ -613,3 +613,11 @@ The hosted staging acceptance record is still NOT RUN. P0 remains open until a v
 ### Master-plan assessment
 
 The latest work strengthens P0 security and execution integrity; it does not complete the broader roadmap. Provider-agnostic AI, graph/branch semantics, broader real connector implementations, accessibility acceptance, teams/approvals, reliability analytics/API and P8 differentiators remain later roadmap items and must not be treated as P0 release blockers unless explicitly brought into the release scope.
+
+
+## Audit-write permission compatibility fix — 2026-10-13
+
+- The audit-history migration correctly removes direct authenticated write privileges. A follow-up call-path audit found manual execution still used the user-scoped client for audit writes, which would fail under the hardened grants.
+- Moved manual run/step audit insertion, outcome persistence, finalization and interruption recovery to the server-only Supabase admin client after the automation is verified against the authenticated user's ID. User-scoped audit reads and user-owned automation updates remain on the authenticated client.
+- Exact-head CI passed at `79d681b97a1a3f56dec18f1a6f507e021f2f5f87` ([run 38374624825](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38374624825)).
+- Staging acceptance still must exercise manual execution and verify owner-scoped audit reads under the actual Supabase roles. P0 remains open.

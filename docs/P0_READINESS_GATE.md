@@ -305,3 +305,11 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - The new forward migration `20261013100000_lock_execution_audit_writes.sql` restricts authenticated clients to owner-scoped SELECT access for `run_logs` and `run_step_logs`; server-owned writes remain available to `service_role`.
 - The disposable smoke suite verifies client INSERT/UPDATE/DELETE privileges are absent, service-role writes remain available, and authenticated write policies have been removed.
 - This checkpoint is code/CI evidence only. Hosted staging migration and audit/recovery acceptance remain open; P0 is not passed and P1 is not authorized.
+
+
+## Manual execution compatibility with server-owned audit writes — 2026-10-13
+
+- The new audit-table grants intentionally block authenticated INSERT/UPDATE/DELETE. A code review found the manual flow executor still attempted to persist run and step audit records through the authenticated Supabase client.
+- Updated the server-side manual executor to use the privileged server-only client for run/step audit inserts, finalization, and interrupted-run recovery, after the automation has been loaded with the authenticated user's ownership filter. Owner-scoped history reads and user-owned automation updates remain on the authenticated client.
+- Exact-head CI passed after the correction at commit `79d681b97a1a3f56dec18f1a6f507e021f2f5f87`: [run 38374624825](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38374624825).
+- This verifies typecheck/tests/build and disposable PostgreSQL smoke tests, not live Supabase runtime behavior. Staging manual/dry/live run checks must confirm audit writes work and history remains owner-scoped before P0 can close.
