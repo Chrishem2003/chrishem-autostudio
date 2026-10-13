@@ -224,3 +224,11 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Hardened the worker to reject malformed claim retry counters before invoking the executor; invalid metadata is finalized to `needs_review` when possible, and a rejected finalization is reported without executing the job.
 - Both CI jobs passed for implementation commit `c7d2017b3451ce8f489142f70dacfc76d851aef8`: [GitHub Actions run 38354868220](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38354868220). Documentation changes and any later code changes still require exact-head CI.
 - These are code and disposable-CI checks only. All staging acceptance gates remain open; do not enable durable queue consumers or outbound transport.
+
+
+## Worker claim-envelope validation — 2026-10-13
+
+- The worker now validates trigger type and idempotency-key shape before calling the executor; malformed request metadata is routed to `needs_review` where the fencing identity remains usable.
+- Missing/blank job identity, automation identity, or worker token fails closed without attempting finalization with an untrusted fencing identity.
+- Regression tests assert invalid claims never invoke the executor. Exact-head CI passed after updating the shared test fixture to include the required trigger type: [run 38355329532](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38355329532).
+- This protects the worker boundary but does not prove staging adapter correctness or provider idempotency. P0 remains open.
