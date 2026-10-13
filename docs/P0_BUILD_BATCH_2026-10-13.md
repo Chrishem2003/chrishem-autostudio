@@ -17,3 +17,10 @@ Typecheck, full unit suite, targeted execution-integrity lint, production build,
 The staging acceptance record remains NOT RUN. Still required: hosted non-production Supabase migration and permission checks; deployed cron authentication checks; provider-sandbox exactly-once/idempotency evidence; interrupted-worker and recovery rehearsal; deployed outbound transport TLS/DNS/redirect/timeout proof; audit-history review; second-person acceptance; and resolution or explicit review of the repository-wide lint baseline.
 
 CI does not prove these external gates. P0 remains open; P1 is not authorized.
+
+
+## Lease-recovery stale-finalizer regression — 2026-10-13
+
+- Extended the disposable PostgreSQL smoke test to simulate a worker attempting to finalize after its lease has expired and recovery has already moved the job to `needs_review`.
+- The test now requires the stale worker's original token to be rejected and asserts that neither the recovered queue status nor the reconciled audit run can be overwritten.
+- This supplements the existing checks for expired-lease recovery, uncertain in-flight steps, and no automatic replay. It is still CI evidence only; deployed staging recovery and provider-side duplicate-effect rehearsal remain mandatory.

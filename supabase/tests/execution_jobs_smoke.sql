@@ -625,6 +625,21 @@ begin
     raise exception 'Expired lease was not safely moved to needs_review';
   end if;
 
+  -- A worker that resumes after recovery must not overwrite the safety hold,
+  -- even if it still presents the token from its original claim.
+  if public.finish_execution_job(
+    expired_job.id, claimed.worker_token, 'failed',
+    'Late stale-worker finalization must be rejected', null
+  ) then
+    raise exception 'Expired worker overwrote a recovered needs_review job';
+  end if;
+  if (select status from public.execution_jobs where id = expired_job.id) <> 'needs_review' then
+    raise exception 'Late stale-worker finalization changed the recovered queue status';
+  end if;
+  if (select status from public.run_logs where id = '00000000-0000-4000-8000-000000000010') <> 'failed' then
+    raise exception 'Late stale-worker finalization changed the reconciled audit run';
+  end if;
+
   -- needs_review is a terminal safety hold, not a retry queue. Repeated
   -- claims must not replay a job whose external side effect may be uncertain.
   if exists (
