@@ -78,3 +78,11 @@ For `POST /api/public/cron/run-scheduled`, `POST /api/public/cron/run-execution-
 - Exact-head CI: [run 38376964605 — passed](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38376964605)
 - Passed: typecheck, unit tests, targeted execution-integrity lint, production build, disposable PostgreSQL migration/permission smoke tests, and concurrent job-claim smoke tests.
 - Staging acceptance remains **NOT RUN**. This CI checkpoint does not authorize enabling queue workers/outbound transport or closing P0.
+
+
+## Repository CI checkpoint — 2026-10-13 (audit-error redaction)
+
+- Code checkpoint: `ea5efc1ffe9f000aea13ae50850af591933302e0`
+- Exact-head CI: [run 38379158465 — passed](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38379158465)
+- Passed: typecheck, unit tests, targeted execution-integrity lint, production build, disposable PostgreSQL migration/permission smoke tests, and concurrent job-claim smoke tests.
+- The change sanitizes manual step audit details and shared run error summaries before persistence. It does not establish staging acceptance or authorize enabling queue workers/outbound transport; staging status remains **NOT RUN**.

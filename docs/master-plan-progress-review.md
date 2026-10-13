@@ -628,3 +628,11 @@ The latest work strengthens P0 security and execution integrity; it does not com
 - Strengthened `resolvePublicTarget` to reject malformed resolver answers and address-family mismatches for every returned DNS record before selecting a pinned socket destination.
 - Added regression coverage for hostname-shaped results, IPv4/IPv6 family mismatches, and mixed public/malformed answers. Existing private-address rejection and DNS pinning tests remain in place.
 - Exact-head CI passed at `ad91a53bb5842ae5bd6cc6098e750c3eac7b9a73` ([run 38376964605](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38376964605)). Staging must still verify real DNS pinning, TLS hostname validation, timeout and redirect behavior. Outbound transport remains disabled pending the release gate.
+
+
+## Sensitive audit-error redaction — 2026-10-13
+
+- Fixed a cross-path inconsistency in audit-data sanitization: manual run/step persistence and shared run finalization now sanitize untrusted step-error details before writing durable audit fields.
+- Added regression coverage for bearer tokens, query-bearing URLs and email addresses in run summaries.
+- Exact-head CI passed at `ea5efc1ffe9f000aea13ae50850af591933302e0` ([run 38379158465](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38379158465)).
+- All hosted staging, provider-side duplicate-effect, interrupted-worker, deployed transport and independent-review gates remain open. P0 is not passed; P1 is not authorized.

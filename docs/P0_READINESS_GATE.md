@@ -320,3 +320,11 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Added strict validation that every DNS result is a literal IPv4/IPv6 address and its declared address family matches the parsed address before the result can be pinned to a socket.
 - Added regression tests for hostname-shaped resolver output, IPv4/IPv6 family mismatches, and mixed answer sets containing malformed entries. Unsafe or malformed results fail closed before a network request.
 - Exact-head CI passed at commit `ad91a53bb5842ae5bd6cc6098e750c3eac7b9a73`: [run 38376964605](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38376964605). This is repository-level evidence only; deployed DNS/TLS/timeout/redirect smoke tests remain staging acceptance requirements.
+
+
+## Sensitive execution-error audit redaction — 2026-10-13
+
+- Review found that synchronous manual execution wrote raw step detail into `run_step_logs.error_detail` / `output_snapshot.detail`, and the shared finalization helper could write raw failure detail into `run_logs.error_summary`. This was inconsistent with the queue worker's existing redaction boundary.
+- Centralized sanitization for shared run summaries and applied the same sanitization before manual step details are persisted. The redaction covers authorization tokens, credential-like assignments, query-bearing URLs, JWTs and email addresses; safe static fallback text is used when the remaining detail is not useful.
+- Added regression coverage for sensitive values in persisted run summaries. Exact-head CI passed at commit `ea5efc1ffe9f000aea13ae50850af591933302e0`: [run 38379158465](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38379158465).
+- This is source/CI evidence only. Actual staging checks, second-person review and all previously open P0 acceptance gates remain outstanding; P0 stays open.
