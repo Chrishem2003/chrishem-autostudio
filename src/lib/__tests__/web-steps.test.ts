@@ -293,6 +293,21 @@ describe("outbound HTTP resilience with injected transport", () => {
 
 
 describe("DNS pinning resolver contract", () => {
+  it("rejects a mixed public/private DNS answer set instead of selecting the public entry", async () => {
+    await expect(resolvePublicTarget("mixed-private.example", async () => [
+      { address: "8.8.8.8", family: 4 },
+      { address: "127.0.0.1", family: 4 },
+    ])).rejects.toThrow(/private, local, or special-use address/i);
+  });
+
+  it("rejects mixed IPv4/IPv6 answers if any address is non-global", async () => {
+    await expect(resolvePublicTarget("mixed-v6-private.example", async () => [
+      { address: "2001:4860:4860::8888", family: 6 },
+      { address: "fd00::1", family: 6 },
+    ])).rejects.toThrow(/private, local, or special-use address/i);
+  });
+
+
   it("rejects resolver results that are hostnames rather than literal IP addresses", async () => {
     await expect(resolvePublicTarget("malformed.example", async () => [
       { address: "public.example", family: 4 },
