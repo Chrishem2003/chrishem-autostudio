@@ -443,3 +443,9 @@ Do not mark any unchecked item as passed based on code inspection alone.
 
 - Cross-path review found the legacy direct scheduler did not renew its automation lease around long provider actions or verify ownership before writing step outcomes, final summaries, and interrupted-run recovery. It now renews the shared automation lease before each action, keeps it alive during provider calls, and fails closed on lease loss before audit mutations; the catch path leaves unresolved history to stale-run reconciliation when ownership cannot be confirmed.
 - Exact-head CI and controlled staging interruption/lease-expiry rehearsal remain required. This is not hosted staging evidence; P0 remains open and queue/outbound flags stay disabled.
+
+
+## Manual execution lease fencing — 2026-10-13
+
+- Manual live execution now renews its automation lease before each provider action, keeps the lease alive during long provider calls, and checks lease ownership before step-intent/outcome writes and parent-run finalization. If ownership cannot be confirmed, catch-path recovery writes are skipped so stale-run reconciliation can handle the uncertain run.
+- This is code-level hardening only. Exact-head CI and controlled staging interruption/lease-expiry testing remain required; P0 stays open and durable queue/outbound transport flags remain disabled.
