@@ -9,6 +9,12 @@ export async function runCronTaskAfterAuthentication<T>(
   task: () => Promise<T>,
 ): Promise<{ denied: Response; result?: never } | { denied?: never; result: T }> {
   const denied = await authenticate(request);
-  if (denied) return { denied };
+  if (denied) {
+    const headers = new Headers(denied.headers);
+    headers.set("Cache-Control", "no-store");
+    headers.set("Pragma", "no-cache");
+    headers.set("X-Content-Type-Options", "nosniff");
+    return { denied: new Response(denied.body, { status: denied.status, statusText: denied.statusText, headers }) };
+  }
   return { result: await task() };
 }
