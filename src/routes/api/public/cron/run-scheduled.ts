@@ -67,8 +67,21 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
             const wf = prepared.workflow as unknown as Workflow;
             const trigger = wf.nodes.find((node) => node.defId === "trigger.schedule");
             if (!trigger) return { prepared, trigger: null, cadence: null, due: false, preflightError: null };
-            const cadence = trigger.config?.["cadence"] || "Hourly";
-            const due = isDue(cadence, row.last_run_at ? new Date(row.last_run_at) : null, now, trigger.config?.["timezone"]);
+            // Persisted workflow configuration is untrusted input. Match the
+            // queue producer's normalization contract instead of passing arbitrary
+            // JSON values into schedule evaluation or the idempotency-key helper.
+            const cadenceValue = trigger.config?.["cadence"];
+            const cadence = typeof cadenceValue === "string" ? cadenceValue : "Hourly";
+            const timezoneValue = trigger.config?.["timezone"];
+            const timezone = typeof timezoneValue === "string" && timezoneValue.trim()
+              ? timezoneValue
+              : "UTC";
+            const due = isDue(
+              cadence,
+              row.last_run_at ? new Date(row.last_run_at) : null,
+              now,
+              timezone,
+            );
             if (!due) return { prepared, trigger, cadence, due: false, preflightError: null };
             const preflightError = await firstLivePreflightError(prepared.plan.nodes, row.user_id, livePreflightError);
             return { prepared, trigger, cadence, due, preflightError };
