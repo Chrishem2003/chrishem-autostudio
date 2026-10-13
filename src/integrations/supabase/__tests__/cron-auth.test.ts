@@ -37,6 +37,24 @@ describe("authenticateCronRequest", () => {
     }
   });
 
+  it("rejects a comma-joined current and previous secret instead of treating it as credentials", async () => {
+    process.env.LOVABLE_CRON_SECRET = "current-secret";
+    process.env.LOVABLE_CRON_SECRET_PREVIOUS = "previous-secret";
+
+    const response = await authenticateCronRequest(
+      request("Bearer current-secret,Bearer previous-secret"),
+    );
+    expect(response?.status).toBe(401);
+  });
+
+  it("does not accept the previous secret when the rotation fallback is unset", async () => {
+    process.env.LOVABLE_CRON_SECRET = "current-secret";
+    delete process.env.LOVABLE_CRON_SECRET_PREVIOUS;
+
+    const response = await authenticateCronRequest(request("Bearer previous-secret"));
+    expect(response?.status).toBe(401);
+  });
+
   it("accepts the current secret and returns null for an authorized request", async () => {
     process.env.LOVABLE_CRON_SECRET = "current-secret";
     process.env.LOVABLE_CRON_SECRET_PREVIOUS = "previous-secret";
