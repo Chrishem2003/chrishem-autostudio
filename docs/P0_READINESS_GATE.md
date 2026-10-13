@@ -391,3 +391,10 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Cross-path audit sanitization now builds sanitized objects with a null prototype, so attacker-controlled keys such as `__proto__` are treated as inert data rather than prototype setters.
 - Added regression coverage for prototype-named keys, sensitive nested values, and serialization. Exact-head CI must pass before this checkpoint is accepted.
 - This is repository-level validation only; staging acceptance remains open and queue/outbound flags remain disabled.
+
+
+## Output property-name redaction — 2026-10-13
+
+- Extended audit sanitization to inspect object property names as untrusted provider output, not just values. Sensitive-key labels are replaced and URL/email/secret-like content in other keys is sanitized before persistence.
+- Added regression coverage for query-bearing URLs, email addresses, sensitive labels, and preservation of a safe field. Exact-head CI must pass before accepting this checkpoint.
+- Staging acceptance remains open; queue consumers and outbound transports stay disabled.

@@ -92,6 +92,23 @@ describe("sanitizeExecutionAuditValue", () => {
     expect(JSON.stringify(result)).toContain("[CIRCULAR]");
     expect(JSON.stringify(result)).toContain("[TRUNCATED]");
   });
+  test("redacts sensitive data embedded in output property names", () => {
+    const input = {
+      "https://provider.test/send?token=secret": "ordinary value",
+      "user@example.com": "ordinary value",
+      "api_key": "sensitive value",
+      "safeLabel": "visible",
+    };
+    const result = sanitizeExecutionAuditValue(input) as Record<string, unknown>;
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("provider.test");
+    expect(serialized).not.toContain("token=secret");
+    expect(serialized).not.toContain("user@example.com");
+    expect(serialized).not.toContain("sensitive value");
+    expect(result["[REDACTED_KEY]"]).toBe("[REDACTED_SECRET]");
+    expect(result.safeLabel).toBe("visible");
+  });
+
   test("preserves prototype-named output keys as inert data", () => {
     const input = JSON.parse('{"__proto__":{"token":"secret-value"},"constructor":{"safe":"visible"}}');
     const result = sanitizeExecutionAuditValue(input) as Record<string, unknown>;

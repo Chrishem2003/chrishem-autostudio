@@ -60,7 +60,12 @@ export function sanitizeExecutionAuditValue(value: unknown): unknown {
     // not as mutators of the returned object's prototype.
     const result: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
     for (const [childKey, childValue] of Object.entries(item).slice(0, 50)) {
-      result[childKey.slice(0, 100)] = visit(childValue, depth + 1, childKey);
+      // Object keys are untrusted output too: providers can put tokens, URLs,
+      // or personal data in a key rather than its value.
+      const safeKey = SENSITIVE_OUTPUT_KEY.test(childKey)
+        ? "[REDACTED_KEY]"
+        : sanitizeExecutionError(childKey.slice(0, 100), "[REDACTED_KEY]");
+      result[safeKey] = visit(childValue, depth + 1, childKey);
     }
     return result;
   };
