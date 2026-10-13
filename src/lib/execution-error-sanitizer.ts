@@ -10,7 +10,7 @@ const EMAIL = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
  */
 export function sanitizeExecutionError(value: unknown, fallback: string): string {
   if (typeof value !== "string") return fallback;
-  let sanitized = value
+  const sanitized = value
     .replace(BEARER_TOKEN, "[REDACTED_AUTH]")
     .replace(JWT, "[REDACTED_TOKEN]")
     .replace(SECRET_ASSIGNMENT, "[REDACTED_SECRET]")
