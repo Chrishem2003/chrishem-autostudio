@@ -44,6 +44,28 @@ describe("authenticated cron task guard", () => {
     expect(dependencyConstructionCalls).toBe(0);
   });
 
+  it("fails closed when authentication throws and never runs the protected task", async () => {
+    let taskCalls = 0;
+    const result = await runCronTaskAfterAuthentication(
+      request(),
+      async () => { throw new Error("sensitive auth transport detail"); },
+      async () => {
+        taskCalls++;
+        return "must not run";
+      },
+    );
+
+    expect(result.denied).toBeInstanceOf(Response);
+    expect(result.denied?.status).toBe(503);
+    expect(result.denied?.headers.get("Cache-Control")).toBe("no-store");
+    expect(result.denied?.headers.get("Pragma")).toBe("no-cache");
+    expect(result.denied?.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(await result.denied?.text()).toBe(JSON.stringify({
+      error: "Cron task is temporarily unavailable.",
+    }));
+    expect(taskCalls).toBe(0);
+  });
+
   it("runs the worker exactly once after successful authentication", async () => {
     let authCalls = 0;
     let taskCalls = 0;
