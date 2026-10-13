@@ -29,6 +29,7 @@ export function parseClaimedExecutionJob(value: unknown): ClaimedExecutionJob {
   let maxAttempts: unknown;
   let workerToken: unknown;
   let idempotencyKey: unknown;
+  let hasPayload = false;
   try {
     const row = value as ClaimedJobRow;
     id = row.id;
@@ -39,6 +40,7 @@ export function parseClaimedExecutionJob(value: unknown): ClaimedExecutionJob {
     maxAttempts = row.max_attempts;
     workerToken = row.worker_token;
     idempotencyKey = row.idempotency_key;
+    hasPayload = Object.prototype.hasOwnProperty.call(row, "payload");
   } catch {
     throw new Error("Queue claim row contains invalid fields.");
   }
@@ -61,6 +63,13 @@ export function parseClaimedExecutionJob(value: unknown): ClaimedExecutionJob {
     attempts > maxAttempts
   ) {
     throw new Error("Queue claim row has invalid attempt counters.");
+  }
+
+  // Missing payloads are protocol errors, not the public enqueue helper's
+  // intentional "omitted payload means {}" default. A persisted queue row must
+  // carry its own payload so schema drift cannot silently alter execution input.
+  if (!hasPayload || payload === undefined) {
+    throw new Error("Queue claim row has an invalid payload.");
   }
 
   const payloadValidation = validateExecutionJobPayload(payload);
