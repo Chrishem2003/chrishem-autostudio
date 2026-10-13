@@ -24,8 +24,13 @@ export function normalizeScheduledTriggerConfig(
   }
 
   const values = config as Record<string, unknown>;
-  const cadence = typeof values.cadence === "string" ? values.cadence : "Hourly";
-  if (!SUPPORTED_SCHEDULE_CADENCES.has(cadence)) return null;
+  const cadenceValue = values.cadence;
+  const cadence = cadenceValue === undefined || cadenceValue === null
+    ? "Hourly"
+    : typeof cadenceValue === "string"
+      ? cadenceValue
+      : null;
+  if (cadence === null || !SUPPORTED_SCHEDULE_CADENCES.has(cadence)) return null;
 
   const candidateTimezone =
     typeof values.timezone === "string" ? values.timezone.trim() : "";
