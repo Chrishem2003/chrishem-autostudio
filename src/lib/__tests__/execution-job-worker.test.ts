@@ -441,6 +441,52 @@ describe("processOneExecutionJob", () => {
     expect(calls.finished).toHaveLength(0);
   });
 
+  test("does not finalize a success if ownership is lost during execution", async () => {
+    let heartbeatCalls = 0;
+    let executeCalls = 0;
+    const { deps, calls } = dependencies({
+      heartbeat: async () => {
+        heartbeatCalls++;
+        return heartbeatCalls === 1;
+      },
+      execute: async (_job, context) => {
+        executeCalls++;
+        expect(await context.heartbeat()).toBe(false);
+        return { status: "succeeded", sideEffectCertainty: "effect_confirmed" };
+      },
+    });
+
+    expect(await processOneExecutionJob(deps)).toEqual({
+      outcome: "lease_lost",
+      jobId: "job-1",
+    });
+    expect(executeCalls).toBe(1);
+    expect(heartbeatCalls).toBe(2);
+    expect(calls.finished).toHaveLength(0);
+  });
+
+  test("does not finalize when an in-execution heartbeat transport fails", async () => {
+    let heartbeatCalls = 0;
+    const { deps, calls } = dependencies({
+      heartbeat: async () => {
+        heartbeatCalls++;
+        if (heartbeatCalls === 2) throw new Error("database connection lost");
+        return true;
+      },
+      execute: async (_job, context) => {
+        expect(await context.heartbeat()).toBe(false);
+        return { status: "succeeded", sideEffectCertainty: "effect_confirmed" };
+      },
+    });
+
+    expect(await processOneExecutionJob(deps)).toEqual({
+      outcome: "lease_lost",
+      jobId: "job-1",
+    });
+    expect(heartbeatCalls).toBe(2);
+    expect(calls.finished).toHaveLength(0);
+  });
+
   test("does not enter executor code when heartbeat returns a truthy non-boolean", async () => {
     let executeCalls = 0;
     const { deps, calls } = dependencies({
