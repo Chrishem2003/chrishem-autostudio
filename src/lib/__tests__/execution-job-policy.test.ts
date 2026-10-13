@@ -111,4 +111,38 @@ describe("decideExecutionRetry", () => {
     expect(certaintyReads).toBe(1);
   });
 
+
+  test("fails closed when an attempt-counter getter throws", () => {
+    const input = {
+      sideEffectCertainty: "not_attempted",
+      get attempts() {
+        throw new Error("hostile attempts getter");
+      },
+      maxAttempts: 3,
+    };
+    const decision = decideExecutionRetry(input as any);
+    expect(decision.status).toBe("needs_review");
+    expect(decision.retryAllowed).toBe(false);
+  });
+
+  test("snapshots each attempt counter only once", () => {
+    let attemptsReads = 0;
+    let maxAttemptsReads = 0;
+    const input = {
+      sideEffectCertainty: "not_attempted",
+      get attempts() {
+        attemptsReads++;
+        return attemptsReads === 1 ? 1 : 3;
+      },
+      get maxAttempts() {
+        maxAttemptsReads++;
+        return maxAttemptsReads === 1 ? 3 : 1;
+      },
+    };
+    const decision = decideExecutionRetry(input as any);
+    expect(decision.status).toBe("queued");
+    expect(attemptsReads).toBe(1);
+    expect(maxAttemptsReads).toBe(1);
+  });
+
 });
