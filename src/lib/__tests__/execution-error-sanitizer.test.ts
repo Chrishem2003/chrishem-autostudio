@@ -92,4 +92,16 @@ describe("sanitizeExecutionAuditValue", () => {
     expect(JSON.stringify(result)).toContain("[CIRCULAR]");
     expect(JSON.stringify(result)).toContain("[TRUNCATED]");
   });
+  test("fails closed for throwing getters and hostile proxy traps", () => {
+    const getterValue = Object.defineProperty({}, "message", {
+      enumerable: true,
+      get() { throw new Error("untrusted getter"); },
+    });
+    const proxyValue = new Proxy({}, {
+      ownKeys() { throw new Error("untrusted proxy"); },
+    });
+    expect(sanitizeExecutionAuditValue(getterValue)).toBe("[UNAVAILABLE]");
+    expect(sanitizeExecutionAuditValue(proxyValue)).toBe("[UNAVAILABLE]");
+  });
+
 });

@@ -63,5 +63,11 @@ export function sanitizeExecutionAuditValue(value: unknown): unknown {
     return result;
   };
 
-  return visit(value, 0);
+  try {
+    return visit(value, 0);
+  } catch {
+    // Proxies and accessor properties are untrusted runtime input. A malformed
+    // object must not abort the workflow while audit data is being sanitized.
+    return "[UNAVAILABLE]";
+  }
 }
