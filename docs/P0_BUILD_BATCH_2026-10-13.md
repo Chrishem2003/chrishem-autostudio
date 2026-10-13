@@ -210,3 +210,15 @@ CI does not prove these external gates. P0 remains open; P1 is not authorized.
 - [ ] Reconcile branch against current `main` (PR was reported dirty and 157 commits behind), then rerun CI on final synchronized head.
 
 **Decision unchanged: P0 OPEN; P1 is not authorized.** Do not merge, deploy, or enable durable queue producers/workers or outbound transport. This checkpoint records repository CI only, not hosted staging acceptance.
+
+## Exact-head verification — DNS-returned NAT64 SSRF regression (2026-10-13)
+
+- [x] Exact-head CI passed on `60f25130989ac9328911d69fe534ac657b577331`: [run 38476054304](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38476054304).
+- [x] Both required jobs passed: typecheck, unit tests, targeted execution-integrity lint, production build, and disposable PostgreSQL migration/permission/idempotency/fencing/concurrency smoke checks.
+- [x] Added resolver-boundary tests proving well-known/local-use NAT64 IPv6 answers are rejected even when supplied by DNS, including a mixed public-plus-NAT64 answer set.
+- [ ] Hosted staging migration/RLS/RPC and deployed cron-auth acceptance remain open.
+- [ ] Provider sandbox duplicate-effect/idempotency proof, interrupted-worker recovery rehearsal, deployed outbound HTTP/TLS/DNS/redirect/timeout verification, audit-history inspection, and independent acceptance remain open.
+- [ ] Repository-wide lint disposition remains open (recorded baseline: 3,317 findings, 3,311 errors and 6 warnings, predominantly formatting).
+- [ ] Branch synchronization against current `main` remains open; do not merge while the PR is dirty/behind, and rerun CI on the final synchronized head.
+
+**Release decision unchanged: P0 OPEN; P1 is not authorized.** This checkpoint verifies repository code only. Do not merge, deploy, or enable durable queue producers/workers or outbound transport.
