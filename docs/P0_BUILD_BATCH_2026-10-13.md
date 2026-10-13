@@ -32,3 +32,10 @@ CI does not prove these external gates. P0 remains open; P1 is not authorized.
 - Added a bounded heartbeat wait (15 seconds by default). A timeout, rejection, malformed result, or explicit lost-lease response is treated as lost ownership; the provider action is allowed to settle, then the helper throws so the caller does not report success or blindly retry an uncertain effect.
 - Added regression tests for a never-settling heartbeat and invalid timeout configuration. Exact-head CI is required before treating this change as verified.
 - This is repository code hardening only. Hosted staging acceptance remains NOT RUN; P0 remains open and P1 is not authorized.
+
+
+## Scheduled execution audit redaction parity — 2026-10-13
+
+- Review found that the legacy direct scheduled executor still wrote raw step detail/output snapshots, unlike manual and durable queue paths.
+- Aligned scheduled audit persistence with shared error and nested-output sanitizers to reduce the risk of storing credentials or sensitive provider outputs in durable history.
+- Exact-head CI required; staging audit-history acceptance remains open.

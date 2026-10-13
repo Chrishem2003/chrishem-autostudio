@@ -9,6 +9,7 @@ import { buildRunFinalization } from "@/lib/run-finalization";
 import { enqueueExecutionJob } from "@/lib/execution-job-queue.server";
 import { isDurableQueueEnabled } from "@/lib/runtime-feature-gates";
 import { livePreflightError } from "@/lib/execute-step.server";
+import { sanitizeExecutionAuditValue, sanitizeExecutionError } from "@/lib/execution-error-sanitizer";
 import { firstLivePreflightError } from "@/lib/live-execution-preflight";
 
 const MAX_SCHEDULED_FLOW_RUNTIME_MS = 4 * 60 * 1000;
@@ -204,8 +205,16 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
                 status: step.status,
                 outcome_state: outcomeState,
                 duration_ms: Math.max(0, Math.round(step.ms)),
-                error_detail: step.status === "failed" ? step.detail.slice(0, 500) : null,
-                output_snapshot: { detail: step.detail.slice(0, 500), outcomeState, ...(step.outputs ? { outputs: step.outputs } : {}) },
+                error_detail: step.status === "failed"
+                  ? sanitizeExecutionError(step.detail, "Step failed; inspect provider state before retrying.")
+                  : null,
+                output_snapshot: {
+                  detail: sanitizeExecutionError(step.detail, "Step completed without safe detail."),
+                  outcomeState,
+                  ...(step.outputs
+                    ? { outputs: sanitizeExecutionAuditValue(step.outputs) as import("@/integrations/supabase/types").Json }
+                    : {}),
+                },
               }).eq("id", intentId).eq("run_id", run.id).select("id").maybeSingle();
               return !stepError && Boolean(persistedStep);
             },

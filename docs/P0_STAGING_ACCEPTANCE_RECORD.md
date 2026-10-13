@@ -102,3 +102,9 @@ For `POST /api/public/cron/run-scheduled`, `POST /api/public/cron/run-execution-
 - Source review found that an unresolved heartbeat request could keep the worker waiting indefinitely after the provider action settled.
 - Added a bounded heartbeat timeout and regression tests. This checkpoint is source-only until exact-head CI reports success.
 - Hosted staging acceptance remains **NOT RUN**. Do not enable queue producers/workers or outbound transport based on this change alone.
+
+
+## Scheduled-run audit redaction parity checkpoint
+
+- The legacy direct scheduled execution path now sanitizes persisted step error details and nested output snapshots using the same shared sanitizers as manual and queue execution.
+- Verify with a controlled staging run that credential-like values are not persisted. This code checkpoint alone does not complete staging acceptance.

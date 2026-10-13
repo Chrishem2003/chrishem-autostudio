@@ -344,3 +344,10 @@ Do not mark any unchecked item as passed based on code inspection alone.
 - Source review identified an unbounded wait when an automation/queue heartbeat promise never settled. The keepalive helper now races each heartbeat against a bounded timeout (15 seconds by default) and treats timeout as lost lease ownership.
 - Added regression coverage for a stalled heartbeat request and invalid timeout values. The action is still awaited before returning an uncertainty error because a dispatched external side effect cannot safely be cancelled or assumed absent.
 - Exact-head CI must pass after this change. This does not replace deployed staging checks or provider-side idempotency evidence; P0 remains open and P1 is not authorized.
+
+
+## Scheduled-run audit redaction parity — 2026-10-13
+
+- Follow-up review found the legacy direct scheduled executor still persisted raw step details and output snapshots, while manual and durable-queue execution sanitized those values. This could retain credential-bearing provider errors or sensitive nested output fields in run history.
+- Updated scheduled step audit persistence to use the shared error sanitizer and bounded nested-output sanitizer, matching the manual/queue execution paths.
+- Exact-head CI must pass before treating the fix as verified. Staging audit-history verification remains required; P0 remains open.
