@@ -285,7 +285,7 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
           } catch (executionError) {
             // Keep run history reconcilable when an unexpected error occurs after
             // the run row exists. In-flight step intents stay explicitly uncertain.
-            if (activeRunId && !executionLeaseLost) {
+            if (activeRunId && !executionLeaseLost && await confirmExecutionLeaseHeartbeat(heartbeatBothLeases)) {
               try {
               const finishedAt = new Date().toISOString();
               const { error: stepRecoveryError } = await supabaseAdmin
