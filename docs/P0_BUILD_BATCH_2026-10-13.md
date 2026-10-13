@@ -104,3 +104,9 @@ CI does not prove these external gates. P0 remains open; P1 is not authorized.
 
 - Cross-path review found a narrow gap: if an error occurred after an audit run was created but before the next normal heartbeat, the catch path could begin best-effort audit recovery based only on the previously recorded lease-loss flag. It now confirms both queue and automation leases immediately before recovery mutations; an unconfirmed heartbeat fails closed and leaves the run for authoritative reconciliation.
 - This is a source-level guard, not hosted staging evidence. Exact-head CI and a controlled lease-expiry/interruption rehearsal remain required; P0 stays open and queue/outbound flags remain disabled.
+
+
+## Scheduled execution lease fencing — 2026-10-13
+
+- Cross-path review found the legacy direct scheduler did not renew its automation lease around long provider actions or verify ownership before writing step outcomes, final summaries, and interrupted-run recovery. It now renews the shared automation lease before each action, keeps it alive during provider calls, and fails closed on lease loss before audit mutations; the catch path leaves unresolved history to stale-run reconciliation when ownership cannot be confirmed.
+- Exact-head CI and controlled staging interruption/lease-expiry rehearsal remain required. This is not hosted staging evidence; P0 remains open and queue/outbound flags stay disabled.
