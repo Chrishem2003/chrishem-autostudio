@@ -29,8 +29,18 @@ export async function runCronTaskAfterAuthentication<T>(
       ),
     };
   }
-  if (denied) {
-    return { denied: withCronSecurityHeaders(denied) };
+  // Runtime adapters can violate their TypeScript contract. Only literal null
+  // is an authorization success; only an actual Response is a valid denial.
+  // Any malformed value fails closed before the protected task is constructed.
+  if (denied !== null) {
+    if (denied instanceof Response) {
+      return { denied: withCronSecurityHeaders(denied) };
+    }
+    return {
+      denied: withCronSecurityHeaders(
+        Response.json({ error: "Cron task is temporarily unavailable." }, { status: 503 }),
+      ),
+    };
   }
   return { result: await task() };
 }
