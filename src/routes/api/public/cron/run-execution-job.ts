@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { authenticateCronRequest } from "@/integrations/supabase/cron-auth";
-import { runCronTaskAfterAuthentication, withCronSecurityHeaders } from "@/lib/cron-task-guard";
+import { runCronTaskAfterAuthentication, runCronTaskWithFallback, withCronSecurityHeaders } from "@/lib/cron-task-guard";
 import { isDurableQueueWorkerEnabled } from "@/lib/runtime-feature-gates";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { classifyExecutionOutcome } from "@/lib/execution-outcome";
@@ -28,7 +28,8 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const guarded = await runCronTaskAfterAuthentication(request, authenticateCronRequest, async () => {
+        const guarded = await runCronTaskWithFallback(
+          () => runCronTaskAfterAuthentication(request, authenticateCronRequest, async () => {
         // Operators can validate cron authentication and an empty queue before
         // enabling producers. This separate gate also prevents accidental draining
         // of old jobs when the worker scheduler is configured but not accepted.
@@ -362,7 +363,16 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
           });
           return new Response("Queue worker failed safely", { status: 500 });
         }
-        });
+          }),
+          () => ({
+            result: withCronSecurityHeaders(
+              Response.json(
+                { error: "Queue worker is temporarily unavailable." },
+                { status: 503 },
+              ),
+            ),
+          }),
+        );
         if (guarded.denied) return withCronSecurityHeaders(guarded.denied);
         return withCronSecurityHeaders(guarded.result);
       },

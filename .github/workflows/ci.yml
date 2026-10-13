@@ -49,6 +49,7 @@ jobs:
           src/lib/execution-job-claim.ts
           src/lib/execution-job-policy.ts
           src/lib/execution-job-worker.ts
+          src/lib/cron-task-guard.ts
           src/lib/execution-run-association.ts
           --rule 'prettier/prettier: off'
       - name: Production build
