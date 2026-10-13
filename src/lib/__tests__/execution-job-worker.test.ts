@@ -386,7 +386,7 @@ describe("processOneExecutionJob", () => {
   });
 
   test("normalizes a reasonable executor retry timestamp to ISO format", async () => {
-    const retryAt = new Date(Date.now() + 30_000).toISOString().replace("Z", "+03:00");
+    const retryAt = new Date(Date.now() + 3 * 60 * 60 * 1_000 + 30_000).toISOString().replace("Z", "+03:00");
     const expected = new Date(retryAt).toISOString();
     const { deps, calls } = dependencies({
       execute: async () => ({
