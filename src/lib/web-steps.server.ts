@@ -275,12 +275,14 @@ export async function callWeb(data: WebInput, dependencies: CallWebDependencies 
 
   let attempts = 0;
   let last = "The destination did not respond.";
+  let lastStatus = 0;
   const retrySafe = isRetrySafeMethod(data.method);
   while (attempts < 3) {
     attempts++;
     try {
       const response = await (dependencies.requestOnce ?? requestOnce)(url, data, target);
       if (response.status === 429 || response.status >= 500) {
+        lastStatus = response.status;
         last = `Got ${response.status} from ${url.hostname}.`;
         if (!retrySafe) {
           return { ok: false, status: response.status, ms: Date.now() - started, attempts, detail: `${last} Automatic retry was suppressed because ${data.method} may have side effects.` };
@@ -292,6 +294,7 @@ export async function callWeb(data: WebInput, dependencies: CallWebDependencies 
           : { ok: false, status: response.status, ms, attempts, detail: summarizeWebResponse(response.status, url.hostname) };
       }
     } catch (error) {
+      lastStatus = 0;
       last = error instanceof Error && error.name === "TimeoutError"
         ? `No reply within ${Math.max(1, Math.min(120, data.timeoutSec))}s.`
         : error instanceof Error && error.message.includes("1 MB")
@@ -301,5 +304,5 @@ export async function callWeb(data: WebInput, dependencies: CallWebDependencies 
     }
     if (attempts < 3) await (dependencies.wait ?? ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))))(250 * 2 ** (attempts - 1));
   }
-  return { ok: false, status: 0, ms: Date.now() - started, attempts, detail: `${last} Tried ${attempts} times — try again shortly.` };
+  return { ok: false, status: lastStatus, ms: Date.now() - started, attempts, detail: `${last} Tried ${attempts} times — try again shortly.` };
 }
