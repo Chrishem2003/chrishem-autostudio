@@ -673,6 +673,13 @@ begin
   update public.execution_jobs
      set locked_until = now() - interval '1 second'
    where id = expired_job.id;
+  -- Association is an audit mutation too: the old token must not attach or
+  -- re-attach a run after its queue lease expires, even before recovery claims it.
+  if public.attach_execution_job_run(
+    expired_job.id, claimed.worker_token, '00000000-0000-4000-8000-000000000010'
+  ) then
+    raise exception 'Expired worker lease was allowed to attach an audit run';
+  end if;
   if public.heartbeat_execution_job(expired_job.id, claimed.worker_token, 300) then
     raise exception 'Heartbeat renewed an already-expired worker lease';
   end if;

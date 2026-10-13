@@ -91,3 +91,10 @@ CI does not prove these external gates. P0 remains open; P1 is not authorized.
 - Cross-path review found that the queue worker's `persistIntent` callback renewed the queue and automation leases directly, but did not set the shared `executionLeaseLost` flag when either heartbeat failed. A subsequent catch path could therefore attempt recovery writes after ownership had become unverifiable.
 - Intent persistence now uses the shared dual-lease heartbeat function, which records lease loss before returning. The catch path consequently skips best-effort audit recovery when either fence fails, leaving reconciliation to the authoritative stale-run recovery path.
 - Exact-head CI and a controlled staging interruption rehearsal remain required. This is not staging evidence; P0 remains open.
+
+
+## Expired-lease audit-association regression — 2026-10-13
+
+- Extended the disposable PostgreSQL queue smoke test to assert that an expired worker token cannot attach or re-attach an audit run after the lease expires, even before the stale-job recovery pass changes the queue status.
+- This closes a specific audit-mutation assertion alongside existing stale-token heartbeat/finalization checks. The test has been added but is not accepted until exact-head CI passes.
+- Hosted staging interruption/fencing rehearsal remains open; P0 stays open and queue/outbound flags remain disabled.
