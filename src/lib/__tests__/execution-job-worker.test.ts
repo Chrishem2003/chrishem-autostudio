@@ -103,7 +103,12 @@ describe("processOneExecutionJob", () => {
 
     const result = await processOneExecutionJob(deps);
     expect(result).toEqual({ outcome: "finished", jobId: "job-1", status: "succeeded" });
-    expect(seen.heartbeat).toEqual([{ id: "job-1", workerToken: "token-1" }]);
+    // The worker confirms ownership before entering executor code, then the
+    // executor's explicit heartbeat uses the same immutable claim identity.
+    expect(seen.heartbeat).toEqual([
+      { id: "job-1", workerToken: "token-1" },
+      { id: "job-1", workerToken: "token-1" },
+    ]);
     expect(seen.finish).toEqual([{ id: "job-1", workerToken: "token-1" }]);
   });
 
