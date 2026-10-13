@@ -53,3 +53,15 @@ export async function runCronTaskAfterAuthentication<T>(
   if (denied !== null) return { denied };
   return { result: await task() };
 }
+
+/** Catch unexpected cron task failures without returning raw transport/provider details. */
+export async function runCronTaskWithFallback<T>(
+  task: () => Promise<T>,
+  fallback: (error: unknown) => T,
+): Promise<T> {
+  try {
+    return await task();
+  } catch (error) {
+    return fallback(error);
+  }
+}

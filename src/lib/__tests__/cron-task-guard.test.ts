@@ -1,6 +1,6 @@
 // @ts-nocheck -- Bun's test runner supplies test types at runtime
 import { describe, expect, it } from "bun:test";
-import { authenticateCronRequestSafely, runCronTaskAfterAuthentication, withCronSecurityHeaders } from "../cron-task-guard";
+import { authenticateCronRequestSafely, runCronTaskAfterAuthentication, runCronTaskWithFallback, withCronSecurityHeaders } from "../cron-task-guard";
 import { processOneExecutionJob } from "../execution-job-worker";
 
 function request() {
@@ -19,6 +19,31 @@ describe("authenticated cron task guard", () => {
     expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
     expect(response.headers.get("Content-Type")).toBe("text/plain");
     expect(await response.text()).toBe("queue empty");
+  });
+
+  it("returns a cache-safe fallback for unexpected protected-task failures", async () => {
+    let fallbackCalls = 0;
+    const response = await runCronTaskWithFallback(
+      async () => {
+        throw new Error("sensitive diagnostic detail");
+      },
+      () => {
+        fallbackCalls++;
+        return withCronSecurityHeaders(Response.json(
+          { error: "Scheduled execution is temporarily unavailable." },
+          { status: 503 },
+        ));
+      },
+    );
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(response.headers.get("Pragma")).toBe("no-cache");
+    expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(await response.text()).toBe(JSON.stringify({
+      error: "Scheduled execution is temporarily unavailable.",
+    }));
+    expect(fallbackCalls).toBe(1);
   });
 
   it("returns authentication failures without constructing or running the worker task", async () => {

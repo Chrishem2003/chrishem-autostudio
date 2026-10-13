@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { authenticateCronRequest } from "@/integrations/supabase/cron-auth";
-import { authenticateCronRequestSafely, withCronSecurityHeaders } from "@/lib/cron-task-guard";
+import { authenticateCronRequestSafely, runCronTaskWithFallback, withCronSecurityHeaders } from "@/lib/cron-task-guard";
 import { isDue } from "@/lib/schedule";
 import type { Workflow } from "@/lib/workflow";
 import { executeFlowSteps } from "@/lib/execute-flow-steps.server";
@@ -22,6 +22,7 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
         const denied = await authenticateCronRequestSafely(request, authenticateCronRequest);
         if (denied !== null) return denied;
 
+        return runCronTaskWithFallback(async () => {
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
         // Reconcile stale manual and scheduled runs through one transactional RPC.
@@ -352,6 +353,17 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
         }
 
         return withCronSecurityHeaders(Response.json({ checked: rows?.length ?? 0, ran, failed, finishedAt: now.toISOString() }));
+        }, () => {
+          // Unexpected client/runtime exceptions may contain sensitive details.
+          // Log a fixed message and return only a generic, cache-safe response.
+          console.error("[AutoStudio scheduler] Unexpected scheduler failure; returning a generic response.");
+          return withCronSecurityHeaders(
+            Response.json(
+              { error: "Scheduled execution is temporarily unavailable." },
+              { status: 503 },
+            ),
+          );
+        });
       },
     },
   },
