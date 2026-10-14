@@ -110,6 +110,25 @@ describe("findExecutionAuditConsistencyIssues", () => {
     ]);
   });
 
+  test("rejects malformed queue and audit completion timestamps", () => {
+    expect(findExecutionAuditConsistencyIssues(
+      [
+        { id: "bad-queue-time", status: "succeeded", run_id: "run-ok", finished_at: "not-a-date" },
+        { id: "bad-run-time", status: "succeeded", run_id: "run-bad-time", finished_at: "2026-10-13T12:00:01Z" },
+      ],
+      [
+        { id: "run-ok", status: "success", finished_at: "2026-10-13T12:00:00Z" },
+        { id: "run-bad-time", status: "success", finished_at: "not-a-date" },
+      ],
+    )).toEqual([
+      { issue: "invalid_queue_completion_timestamp", jobId: "bad-queue-time", runId: "run-ok" },
+      { issue: "succeeded_job_without_queue_completion_timestamp", jobId: "bad-queue-time", runId: "run-ok" },
+      { issue: "invalid_audit_run_completion_timestamp", jobId: "bad-run-time", runId: "run-bad-time" },
+      { issue: "successful_audit_run_without_completion_timestamp", jobId: "bad-run-time", runId: "run-bad-time" },
+      { issue: "succeeded_job_without_confirmed_successful_run", jobId: "bad-run-time", runId: "run-bad-time" },
+    ]);
+  });
+
   test("detects success without queue completion time and non-success jobs linked to successful runs", () => {
     expect(findExecutionAuditConsistencyIssues(
       [
