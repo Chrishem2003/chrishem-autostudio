@@ -140,3 +140,5 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/execution_jobs_smoke.sql
       - name: Verify concurrent workers claim distinct jobs
         run: bash supabase/tests/execution_jobs_concurrency.sh
+      - name: Exercise scheduled release/claim transaction race
+        run: bash supabase/tests/scheduled_release_claim_race.sh
