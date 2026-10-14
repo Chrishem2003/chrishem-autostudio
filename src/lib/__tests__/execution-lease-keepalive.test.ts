@@ -100,6 +100,26 @@ describe("runWithExecutionLeaseKeepalive", () => {
     expect(actionSettled).toBe(true);
   });
 
+  test("does not accept a late successful heartbeat response after its timeout", async () => {
+    let heartbeats = 0;
+    let actionSettled = false;
+    await expect(runWithExecutionLeaseKeepalive(
+      () => new Promise((resolve) => setTimeout(() => {
+        actionSettled = true;
+        resolve("provider result");
+      }, 30)),
+      () => {
+        heartbeats += 1;
+        return new Promise((resolve) => setTimeout(() => resolve(true), 20));
+      },
+      2,
+      5,
+    )).rejects.toThrow("outcome requires review");
+
+    expect(heartbeats).toBe(1);
+    expect(actionSettled).toBe(true);
+  });
+
   test("rejects an invalid heartbeat timeout before starting the action", async () => {
     let called = false;
     await expect(runWithExecutionLeaseKeepalive(
