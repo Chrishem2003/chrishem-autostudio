@@ -15,6 +15,7 @@ import type { Workflow } from "@/lib/workflow";
 import { createAndAttachExecutionJobRun } from "@/lib/execution-run-association";
 import { firstLivePreflightError } from "@/lib/live-execution-preflight";
 import { confirmExecutionLeaseHeartbeat, runWithExecutionLeaseKeepalive } from "@/lib/execution-lease-keepalive.server";
+import { isValidExecutionLeaseToken } from "@/lib/execution-lease-token";
 
 const MAX_JOB_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -91,7 +92,7 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
           // Only a bounded string token may authorize lease heartbeats or release.
           // If the token shape is unknown, stop and let the lease expire rather
           // than passing an arbitrary value through the execution path.
-          if (typeof executionLock !== "string" || executionLock.length > 200) {
+          if (!isValidExecutionLeaseToken(executionLock)) {
             throw new Error("Automation execution lease returned an invalid token.");
           }
 
