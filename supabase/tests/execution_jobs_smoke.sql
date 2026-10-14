@@ -1254,8 +1254,8 @@ begin
   if finish_definition not like '%for update%' or finish_definition not like '%locked_until <= clock_timestamp()%' then
     raise exception 'Worker finalization does not lock first and evaluate expiry after lock acquisition';
   end if;
-  if claim_definition not like '%locked_until <= clock_timestamp()%' then
-    raise exception 'Expired worker recovery does not evaluate expiry at statement time';
+  if claim_definition not like '%locked_until <= clock_timestamp()%' or claim_definition not like '%for update skip locked%' then
+    raise exception 'Expired worker recovery does not lock candidates and evaluate expiry at statement time';
   end if;
   if attach_definition not like '%for update%' or attach_definition not like '%locked_until <= clock_timestamp()%' then
     raise exception 'Audit run association does not lock first and evaluate expiry after lock acquisition';
