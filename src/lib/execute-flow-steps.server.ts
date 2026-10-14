@@ -79,9 +79,18 @@ export async function executeFlowSteps(input: ExecuteFlowStepsInput): Promise<Ex
     }
 
     let step: ExecutedStep;
-    if (Date.now() - input.startedAtMs >= input.maxRuntimeMs) {
+    const elapsedMs = Date.now() - input.startedAtMs;
+    const invalidBudget =
+      !Number.isFinite(input.startedAtMs) ||
+      !Number.isFinite(input.maxRuntimeMs) ||
+      input.maxRuntimeMs <= 0 ||
+      !Number.isFinite(elapsedMs) ||
+      elapsedMs < 0;
+    if (invalidBudget || elapsedMs >= input.maxRuntimeMs) {
       step = { nodeId: node.id, label: node.name.slice(0, 160), status: "failed", ms: 0,
-        detail: "The flow exceeded its execution budget. No action was attempted for this step; remaining steps were halted." };
+        detail: invalidBudget
+          ? "The flow execution budget is invalid. No action was attempted for this step; remaining steps were halted."
+          : "The flow exceeded its execution budget. No action was attempted for this step; remaining steps were halted." };
     } else {
       const resolution = resolveStepConfig(node.config, priorOutputs);
       if (!resolution.ok) {
