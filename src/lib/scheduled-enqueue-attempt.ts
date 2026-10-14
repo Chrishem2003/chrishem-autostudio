@@ -47,3 +47,11 @@ export function shouldReleaseScheduledLease(input: {
 }): boolean {
   return input.enqueueSucceeded || Boolean(input.lastRunAt);
 }
+
+/** A lease release is confirmed only when the RPC succeeds and returns true. */
+export function isScheduledLeaseReleaseConfirmed(input: {
+  data: unknown;
+  error: { code?: string } | null | undefined;
+}): boolean {
+  return !input.error && input.data === true;
+}
