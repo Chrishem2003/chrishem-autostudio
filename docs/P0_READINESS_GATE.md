@@ -621,3 +621,11 @@ A first side-by-side review of `main` and `audit/p0-hardening` found a behavior-
 - Added a keepalive regression where the heartbeat times out but later resolves `true`. The late response must not restore lease confidence, restart heartbeat requests, or permit a successful provider result to be returned; the provider action is allowed to settle and the outcome remains review-required.
 - Strengthened the worker finalization test to model the database state changing to `succeeded` before the transport throws. The worker returns `finalization_rejected` (unknown to the caller) and does not execute or finalize a second time in the same call. Recovery must consult durable state; it must not infer that the commit failed from the missing response.
 - These are deterministic adapter-level regression tests. They do not substitute for hosted staging fault injection that drops responses after committed heartbeat/finalization RPCs. P0 remains open until staging, idempotency, network boundary, independent review, and remaining lint criteria are accepted.
+
+
+## Durable-state behavior after ambiguous claim/finalization responses — 2026-10-14
+
+- Strengthened the worker regression for a claim RPC that commits `queued → running` but whose response is lost. The caller propagates the transport failure and invokes neither the executor nor finalizer; the durable row remains running until normal lease-expiry recovery parks it for review.
+- Added disposable PostgreSQL coverage that polls the queue repeatedly after a committed terminal `succeeded` state, simulating a lost finalization response. The terminal status, completion timestamp, and cleared lease identity must remain unchanged, and the job must never be returned by a later claim.
+- Existing completed-audit/expired-lease coverage separately verifies that a lost finalization response followed by lease expiry parks the queue record for review while preserving the successful run and step audit; no automatic replay occurs.
+- These tests establish repository and disposable-database behavior, not real network fault injection. Hosted staging must still drop responses after committed claim/heartbeat/finalization operations and verify deployed recovery behavior before P0 can close.
