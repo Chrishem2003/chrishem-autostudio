@@ -13,6 +13,7 @@ import { normalizeScheduledTriggerConfig } from "@/lib/scheduled-trigger-config"
 import { isScheduledLeaseReleaseConfirmed, runScheduledEnqueueAttempt, shouldReleaseScheduledLease } from "@/lib/scheduled-enqueue-attempt";
 import { isValidExecutionLeaseToken } from "@/lib/execution-lease-token";
 import { parseStaleExecutionRunReferences } from "@/lib/stale-execution-run-references";
+import { isSafeStaleRunReconciliationResult } from "@/lib/stale-run-reconciliation-result";
 
 const MAX_SCHEDULED_FLOW_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -60,7 +61,7 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
             "reconcile_stale_execution_run" as never,
             { _run_id: stale.id, _lock_token: null } as never,
           );
-          if (recoveryError || !["reconciled", "not_running", "not_stale", "active_lease"].includes(String(recoveryResult))) {
+          if (recoveryError || !isSafeStaleRunReconciliationResult(recoveryResult)) {
             console.error("[AutoStudio scheduler] Stale run reconciliation was not safe to complete; refusing to schedule new work.", {
               runId: stale.id, errorCode: recoveryError?.code ?? String(recoveryResult ?? "NO_RECOVERY_RESULT"),
             });
