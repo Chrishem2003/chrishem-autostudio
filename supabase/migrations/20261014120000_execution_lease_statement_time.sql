@@ -78,6 +78,35 @@ begin
 end;
 $$;
 
+-- Run association is also a lease-fenced mutation. Use statement-time expiry
+-- so a request blocked on the queue row cannot attach audit history after expiry.
+create or replace function public.attach_execution_job_run(
+  _job_id uuid,
+  _worker_token uuid,
+  _run_id uuid
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $
+begin
+  update public.execution_jobs
+     set run_id = _run_id,
+         updated_at = clock_timestamp()
+   where id = _job_id
+     and status = 'running'
+     and worker_token = _worker_token
+     and locked_until > clock_timestamp()
+     and (run_id is null or run_id = _run_id);
+
+  return found;
+end;
+$;
+
+revoke all on function public.attach_execution_job_run(uuid, uuid, uuid) from public, anon, authenticated;
+grant execute on function public.attach_execution_job_run(uuid, uuid, uuid) to service_role;
+
 create or replace function public.finish_execution_job(
   _job_id uuid,
   _worker_token uuid,
