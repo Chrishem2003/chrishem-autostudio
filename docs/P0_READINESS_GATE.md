@@ -614,3 +614,10 @@ A first side-by-side review of `main` and `audit/p0-hardening` found a behavior-
 - Extended the lock-first lease rule to stale-worker recovery. `claim_execution_job` now selects expired running jobs with `FOR UPDATE SKIP LOCKED`, then performs a fresh `clock_timestamp()` expiry check while holding each row lock before moving it to `needs_review`. Rows already owned by another transaction are skipped for a later poll rather than waited on with a stale predicate.
 - The SQL smoke assertion now verifies that recovery uses both the lock-skipping selection and the fresh expiry check. Exact-head CI passed on `310b5f32953e7df040bfd470a51244d73e6478ae`: [run 38550454301](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38550454301). Both required jobs passed.
 - Hosted staging concurrency/fault-injection, provider idempotency proof, network-boundary verification, independent acceptance, and repository-wide lint disposition remain open. This is not a release approval: **P0 remains OPEN; P1 is not authorized.**
+
+
+## Ambiguous heartbeat/finalization response regression coverage — 2026-10-14
+
+- Added a keepalive regression where the heartbeat times out but later resolves `true`. The late response must not restore lease confidence, restart heartbeat requests, or permit a successful provider result to be returned; the provider action is allowed to settle and the outcome remains review-required.
+- Strengthened the worker finalization test to model the database state changing to `succeeded` before the transport throws. The worker returns `finalization_rejected` (unknown to the caller) and does not execute or finalize a second time in the same call. Recovery must consult durable state; it must not infer that the commit failed from the missing response.
+- These are deterministic adapter-level regression tests. They do not substitute for hosted staging fault injection that drops responses after committed heartbeat/finalization RPCs. P0 remains open until staging, idempotency, network boundary, independent review, and remaining lint criteria are accepted.
