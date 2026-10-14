@@ -30,7 +30,9 @@ export type AuditConsistencyIssue =
   | "invalid_audit_run_completion_timestamp"
   | "active_job_with_completion_timestamp"
   | "running_audit_run_with_completion_timestamp"
-  | "terminal_audit_run_without_completion_timestamp";
+  | "terminal_audit_run_without_completion_timestamp"
+  | "audit_run_linked_to_multiple_queue_jobs"
+  | "queue_completed_before_audit_run";
 
 export interface AuditConsistencyFinding {
   issue: AuditConsistencyIssue;
@@ -74,6 +76,12 @@ export function findExecutionAuditConsistencyIssues(
   const jobCounts = new Map<string, number>();
   for (const job of jobs) jobCounts.set(job.id, (jobCounts.get(job.id) ?? 0) + 1);
   const reportedDuplicateJobs = new Set<string>();
+  const runAssociationCounts = new Map<string, number>();
+  for (const job of jobs) {
+    if ((jobCounts.get(job.id) ?? 0) === 1 && job.run_id !== null) {
+      runAssociationCounts.set(job.run_id, (runAssociationCounts.get(job.run_id) ?? 0) + 1);
+    }
+  }
 
   for (const job of jobs) {
     // Duplicate queue IDs mean the snapshot cannot reliably associate one
@@ -104,6 +112,10 @@ export function findExecutionAuditConsistencyIssues(
       continue;
     }
     if (job.run_id === null) continue;
+
+    if ((runAssociationCounts.get(job.run_id) ?? 0) > 1) {
+      findings.push({ issue: "audit_run_linked_to_multiple_queue_jobs", jobId: job.id, runId: job.run_id });
+    }
 
     if ((runCounts.get(job.run_id) ?? 0) > 1) {
       findings.push({ issue: "duplicate_audit_run_snapshot_id", jobId: job.id, runId: job.run_id });
@@ -137,6 +149,14 @@ export function findExecutionAuditConsistencyIssues(
     }
     if (isSuccessfulAuditRun(run.status) && !hasValidCompletionTimestamp(run.finished_at)) {
       findings.push({ issue: "successful_audit_run_without_completion_timestamp", jobId: job.id, runId: run.id });
+    }
+    if (
+      job.status === "succeeded" &&
+      hasValidCompletionTimestamp(job.finished_at) &&
+      hasValidCompletionTimestamp(run.finished_at) &&
+      Date.parse(job.finished_at) < Date.parse(run.finished_at)
+    ) {
+      findings.push({ issue: "queue_completed_before_audit_run", jobId: job.id, runId: run.id });
     }
     if (job.status === "succeeded" && (!isSuccessfulAuditRun(run.status) || !hasValidCompletionTimestamp(run.finished_at))) {
       findings.push({ issue: "succeeded_job_without_confirmed_successful_run", jobId: job.id, runId: run.id });
