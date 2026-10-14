@@ -17,11 +17,11 @@ This checklist is the release gate for P0 execution-integrity hardening. A code 
 - [x] Detect one audit run linked to multiple queue jobs, despite the database one-to-one association guard.
 - [x] Detect successful queue completion timestamps that precede the linked audit-run completion timestamp.
 - [x] Treat malformed/negative queue status aggregates as a critical health diagnostic instead of silently reporting healthy.
-- [ ] Re-run exact-head CI for duplicate run-association and completion-ordering regressions before treating these checks as verified.
+- [x] Duplicate run-association and completion-ordering regressions passed in exact-head CI run [38530477937](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38530477937) on code checkpoint `6587cd7b00584d0a0fe19662cc00c28e9c17391f`.
 - [x] Detect one audit run linked to multiple queue jobs, despite the database one-to-one association guard.
 - [x] Detect successful queue completion timestamps that precede the linked audit-run completion timestamp.
 - [ ] Re-run exact-head CI for duplicate run-association and completion-ordering regressions before treating these checks as verified.
-- [ ] Re-run exact-head CI after the latest audit-consistency and CI-lint changes; local/connector CI evidence is not yet confirmed.
+- [x] Exact-head CI passed on code checkpoint `6587cd7b00584d0a0fe19662cc00c28e9c17391f`: typecheck, 350 unit tests, focused execution-integrity lint, production build, and disposable PostgreSQL migration/idempotency/fencing/concurrency smoke tests. See [CI run 38530477937](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38530477937).
 - [x] Report non-success queue states linked to a successful audit run.
 - [x] Report a running queue job linked to failed, succeeded, cancelled, canceled, timed-out, or abandoned audit runs.
 - [x] Add focused regression cases for the added diagnostic conditions.
