@@ -176,6 +176,12 @@ export function buildExecutionQueueAlerts(input: {
     if (Number.isFinite(count) && count > 0) alerts.push({ code, severity, count, message });
   };
 
+  const invalidStatusCount = EXECUTION_QUEUE_STATUSES.filter((status) =>
+    !Number.isSafeInteger(input.counts[status]) || input.counts[status] < 0
+  ).length;
+  add("invalid_queue_status_count", "critical", invalidStatusCount,
+    "Queue status aggregates are malformed; verify the monitoring query before using this snapshot.");
+
   add("jobs_needing_review", "critical", input.counts.needs_review,
     "One or more jobs need human verification before any retry.");
   add("dead_letter_jobs", "critical", input.counts.dead_letter,
