@@ -607,3 +607,10 @@ A first side-by-side review of `main` and `audit/p0-hardening` found a behavior-
 - The concurrent regression script now tests both finalization and audit-run association with a lock held beyond lease expiry. The finalization case uses `needs_review` to test the lease fence itself rather than accidentally passing because a successful audit run was absent. SQL smoke assertions require lock-first checks.
 - Exact-head CI passed on `98bdb9179d89310299340ce579829ca2f30133ce`: [run 38550010325](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38550010325). Both required jobs passed, including typecheck, full unit tests, targeted integrity lint, production build, disposable PostgreSQL migration assertions, and concurrent lease tests.
 - This is repository/disposable-database evidence only. Hosted staging lock-wait/expiry interruption rehearsal, provider idempotency proof, deployed network-boundary verification, independent acceptance, and repository-wide lint disposition remain open. **P0 remains OPEN; P1 is not authorized.** Keep queue producer/worker and outbound transport gates disabled.
+
+
+## Expired-job recovery lock discipline — 2026-10-14
+
+- Extended the lock-first lease rule to stale-worker recovery. `claim_execution_job` now selects expired running jobs with `FOR UPDATE SKIP LOCKED`, then performs a fresh `clock_timestamp()` expiry check while holding each row lock before moving it to `needs_review`. Rows already owned by another transaction are skipped for a later poll rather than waited on with a stale predicate.
+- The SQL smoke assertion now verifies that recovery uses both the lock-skipping selection and the fresh expiry check. Exact-head CI passed on `310b5f32953e7df040bfd470a51244d73e6478ae`: [run 38550454301](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38550454301). Both required jobs passed.
+- Hosted staging concurrency/fault-injection, provider idempotency proof, network-boundary verification, independent acceptance, and repository-wide lint disposition remain open. This is not a release approval: **P0 remains OPEN; P1 is not authorized.**
