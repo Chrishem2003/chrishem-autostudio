@@ -91,14 +91,30 @@ security definer
 set search_path = public
 as $attach_job_run$
 begin
-  update public.execution_jobs
+  if _run_id is null then
+    return false;
+  end if;
+
+  update public.execution_jobs j
      set run_id = _run_id,
          updated_at = clock_timestamp()
-   where id = _job_id
-     and status = 'running'
-     and worker_token = _worker_token
-     and locked_until > clock_timestamp()
-     and (run_id is null or run_id = _run_id);
+   where j.id = _job_id
+     and j.status = 'running'
+     and j.worker_token = _worker_token
+     and j.locked_until > clock_timestamp()
+     and (j.run_id is null or j.run_id = _run_id)
+     and exists (
+       select 1
+         from public.run_logs r
+        where r.id = _run_id
+          and r.automation_id = j.automation_id
+     )
+     and not exists (
+       select 1
+         from public.execution_jobs other
+        where other.run_id = _run_id
+          and other.id <> j.id
+     );
 
   return found;
 end;
@@ -106,6 +122,8 @@ $attach_job_run$;
 
 revoke all on function public.attach_execution_job_run(uuid, uuid, uuid) from public, anon, authenticated;
 grant execute on function public.attach_execution_job_run(uuid, uuid, uuid) to service_role;
+comment on function public.attach_execution_job_run(uuid, uuid, uuid) is
+  'Attaches exactly one audit run from the same automation to the current unexpired worker lease using statement-time expiry.';
 
 create or replace function public.finish_execution_job(
   _job_id uuid,
