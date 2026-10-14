@@ -18,12 +18,8 @@ This checklist is the release gate for P0 execution-integrity hardening. A code 
 - [x] Detect successful queue completion timestamps that precede the linked audit-run completion timestamp.
 - [x] Treat malformed/negative queue status aggregates as a critical health diagnostic instead of silently reporting healthy.
 - [x] Fail closed on malformed queue diagnostic counters, timestamps, and missing status-count envelopes.
-- [ ] Verify the queue-health input hardening and newly added regression tests on exact-head CI.
-- [x] Duplicate run-association and completion-ordering regressions passed in exact-head CI run [38530477937](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38530477937) on code checkpoint `6587cd7b00584d0a0fe19662cc00c28e9c17391f`.
-- [x] Detect one audit run linked to multiple queue jobs, despite the database one-to-one association guard.
-- [x] Detect successful queue completion timestamps that precede the linked audit-run completion timestamp.
-- [ ] Re-run exact-head CI for duplicate run-association and completion-ordering regressions before treating these checks as verified.
-- [x] Exact-head CI passed on code checkpoint `6587cd7b00584d0a0fe19662cc00c28e9c17391f`: typecheck, 350 unit tests, focused execution-integrity lint, production build, and disposable PostgreSQL migration/idempotency/fencing/concurrency smoke tests. See [CI run 38530477937](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38530477937).
+- [x] Queue-health input hardening and malformed-input regressions passed exact-head CI on commit `898ce72494ae772b5aa564c7137c4564f3937094`: typecheck, 353 unit tests, focused execution-integrity lint, production build, and disposable PostgreSQL migration/idempotency/fencing/concurrency smoke tests. See [CI run 38532270434](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38532270434).
+- [x] Earlier exact-head CI checkpoints verified audit association and completion-ordering regressions; the newest checkpoint above additionally verifies queue-health malformed-input guards.
 - [x] Report non-success queue states linked to a successful audit run.
 - [x] Report a running queue job linked to failed, succeeded, cancelled, canceled, timed-out, or abandoned audit runs.
 - [x] Add focused regression cases for the added diagnostic conditions.
