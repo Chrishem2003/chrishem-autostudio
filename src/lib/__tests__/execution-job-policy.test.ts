@@ -67,20 +67,36 @@ describe("decideExecutionRetry", () => {
     }).status).toBe("dead_letter");
   });
 
-  test("rejects invalid attempt counters", () => {
-    expect(() => decideExecutionRetry({
-      sideEffectCertainty: "not_attempted",
-      attempts: 0,
-      maxAttempts: 3,
-    })).toThrow("attempts must be a positive integer");
+  test("routes invalid attempt counters to review without throwing", () => {
+    for (const attempts of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const decision = decideExecutionRetry({
+        sideEffectCertainty: "not_attempted",
+        attempts,
+        maxAttempts: 3,
+      });
+      expect(decision.status).toBe("needs_review");
+      expect(decision.retryAllowed).toBe(false);
+    }
   });
 
-  test("rejects unsupported maximum attempts", () => {
-    expect(() => decideExecutionRetry({
+  test("routes invalid retry limits and inconsistent counters to review", () => {
+    for (const maxAttempts of [0, -1, 1.5, 11, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const decision = decideExecutionRetry({
+        sideEffectCertainty: "confirmed_no_effect",
+        attempts: 1,
+        maxAttempts,
+      });
+      expect(decision.status).toBe("needs_review");
+      expect(decision.retryAllowed).toBe(false);
+    }
+
+    const inconsistent = decideExecutionRetry({
       sideEffectCertainty: "not_attempted",
-      attempts: 1,
-      maxAttempts: 11,
-    })).toThrow("maxAttempts must be an integer between 1 and 10");
+      attempts: 4,
+      maxAttempts: 3,
+    });
+    expect(inconsistent.status).toBe("needs_review");
+    expect(inconsistent.retryAllowed).toBe(false);
   });
 
   test("fails closed when a retry-policy field getter throws", () => {
