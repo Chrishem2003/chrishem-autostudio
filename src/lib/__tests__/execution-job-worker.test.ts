@@ -42,10 +42,17 @@ describe("processOneExecutionJob", () => {
       enumerable: true,
       get() { throw new Error("hostile nested payload getter"); },
     });
+    const cyclicPayload: any = {};
+    cyclicPayload.self = cyclicPayload;
 
     for (const malformedClaim of [
       hostileEnvelope,
       { ...job, payload: hostileNestedPayload },
+      { ...job, payload: new Date() },
+      { ...job, payload: new Map([["action", "send"]]) },
+      { ...job, payload: { amount: Number.POSITIVE_INFINITY } },
+      { ...job, payload: { nested: 1n } },
+      { ...job, payload: cyclicPayload },
     ]) {
       let executeCalls = 0;
       let finishCalls = 0;
