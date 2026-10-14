@@ -21,6 +21,32 @@
 7. Inspect the provider's own history and reconcile whether the external effect happened. Never blindly replay an uncertain action.
 8. Repeat with a second unrelated run active. Verify recovery of the first run does not mutate the second run or its step records.
 
+## Provider outcome certainty and duplicate-effect scenarios
+
+Run these only against a provider sandbox or a controlled test destination. Capture provider-side event IDs and effect counts, not credentials or message contents.
+
+### Provider accepted the request but the response was lost
+
+1. Configure the test adapter/proxy to let the provider accept one request, then drop the response before the worker receives it.
+2. Verify the job/run records the action as uncertain or review-required and does not automatically retry the provider call.
+3. Inspect provider-side history using a stable test correlation/idempotency key. Record whether the effect occurred and its provider event identifier.
+4. Reconcile the job through the supported operator path; do not change certainty to confirmed-no-effect based only on a timeout.
+5. Verify a second worker, duplicate webhook, cron overlap, or manual replay does not create another external effect.
+
+### Confirmed no-effect retry
+
+1. Configure a deterministic sandbox rejection that occurs before the provider performs the effect.
+2. Verify the adapter reports `confirmed_no_effect` only when supported by authoritative provider evidence.
+3. Verify the queued retry retains the same durable job identity/idempotency key and is bounded by the configured attempt policy.
+4. Verify attempt exhaustion routes to the documented terminal/review state and does not loop indefinitely.
+
+### Provider idempotency contract
+
+- [ ] Record the provider and adapter versions plus the exact idempotency guarantee relied on.
+- [ ] Prove the provider actually honors the supplied key for the relevant operation; a local key or adapter assertion alone is not proof.
+- [ ] Verify key scope, retention window, payload-mismatch behavior, and response lookup/reconciliation behavior.
+- [ ] If the provider has no authoritative idempotency/reconciliation mechanism, confirm uncertain outcomes remain manual-review only.
+
 ## Required negative cases
 
 - [ ] Missing, blank, or stale fencing identity cannot finalize a queue job.
@@ -29,6 +55,8 @@
 - [ ] Existing terminal step diagnostics are preserved during recovery.
 - [ ] A failed/rejected heartbeat while a provider request is in flight results in a review-required outcome, even if the provider request later settles.
 - [ ] Duplicate delivery of the same request does not create a second queue job or a duplicate provider-side effect.
+- [ ] Simulated provider acceptance with a lost response remains review-required and is not automatically replayed.
+- [ ] A safe confirmed-no-effect retry retains the stable job/idempotency identity and respects the attempt limit.
 - [ ] Unauthorized cron requests are rejected without claiming jobs or reading queue snapshots.
 - [ ] Health endpoint responses are non-cacheable and contain no secrets or raw provider payloads.
 
