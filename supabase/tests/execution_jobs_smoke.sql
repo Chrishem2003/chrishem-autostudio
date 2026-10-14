@@ -1091,6 +1091,26 @@ begin
 end
 $$;
 
+-- The stale-run recovery RPC must preserve parent-first row-lock ordering.
+-- Its initial run lookup is intentionally unlocked; the automation lock must be
+-- acquired before the later SELECT ... FOR UPDATE of the run row.
+do $stale_run_lock_order_check$
+declare
+  definition text := pg_get_functiondef('public.reconcile_stale_execution_run(uuid, uuid)'::regprocedure);
+  automation_lock_position integer;
+  locked_run_position integer;
+begin
+  automation_lock_position := strpos(definition, 'from public.automations where id = _automation_id for update');
+  locked_run_position := strpos(definition, 'from public.run_logs where id = _run_id and status::text = ''running'' for update');
+  if automation_lock_position = 0 or locked_run_position = 0 then
+    raise exception 'Stale-run recovery is missing an expected parent/child lock';
+  end if;
+  if automation_lock_position > locked_run_position then
+    raise exception 'Stale-run recovery locks run_logs before automations; lock-order inversion can deadlock';
+  end if;
+end
+$stale_run_lock_order_check$;
+
 -- Privilege contract: every sensitive queue/lease RPC is service-role-only.
 -- Keep this as a migration smoke assertion so a later CREATE OR REPLACE cannot
 -- silently restore PostgreSQL's default PUBLIC EXECUTE grant.
