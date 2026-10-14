@@ -95,9 +95,9 @@ export async function processOneExecutionJob(
   // cannot be safely finalized because the database fencing key itself is not
   // trustworthy; malformed non-identity metadata can be parked for review.
   if (
-    typeof job.id !== "string" || job.id.trim().length === 0 ||
-    typeof job.automationId !== "string" || job.automationId.trim().length === 0 ||
-    typeof job.workerToken !== "string" || job.workerToken.trim().length === 0
+    typeof job.id !== "string" || job.id.trim().length === 0 || job.id.length > 200 ||
+    typeof job.automationId !== "string" || job.automationId.trim().length === 0 || job.automationId.length > 200 ||
+    typeof job.workerToken !== "string" || job.workerToken.trim().length === 0 || job.workerToken.length > 200
   ) {
     return { outcome: "finalization_rejected", jobId: "unknown-claimed-job" };
   }
