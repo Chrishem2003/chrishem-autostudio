@@ -29,6 +29,7 @@ expected=$(cat <<'MIGRATIONS'
 20261014100000_stale_run_lock_order.sql
 20261014110000_scheduled_release_lock_order.sql
 20261014120000_execution_lease_statement_time.sql
+20261014130000_stale_reconciliation_fresh_clock.sql
 MIGRATIONS
 )
 
