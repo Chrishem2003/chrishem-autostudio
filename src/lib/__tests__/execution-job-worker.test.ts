@@ -177,6 +177,35 @@ describe("processOneExecutionJob", () => {
     }
   });
 
+  test("rejects oversized claim identity fields before executing or finalizing", async () => {
+    for (const invalidIdentity of [
+      { id: "j".repeat(201) },
+      { automationId: "a".repeat(201) },
+      { workerToken: "t".repeat(201) },
+    ]) {
+      let executeCalls = 0;
+      let finishCalls = 0;
+      const { deps } = dependencies({
+        claim: async () => ({ ...job, ...invalidIdentity }),
+        execute: async () => {
+          executeCalls++;
+          return { status: "succeeded", sideEffectCertainty: "effect_confirmed" };
+        },
+        finish: async () => {
+          finishCalls++;
+          return true;
+        },
+      });
+
+      expect(await processOneExecutionJob(deps)).toEqual({
+        outcome: "finalization_rejected",
+        jobId: "unknown-claimed-job",
+      });
+      expect(executeCalls).toBe(0);
+      expect(finishCalls).toBe(0);
+    }
+  });
+
   test("does not finalize a claim with an unusable fencing identity", async () => {
     let executeCalls = 0;
     const { deps, calls } = dependencies({
