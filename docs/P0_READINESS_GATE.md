@@ -550,3 +550,13 @@ A first side-by-side review of `main` and `audit/p0-hardening` found a behavior-
 - Lease release is accepted only when the RPC has no error and returns literal `true`. For an ambiguous first-generation enqueue failure with no prior cursor, the producer retains the lease until expiry rather than changing the idempotency generation and risking a duplicate job.
 - Exact-head CI passed on commit `11ccd4a1ccbe3fff1877aed515e764525d164b1d`: typecheck, complete unit suite, targeted execution-integrity lint, production build, and disposable PostgreSQL migration/idempotency/lease-fencing/concurrent-worker smoke test. See [CI run 38522195285](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38522195285).
 - This is code and disposable-database evidence only. Hosted staging migration/RLS/RPC checks, deployed cron authentication, provider-side duplicate-effect/idempotency tests, interrupted-worker recovery, deployed HTTP/TLS/DNS/redirect/timeout checks, audit-history inspection, and repository-wide lint disposition remain open. P0 remains open; do not enable production queue/outbound transport or begin P1.
+
+
+## Exact-head checkpoint — schedule timing boundary regressions — 2026-10-14
+
+- Added explicit boundary tests for the five-minute cadence (not due at 4m29s; due at 4m30s), hourly cadence (not due at 54m59s; due at 55m), and invalid-timezone fallback to UTC.
+- The latest recorded code head for this test batch is `bc4f5aee4c8157b4624e5007529d71a7fbaf5ced`. Exact-head CI passed: [run 38523951631](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38523951631). Typecheck, unit tests, production build, and disposable PostgreSQL durable-queue migration smoke test passed.
+- Follow-up integration review confirmed the SQL smoke suite explicitly checks scheduled lease token fencing, NULL-cursor rejection without lease removal, idempotent enqueue payload consistency, service-role-only RPC execution, and expired worker jobs being parked for review rather than automatically replayed.
+- This does not establish hosted staging acceptance. Hosted migration/RLS/RPC checks, deployed cron authentication, provider-side duplicate-effect/idempotency proof, interrupted-worker recovery, deployed network-boundary checks, audit-history inspection, repository-wide lint disposition, branch reconciliation, and final independent P0 review remain open.
+
+**Release decision remains P0 OPEN; P1 is not authorized.** Do not merge, deploy, or enable production queue producers/workers or outbound transport until the outstanding acceptance gates pass.
