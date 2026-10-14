@@ -11,6 +11,10 @@ This checklist is the release gate for P0 execution-integrity hardening. A code 
 - [x] Report a succeeded queue job without its own completion timestamp.
 - [x] Report a successful audit run without its own completion timestamp.
 - [x] Fail closed in diagnostics when a linked audit-run ID is duplicated in the supplied snapshot.
+- [x] Fail closed in diagnostics when a queue-job ID is duplicated in the supplied snapshot.
+- [x] Reject malformed completion timestamps and flag timestamps on active queue/audit records.
+- [x] Flag terminal failed audit runs that lack a completion timestamp.
+- [ ] Re-run exact-head CI after the latest audit-consistency and CI-lint changes; local/connector CI evidence is not yet confirmed.
 - [x] Report non-success queue states linked to a successful audit run.
 - [x] Report a running queue job linked to failed, succeeded, cancelled, canceled, timed-out, or abandoned audit runs.
 - [x] Add focused regression cases for the added diagnostic conditions.
