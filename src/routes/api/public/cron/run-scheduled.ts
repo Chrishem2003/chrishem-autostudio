@@ -11,6 +11,7 @@ import { livePreflightError } from "@/lib/execute-step.server";
 import { scheduledExecutionIdempotencyKey } from "@/lib/scheduled-execution-key";
 import { normalizeScheduledTriggerConfig } from "@/lib/scheduled-trigger-config";
 import { isScheduledLeaseReleaseConfirmed, runScheduledEnqueueAttempt, shouldReleaseScheduledLease } from "@/lib/scheduled-enqueue-attempt";
+import { isValidExecutionLeaseToken } from "@/lib/execution-lease-token";
 
 const MAX_SCHEDULED_FLOW_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -133,7 +134,7 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
             // Treat the RPC payload as untrusted runtime data. A malformed lease
             // token cannot safely authorize enqueue/release operations; leave the
             // lease to expire and report the automation as failed.
-            if (typeof queueLock !== "string" || queueLock.length > 200) {
+            if (!isValidExecutionLeaseToken(queueLock)) {
               console.error("[AutoStudio scheduler] Queue-enqueue lease returned an invalid token.", {
                 automationId: row.id,
               });
