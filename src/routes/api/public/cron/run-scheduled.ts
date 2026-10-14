@@ -93,7 +93,7 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
             const preflightError = await firstLivePreflightError(prepared.plan.nodes, row.user_id, livePreflightError);
             return { prepared, trigger, cadence, due, preflightError };
           });
-          if (!gate.success) { console.warn("[AutoStudio scheduler] Saved workflow failed execution preflight.", { automationId: row.id, reason: gate.error }); continue; }
+          if (!gate.success) { console.warn("[AutoStudio scheduler] Saved workflow failed execution preflight.", { automationId: row.id, reason: gate.error }); failed++; continue; }
           const { prepared, trigger, cadence, due, preflightError } = gate.value;
           if (!trigger || !due) continue;
           if (preflightError) { console.warn("[AutoStudio scheduler] Scheduled workflow failed live capability preflight; no run was started.", { automationId: row.id, reason: preflightError }); failed++; continue; }
