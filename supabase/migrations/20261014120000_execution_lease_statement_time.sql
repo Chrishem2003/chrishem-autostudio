@@ -10,20 +10,35 @@ set search_path = public
 as $$
 declare
   _token uuid := gen_random_uuid();
+  _expired_job public.execution_jobs%rowtype;
 begin
   if _lease_seconds is null or _lease_seconds < 30 or _lease_seconds > 900 then
     raise exception 'Invalid execution worker lease duration';
   end if;
 
-  update public.execution_jobs
-     set status = 'needs_review',
-         worker_token = null,
-         locked_until = null,
-         finished_at = clock_timestamp(),
-         updated_at = clock_timestamp(),
-         last_error = coalesce(last_error, 'Worker lease expired; external side effects must be checked before retry.')
-   where status = 'running'
-     and locked_until <= clock_timestamp();
+  -- Skip rows another heartbeat/finalizer currently owns. Once a candidate is
+  -- locked, re-check expiry with a fresh wall-clock read before parking it.
+  for _expired_job in
+    select *
+      from public.execution_jobs
+     where status = 'running'
+       and locked_until <= clock_timestamp()
+     for update skip locked
+  loop
+    if _expired_job.locked_until <= clock_timestamp() then
+      update public.execution_jobs
+         set status = 'needs_review',
+             worker_token = null,
+             locked_until = null,
+             finished_at = clock_timestamp(),
+             updated_at = clock_timestamp(),
+             last_error = coalesce(last_error, 'Worker lease expired; external side effects must be checked before retry.')
+       where id = _expired_job.id
+         and status = 'running'
+         and worker_token = _expired_job.worker_token
+         and locked_until = _expired_job.locked_until;
+    end if;
+  end loop;
 
   return query
     with candidate as (
