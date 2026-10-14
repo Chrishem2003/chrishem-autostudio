@@ -66,13 +66,25 @@ export function decideExecutionRetry(input: RetryPolicyInput): RetryDecision {
     };
   }
   if (!Number.isInteger(attempts) || (attempts as number) < 1) {
-    throw new Error("attempts must be a positive integer");
+    return {
+      status: "needs_review",
+      retryAllowed: false,
+      reason: "Attempt count is invalid; verify the queue record before retrying.",
+    };
   }
   if (!Number.isInteger(maxAttempts) || (maxAttempts as number) < 1 || (maxAttempts as number) > 10) {
-    throw new Error("maxAttempts must be an integer between 1 and 10");
+    return {
+      status: "needs_review",
+      retryAllowed: false,
+      reason: "Maximum attempt policy is invalid; verify the queue configuration before retrying.",
+    };
   }
   if ((attempts as number) > (maxAttempts as number)) {
-    throw new Error("attempts cannot exceed maxAttempts");
+    return {
+      status: "needs_review",
+      retryAllowed: false,
+      reason: "Attempt count exceeds the configured maximum; verify the queue record before retrying.",
+    };
   }
 
   if (sideEffectCertainty === "uncertain") {
