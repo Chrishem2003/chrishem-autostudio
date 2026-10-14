@@ -589,3 +589,12 @@ A first side-by-side review of `main` and `audit/p0-hardening` found a behavior-
 - The same run's non-blocking repository-wide `bun run lint` step reported **3,148 errors and 6 warnings**; 3,090 errors were marked auto-fixable by ESLint. The log showed findings across 121 source files, including both legacy UI files and execution-related modules. Because this step uses `continue-on-error: true`, the green workflow does not mean repository-wide lint is clean.
 - Do not hide this baseline by broadening lint ignores or weakening rules. Prioritize formatter-only auto-fixes in reviewable batches, then rerun the complete lint command and targeted integrity checks. Preserve semantic/security changes for separate reviewed patches.
 - This lint debt remains an explicit P0 disposition gate. P0 remains open; P1 is not authorized.
+
+
+## Worker lease statement-time expiry fence — 2026-10-14
+
+- Cross-path review identified that PostgreSQL `now()` is transaction-stable. A finalizer that begins before lease expiry and waits on a row lock could otherwise evaluate the lease using stale transaction-start time after expiry.
+- Added `20261014120000_execution_lease_statement_time.sql`: queue claim/recovery, heartbeat, and finalization now use `clock_timestamp()` for lease-expiry predicates and state timestamps. Finalization retains the audit-success requirement and service-role-only grants.
+- Added SQL definition assertions plus `supabase/tests/execution_job_expiry_lock_race.sh`, which holds the queue row lock past expiry and verifies that the waiting stale finalizer is rejected and the job is parked for review.
+- Exact-head CI passed on `29587b967675d08eea55d43460ecdecf88fec457`: [run 38547358190](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38547358190). Both required jobs passed, including typecheck, full unit suite, targeted integrity lint, production build, migration smoke assertions, and concurrent queue/lease tests.
+- This is repository and disposable-database evidence only. Hosted staging lease-expiry/interruption rehearsal, provider idempotency proof, network-boundary verification, independent acceptance, and repository-wide lint disposition remain open. **P0 remains OPEN; P1 is not authorized.** Keep queue producer/worker and outbound transport gates disabled.
