@@ -16,6 +16,7 @@ This checklist is the release gate for P0 execution-integrity hardening. A code 
 - [x] Flag terminal failed audit runs that lack a completion timestamp.
 - [x] Detect one audit run linked to multiple queue jobs, despite the database one-to-one association guard.
 - [x] Detect successful queue completion timestamps that precede the linked audit-run completion timestamp.
+- [x] Treat malformed/negative queue status aggregates as a critical health diagnostic instead of silently reporting healthy.
 - [ ] Re-run exact-head CI for duplicate run-association and completion-ordering regressions before treating these checks as verified.
 - [x] Detect one audit run linked to multiple queue jobs, despite the database one-to-one association guard.
 - [x] Detect successful queue completion timestamps that precede the linked audit-run completion timestamp.
