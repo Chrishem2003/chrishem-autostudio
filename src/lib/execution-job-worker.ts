@@ -52,13 +52,47 @@ export type ProcessOneJobResult =
  * mutable when the job envelope is frozen. Freeze the complete payload graph
  * before handing it to an executor so the request being executed cannot drift.
  */
-function freezeExecutionPayload(value: unknown, seen = new WeakSet<object>()): unknown {
-  if (!value || typeof value !== "object") return value;
-  if (seen.has(value)) return value;
-  seen.add(value);
-  for (const child of Object.values(value as Record<string, unknown>)) {
-    freezeExecutionPayload(child, seen);
+function freezeExecutionPayload(
+  value: unknown,
+  seen = new WeakSet<object>(),
+  ancestors = new WeakSet<object>(),
+): unknown {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean" ||
+    (typeof value === "number" && Number.isFinite(value))
+  ) return value;
+
+  if (typeof value !== "object") {
+    throw new TypeError("Execution payload contains a non-JSON value");
   }
+  if (ancestors.has(value)) {
+    throw new TypeError("Execution payload contains a cycle");
+  }
+  if (seen.has(value)) return value;
+
+  const prototype = Object.getPrototypeOf(value);
+  const isArray = Array.isArray(value);
+  if (isArray ? prototype !== Array.prototype : prototype !== Object.prototype && prototype !== null) {
+    throw new TypeError("Execution payload must contain only plain JSON objects and arrays");
+  }
+
+  seen.add(value);
+  ancestors.add(value);
+  const keys = Reflect.ownKeys(value);
+  if (keys.some((key) => typeof key === "symbol")) {
+    throw new TypeError("Execution payload contains a symbol key");
+  }
+  for (const key of keys) {
+    if (isArray && key === "length") continue;
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor || !("value" in descriptor) || !descriptor.enumerable) {
+      throw new TypeError("Execution payload contains an accessor or non-enumerable property");
+    }
+    freezeExecutionPayload(descriptor.value, seen, ancestors);
+  }
+  ancestors.delete(value);
   return Object.freeze(value);
 }
 
