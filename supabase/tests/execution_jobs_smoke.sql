@@ -1128,6 +1128,10 @@ begin
   if automation_lock_position > locked_run_position then
     raise exception 'Stale-run recovery locks run_logs before automations; lock-order inversion can deadlock';
   end if;
+  if definition not like '%clock_timestamp() - interval ''20 minutes''%'
+     or definition not like '%_locked_until > clock_timestamp()%' then
+    raise exception 'Stale-run recovery does not use fresh wall-clock checks after lock waits';
+  end if;
 end
 $stale_run_lock_order_check$;
 
