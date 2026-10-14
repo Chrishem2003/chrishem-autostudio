@@ -228,6 +228,13 @@ describe("buildExecutionQueueAlerts", () => {
     const input = base();
     input.counts.queued = 4;
     input.oldestQueuedAt = "not-a-timestamp";
-    expect(buildExecutionQueueAlerts(input).alerts).toHaveLength(0);
+    const result = buildExecutionQueueAlerts(input);
+    expect(result.status).toBe("critical");
+    expect(result.alerts).toContainEqual({
+      code: "invalid_queue_diagnostic_input",
+      severity: "critical",
+      count: 1,
+      message: "Queue health diagnostic inputs are malformed; do not use this snapshot to authorize recovery.",
+    });
   });
 });
