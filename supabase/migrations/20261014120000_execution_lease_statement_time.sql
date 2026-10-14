@@ -89,7 +89,7 @@ returns boolean
 language plpgsql
 security definer
 set search_path = public
-as $
+as $attach_job_run$
 begin
   update public.execution_jobs
      set run_id = _run_id,
@@ -102,7 +102,7 @@ begin
 
   return found;
 end;
-$;
+$attach_job_run$;
 
 revoke all on function public.attach_execution_job_run(uuid, uuid, uuid) from public, anon, authenticated;
 grant execute on function public.attach_execution_job_run(uuid, uuid, uuid) to service_role;
