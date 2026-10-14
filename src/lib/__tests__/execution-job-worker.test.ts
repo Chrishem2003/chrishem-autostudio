@@ -640,12 +640,15 @@ describe("processOneExecutionJob", () => {
     expect(persistedError).toContain("[REDACTED_SECRET]");
   });
 
-  test("does not execute or finalize when claiming a job fails", async () => {
+  test("does not execute or finalize when a claim commits but its response is lost", async () => {
     let executeCalls = 0;
     let finishCalls = 0;
+    let durableStatus = "queued";
     const { deps } = dependencies({
       claim: async () => {
-        throw new Error("queue database unavailable");
+        // Simulate the database committing the claim before the transport fails.
+        durableStatus = "running";
+        throw new Error("connection reset after claim commit");
       },
       execute: async () => {
         executeCalls++;
@@ -657,7 +660,8 @@ describe("processOneExecutionJob", () => {
       },
     });
 
-    await expect(processOneExecutionJob(deps)).rejects.toThrow("queue database unavailable");
+    await expect(processOneExecutionJob(deps)).rejects.toThrow("connection reset after claim commit");
+    expect(durableStatus).toBe("running");
     expect(executeCalls).toBe(0);
     expect(finishCalls).toBe(0);
   });
