@@ -60,10 +60,27 @@ returns boolean
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $heartbeat_job$
+declare
+  _job public.execution_jobs%rowtype;
 begin
   if _lease_seconds is null or _lease_seconds < 30 or _lease_seconds > 900 then
     raise exception 'Invalid execution worker lease duration';
+  end if;
+
+  -- Lock first, then evaluate expiry. A WHERE predicate evaluated before a
+  -- lock wait can be stale by the time PostgreSQL resumes the UPDATE.
+  select * into _job
+    from public.execution_jobs
+   where id = _job_id
+   for update;
+
+  if not found
+     or _job.status <> 'running'
+     or _job.worker_token is distinct from _worker_token
+     or _job.locked_until is null
+     or _job.locked_until <= clock_timestamp() then
+    return false;
   end if;
 
   update public.execution_jobs
@@ -71,15 +88,13 @@ begin
          updated_at = clock_timestamp()
    where id = _job_id
      and status = 'running'
-     and worker_token = _worker_token
-     and locked_until > clock_timestamp();
+     and worker_token = _worker_token;
 
   return found;
 end;
-$$;
+$heartbeat_job$;
 
--- Run association is also a lease-fenced mutation. Use statement-time expiry
--- so a request blocked on the queue row cannot attach audit history after expiry.
+
 create or replace function public.attach_execution_job_run(
   _job_id uuid,
   _worker_token uuid,
@@ -90,8 +105,24 @@ language plpgsql
 security definer
 set search_path = public
 as $attach_job_run$
+declare
+  _job public.execution_jobs%rowtype;
 begin
   if _run_id is null then
+    return false;
+  end if;
+
+  select * into _job
+    from public.execution_jobs
+   where id = _job_id
+   for update;
+
+  if not found
+     or _job.status <> 'running'
+     or _job.worker_token is distinct from _worker_token
+     or _job.locked_until is null
+     or _job.locked_until <= clock_timestamp()
+     or (_job.run_id is not null and _job.run_id <> _run_id) then
     return false;
   end if;
 
@@ -101,29 +132,20 @@ begin
    where j.id = _job_id
      and j.status = 'running'
      and j.worker_token = _worker_token
-     and j.locked_until > clock_timestamp()
      and (j.run_id is null or j.run_id = _run_id)
      and exists (
-       select 1
-         from public.run_logs r
-        where r.id = _run_id
-          and r.automation_id = j.automation_id
+       select 1 from public.run_logs r
+        where r.id = _run_id and r.automation_id = j.automation_id
      )
      and not exists (
-       select 1
-         from public.execution_jobs other
-        where other.run_id = _run_id
-          and other.id <> j.id
+       select 1 from public.execution_jobs other
+        where other.run_id = _run_id and other.id <> j.id
      );
 
   return found;
 end;
 $attach_job_run$;
 
-revoke all on function public.attach_execution_job_run(uuid, uuid, uuid) from public, anon, authenticated;
-grant execute on function public.attach_execution_job_run(uuid, uuid, uuid) to service_role;
-comment on function public.attach_execution_job_run(uuid, uuid, uuid) is
-  'Attaches exactly one audit run from the same automation to the current unexpired worker lease using statement-time expiry.';
 
 create or replace function public.finish_execution_job(
   _job_id uuid,
@@ -136,10 +158,27 @@ returns boolean
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $finish_execution_job$
+declare
+  _job public.execution_jobs%rowtype;
 begin
   if _status is null or _status not in ('succeeded', 'failed', 'queued', 'needs_review', 'dead_letter') then
     raise exception 'Invalid execution job final status';
+  end if;
+
+  -- Serialize against heartbeat/recovery, then re-check the lease using a fresh
+  -- wall-clock read after any row-lock wait has completed.
+  select * into _job
+    from public.execution_jobs
+   where id = _job_id
+   for update;
+
+  if not found
+     or _job.status <> 'running'
+     or _job.worker_token is distinct from _worker_token
+     or _job.locked_until is null
+     or _job.locked_until <= clock_timestamp() then
+    return false;
   end if;
 
   update public.execution_jobs j
@@ -156,14 +195,12 @@ begin
    where j.id = _job_id
      and j.status = 'running'
      and j.worker_token = _worker_token
-     and j.locked_until > clock_timestamp()
      and (
        _status <> 'succeeded'
        or (
          j.run_id is not null
          and exists (
-           select 1
-             from public.run_logs r
+           select 1 from public.run_logs r
             where r.id = j.run_id
               and r.status = 'success'
               and r.finished_at is not null
@@ -173,7 +210,9 @@ begin
 
   return found;
 end;
-$$;
+$finish_execution_job$;
+
+
 
 revoke all on function public.claim_execution_job(integer) from public, anon, authenticated;
 revoke all on function public.heartbeat_execution_job(uuid, uuid, integer) from public, anon, authenticated;
