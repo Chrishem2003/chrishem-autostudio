@@ -25,7 +25,9 @@ export type AuditConsistencyIssue =
   | "non_successful_job_with_successful_audit_run"
   | "successful_audit_run_without_completion_timestamp"
   | "duplicate_audit_run_snapshot_id"
-  | "duplicate_queue_job_snapshot_id";
+  | "duplicate_queue_job_snapshot_id"
+  | "invalid_queue_completion_timestamp"
+  | "invalid_audit_run_completion_timestamp";
 
 export interface AuditConsistencyFinding {
   issue: AuditConsistencyIssue;
@@ -34,6 +36,10 @@ export interface AuditConsistencyFinding {
 }
 
 const isSuccessfulAuditRun = (status: string) => status === "success" || status === "succeeded";
+
+function hasValidCompletionTimestamp(value: string | null | undefined): value is string {
+  return typeof value === "string" && value.trim().length > 0 && Number.isFinite(Date.parse(value));
+}
 
 const TERMINAL_AUDIT_RUN_STATUSES = new Set([
   "success",
@@ -77,7 +83,10 @@ export function findExecutionAuditConsistencyIssues(
       }
       continue;
     }
-    if (job.status === "succeeded" && !job.finished_at) {
+    if (job.finished_at && !hasValidCompletionTimestamp(job.finished_at)) {
+      findings.push({ issue: "invalid_queue_completion_timestamp", jobId: job.id, runId: job.run_id });
+    }
+    if (job.status === "succeeded" && !hasValidCompletionTimestamp(job.finished_at)) {
       findings.push({ issue: "succeeded_job_without_queue_completion_timestamp", jobId: job.id, runId: job.run_id });
     }
     if (job.status === "running" && job.run_id === null) {
@@ -107,16 +116,19 @@ export function findExecutionAuditConsistencyIssues(
       continue;
     }
 
-    if (isSuccessfulAuditRun(run.status) && !run.finished_at) {
+    if (isSuccessfulAuditRun(run.status) && run.finished_at && !hasValidCompletionTimestamp(run.finished_at)) {
+      findings.push({ issue: "invalid_audit_run_completion_timestamp", jobId: job.id, runId: run.id });
+    }
+    if (isSuccessfulAuditRun(run.status) && !hasValidCompletionTimestamp(run.finished_at)) {
       findings.push({ issue: "successful_audit_run_without_completion_timestamp", jobId: job.id, runId: run.id });
     }
-    if (job.status === "succeeded" && (!isSuccessfulAuditRun(run.status) || !run.finished_at)) {
+    if (job.status === "succeeded" && (!isSuccessfulAuditRun(run.status) || !hasValidCompletionTimestamp(run.finished_at))) {
       findings.push({ issue: "succeeded_job_without_confirmed_successful_run", jobId: job.id, runId: run.id });
     }
     if (
       ["queued", "failed", "needs_review", "dead_letter"].includes(job.status) &&
       isSuccessfulAuditRun(run.status) &&
-      Boolean(run.finished_at)
+      hasValidCompletionTimestamp(run.finished_at)
     ) {
       findings.push({ issue: "non_successful_job_with_successful_audit_run", jobId: job.id, runId: run.id });
     }
