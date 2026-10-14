@@ -136,9 +136,13 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261014100000_stale_run_lock_order.sql
       - name: Fix scheduled lease release lock order
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261014110000_scheduled_release_lock_order.sql
+      - name: Apply statement-time worker lease expiry migration
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261014120000_execution_lease_statement_time.sql
       - name: Verify idempotency, lease fencing and RPC permissions
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/execution_jobs_smoke.sql
       - name: Verify concurrent workers claim distinct jobs
         run: bash supabase/tests/execution_jobs_concurrency.sh
       - name: Exercise scheduled release/claim transaction race
         run: bash supabase/tests/scheduled_release_claim_race.sh
+      - name: Exercise expired worker finalization lock race
+        run: bash supabase/tests/execution_job_expiry_lock_race.sh
