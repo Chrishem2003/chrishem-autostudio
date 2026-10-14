@@ -206,7 +206,7 @@ describe("findExecutionAuditConsistencyIssues", () => {
       ],
       [
         { id: "still-running", status: "running" },
-        { id: "failed-run", status: "failed" },
+        { id: "failed-run", status: "failed", finished_at: "2026-10-11T10:00:00Z" },
       ],
     )).toEqual([
       { issue: "succeeded_job_without_confirmed_successful_run", jobId: "finished-job", runId: "still-running" },
