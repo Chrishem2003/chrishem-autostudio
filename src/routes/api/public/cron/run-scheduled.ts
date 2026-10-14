@@ -191,8 +191,9 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
               },
             });
             if (attempt.enqueueSucceeded) ran++;
-            else failed++;
-            if (!attempt.releaseSucceeded) failed++;
+            // Count each automation at most once in the failure summary, even
+            // when both enqueue and lease release fail during the same attempt.
+            if (!attempt.enqueueSucceeded || !attempt.releaseSucceeded) failed++;
             continue;
           }
 
