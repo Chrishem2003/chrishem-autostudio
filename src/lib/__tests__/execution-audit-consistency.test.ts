@@ -67,7 +67,9 @@ describe("findExecutionAuditConsistencyIssues", () => {
       ],
       [{ id: "run-success", status: "success", finished_at: "2026-10-13T12:00:00Z" }],
     )).toEqual([
+      { issue: "audit_run_linked_to_multiple_queue_jobs", jobId: "review-job", runId: "run-success" },
       { issue: "non_successful_job_with_successful_audit_run", jobId: "review-job", runId: "run-success" },
+      { issue: "audit_run_linked_to_multiple_queue_jobs", jobId: "running-job", runId: "run-success" },
       { issue: "running_job_with_terminal_audit_run", jobId: "running-job", runId: "run-success" },
     ]);
   });
@@ -183,7 +185,10 @@ describe("findExecutionAuditConsistencyIssues", () => {
       [{ id: "run-ok", status: "succeeded", finished_at: "2026-10-11T10:00:00Z" }],
     )).toEqual([
       { issue: "succeeded_job_without_queue_completion_timestamp", jobId: "missing-finished-at", runId: "run-ok" },
+      { issue: "audit_run_linked_to_multiple_queue_jobs", jobId: "missing-finished-at", runId: "run-ok" },
+      { issue: "audit_run_linked_to_multiple_queue_jobs", jobId: "review-after-success", runId: "run-ok" },
       { issue: "non_successful_job_with_successful_audit_run", jobId: "review-after-success", runId: "run-ok" },
+      { issue: "audit_run_linked_to_multiple_queue_jobs", jobId: "retry-after-success", runId: "run-ok" },
       { issue: "non_successful_job_with_successful_audit_run", jobId: "retry-after-success", runId: "run-ok" },
     ]);
   });
@@ -209,7 +214,9 @@ describe("findExecutionAuditConsistencyIssues", () => {
         { id: "failed-run", status: "failed", finished_at: "2026-10-11T10:00:00Z" },
       ],
     )).toEqual([
+      { issue: "audit_run_linked_to_multiple_queue_jobs", jobId: "finished-job", runId: "still-running" },
       { issue: "succeeded_job_without_confirmed_successful_run", jobId: "finished-job", runId: "still-running" },
+      { issue: "audit_run_linked_to_multiple_queue_jobs", jobId: "queued-job", runId: "still-running" },
       { issue: "nonrunning_job_with_running_audit_run", jobId: "queued-job", runId: "still-running" },
       { issue: "running_job_with_terminal_audit_run", jobId: "active-job", runId: "failed-run" },
     ]);
