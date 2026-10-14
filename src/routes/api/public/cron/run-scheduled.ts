@@ -27,6 +27,16 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
         const denied = await authenticateCronRequestSafely(request, authenticateCronRequest);
         if (denied !== null) return denied;
 
+        // Fail closed before stale-run reconciliation or schedule processing.
+        // The scheduler must never fall back to inline provider execution when
+        // durable queue rollout is disabled.
+        if (!isDurableQueueEnabled()) {
+          return withCronSecurityHeaders(Response.json(
+            { error: "Scheduled execution queue is disabled by rollout policy." },
+            { status: 503 },
+          ));
+        }
+
         return runCronTaskWithFallback(async () => {
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
@@ -94,10 +104,9 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
           const wf = prepared.workflow as unknown as Workflow;
           const executionPlan = prepared.plan;
 
-          // Roll out durable queue consumption explicitly. Until the worker cron is
-          // configured and runtime-validated, the legacy direct path remains the
-          // default. With the flag enabled, this branch only enqueues and never
-          // executes workflow steps in the scheduler request.
+          // The fail-closed gate above guarantees this producer only queues work.
+          // Keep the guard local as defense in depth; this branch never executes
+          // provider actions inside the scheduler request.
           if (isDurableQueueEnabled()) {
             // Validate the generation key before claiming a lease. Invalid
             // cadence/timestamp data must not strand a queue-enqueue lease.
