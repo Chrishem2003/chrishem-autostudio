@@ -36,8 +36,8 @@ sleep 0.2
     select public.finish_execution_job(
       '$job_id',
       '00000000-0000-4000-8000-000000000078',
-      'succeeded',
-      null,
+      'needs_review',
+      'stale worker lock-wait regression',
       null
     );
   " | tr -d '[:space:]' > "$tmp_dir/finish-result"
