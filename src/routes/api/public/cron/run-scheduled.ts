@@ -7,6 +7,7 @@ import { withPreparedExecutionPlan } from "@/lib/prepared-execution-gate";
 import { enqueueExecutionJob } from "@/lib/execution-job-queue.server";
 import { isDurableQueueEnabled } from "@/lib/runtime-feature-gates";
 import { firstLivePreflightError } from "@/lib/live-execution-preflight";
+import { livePreflightError } from "@/lib/execute-step.server";
 import { scheduledExecutionIdempotencyKey } from "@/lib/scheduled-execution-key";
 import { normalizeScheduledTriggerConfig } from "@/lib/scheduled-trigger-config";
 import { isScheduledLeaseReleaseConfirmed, runScheduledEnqueueAttempt, shouldReleaseScheduledLease } from "@/lib/scheduled-enqueue-attempt";
