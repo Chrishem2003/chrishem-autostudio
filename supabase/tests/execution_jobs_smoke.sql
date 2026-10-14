@@ -1239,6 +1239,39 @@ end
 $finished_run_expiry_check$;
 
 
+-- A terminal queue record must remain terminal when later workers poll after
+-- a finalization RPC response was lost. Claim/recovery may inspect it but never
+-- re-queue or overwrite the committed terminal state.
+do $terminal_queue_reconciliation_check$
+declare
+  queue_id uuid := '00000000-0000-4000-8000-000000000084';
+  original_finished_at timestamptz := clock_timestamp() - interval '30 seconds';
+begin
+  delete from public.execution_jobs where id = queue_id;
+  insert into public.execution_jobs (
+    id, automation_id, trigger_type, idempotency_key, payload, status,
+    attempts, max_attempts, worker_token, locked_until, started_at, finished_at
+  ) values (
+    queue_id, '00000000-0000-4000-8000-000000000002',
+    'manual', 'smoke-terminal-response-lost', '{}'::jsonb, 'succeeded',
+    1, 3, null, null, original_finished_at - interval '1 minute', original_finished_at
+  );
+
+  perform * from public.claim_execution_job(300);
+  perform * from public.claim_execution_job(300);
+
+  if (select status from public.execution_jobs where id = queue_id) <> 'succeeded'
+     or (select finished_at from public.execution_jobs where id = queue_id) is distinct from original_finished_at
+     or (select worker_token from public.execution_jobs where id = queue_id) is not null
+     or (select locked_until from public.execution_jobs where id = queue_id) is not null then
+    raise exception 'Subsequent queue polling changed a committed terminal job after an ambiguous response';
+  end if;
+  if exists (select 1 from public.claim_execution_job(300) where id = queue_id) then
+    raise exception 'Committed terminal job was returned by a later claim';
+  end if;
+end
+$terminal_queue_reconciliation_check$;
+
 -- Worker lease fences must use statement-time clock reads, not transaction-
 -- stable now(), or a finalizer waiting on a row lock can outlive its lease.
 do $statement_time_lease_check$
