@@ -14,7 +14,7 @@ import { firstLivePreflightError } from "@/lib/live-execution-preflight";
 import { confirmExecutionLeaseHeartbeat, runWithExecutionLeaseKeepalive } from "@/lib/execution-lease-keepalive.server";
 import { scheduledExecutionIdempotencyKey } from "@/lib/scheduled-execution-key";
 import { normalizeScheduledTriggerConfig } from "@/lib/scheduled-trigger-config";
-import { runScheduledEnqueueAttempt, shouldReleaseScheduledLease } from "@/lib/scheduled-enqueue-attempt";
+import { isScheduledLeaseReleaseConfirmed, runScheduledEnqueueAttempt, shouldReleaseScheduledLease } from "@/lib/scheduled-enqueue-attempt";
 
 const MAX_SCHEDULED_FLOW_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -168,12 +168,14 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
 
                 let releaseErrorCode: string | null = null;
                 try {
-                  const { error: queueReleaseError } = await supabaseAdmin.rpc("release_scheduled_automation", {
+                  const { data: releaseConfirmed, error: queueReleaseError } = await supabaseAdmin.rpc("release_scheduled_automation", {
                     _automation_id: row.id,
                     _lock_token: queueLock,
                     _last_run_at: enqueueSucceeded ? enqueuedAt : (row.last_run_at ?? "1970-01-01T00:00:00.000Z"),
                   });
-                  if (queueReleaseError) releaseErrorCode = queueReleaseError.code ?? "UNKNOWN_ERROR";
+                  if (!isScheduledLeaseReleaseConfirmed({ data: releaseConfirmed, error: queueReleaseError })) {
+                    releaseErrorCode = queueReleaseError?.code ?? (releaseConfirmed === false ? "LEASE_NOT_OWNED" : "LEASE_RELEASE_UNCONFIRMED");
+                  }
                 } catch {
                   releaseErrorCode = "TRANSPORT_ERROR";
                 }
