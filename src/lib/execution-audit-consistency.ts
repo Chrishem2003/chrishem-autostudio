@@ -27,7 +27,10 @@ export type AuditConsistencyIssue =
   | "duplicate_audit_run_snapshot_id"
   | "duplicate_queue_job_snapshot_id"
   | "invalid_queue_completion_timestamp"
-  | "invalid_audit_run_completion_timestamp";
+  | "invalid_audit_run_completion_timestamp"
+  | "active_job_with_completion_timestamp"
+  | "running_audit_run_with_completion_timestamp"
+  | "terminal_audit_run_without_completion_timestamp";
 
 export interface AuditConsistencyFinding {
   issue: AuditConsistencyIssue;
@@ -86,6 +89,9 @@ export function findExecutionAuditConsistencyIssues(
     if (job.finished_at && !hasValidCompletionTimestamp(job.finished_at)) {
       findings.push({ issue: "invalid_queue_completion_timestamp", jobId: job.id, runId: job.run_id });
     }
+    if ((job.status === "queued" || job.status === "running") && job.finished_at != null) {
+      findings.push({ issue: "active_job_with_completion_timestamp", jobId: job.id, runId: job.run_id });
+    }
     if (job.status === "succeeded" && !hasValidCompletionTimestamp(job.finished_at)) {
       findings.push({ issue: "succeeded_job_without_queue_completion_timestamp", jobId: job.id, runId: job.run_id });
     }
@@ -118,6 +124,16 @@ export function findExecutionAuditConsistencyIssues(
 
     if (isSuccessfulAuditRun(run.status) && run.finished_at && !hasValidCompletionTimestamp(run.finished_at)) {
       findings.push({ issue: "invalid_audit_run_completion_timestamp", jobId: job.id, runId: run.id });
+    }
+    if (run.status === "running" && run.finished_at != null) {
+      findings.push({ issue: "running_audit_run_with_completion_timestamp", jobId: job.id, runId: run.id });
+    }
+    if (
+      TERMINAL_AUDIT_RUN_STATUSES.has(run.status) &&
+      !isSuccessfulAuditRun(run.status) &&
+      !hasValidCompletionTimestamp(run.finished_at)
+    ) {
+      findings.push({ issue: "terminal_audit_run_without_completion_timestamp", jobId: job.id, runId: run.id });
     }
     if (isSuccessfulAuditRun(run.status) && !hasValidCompletionTimestamp(run.finished_at)) {
       findings.push({ issue: "successful_audit_run_without_completion_timestamp", jobId: job.id, runId: run.id });
