@@ -17,6 +17,9 @@ This checklist is the release gate for P0 execution-integrity hardening. A code 
 - [x] Detect one audit run linked to multiple queue jobs, despite the database one-to-one association guard.
 - [x] Detect successful queue completion timestamps that precede the linked audit-run completion timestamp.
 - [ ] Re-run exact-head CI for duplicate run-association and completion-ordering regressions before treating these checks as verified.
+- [x] Detect one audit run linked to multiple queue jobs, despite the database one-to-one association guard.
+- [x] Detect successful queue completion timestamps that precede the linked audit-run completion timestamp.
+- [ ] Re-run exact-head CI for duplicate run-association and completion-ordering regressions before treating these checks as verified.
 - [ ] Re-run exact-head CI after the latest audit-consistency and CI-lint changes; local/connector CI evidence is not yet confirmed.
 - [x] Report non-success queue states linked to a successful audit run.
 - [x] Report a running queue job linked to failed, succeeded, cancelled, canceled, timed-out, or abandoned audit runs.
