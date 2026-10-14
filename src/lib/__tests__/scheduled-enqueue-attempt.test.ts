@@ -1,6 +1,6 @@
 // @ts-nocheck -- Bun's test runner supplies test types at runtime
 import { describe, expect, it } from "bun:test";
-import { runScheduledEnqueueAttempt, shouldReleaseScheduledLease } from "../scheduled-enqueue-attempt";
+import { isScheduledLeaseReleaseConfirmed, runScheduledEnqueueAttempt, shouldReleaseScheduledLease } from "../scheduled-enqueue-attempt";
 
 describe("runScheduledEnqueueAttempt", () => {
   it("does not advance the schedule marker when enqueue fails", async () => {
@@ -59,5 +59,11 @@ describe("runScheduledEnqueueAttempt", () => {
     });
 
     expect(result).toEqual({ enqueueSucceeded: true, releaseSucceeded: false });
+  });
+  it("requires the lease-release RPC to return true", () => {
+    expect(isScheduledLeaseReleaseConfirmed({ data: true, error: null })).toBe(true);
+    expect(isScheduledLeaseReleaseConfirmed({ data: false, error: null })).toBe(false);
+    expect(isScheduledLeaseReleaseConfirmed({ data: null, error: null })).toBe(false);
+    expect(isScheduledLeaseReleaseConfirmed({ data: true, error: { code: "XX000" } })).toBe(false);
   });
 });
