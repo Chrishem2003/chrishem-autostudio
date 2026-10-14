@@ -24,7 +24,8 @@ export type AuditConsistencyIssue =
   | "succeeded_job_without_queue_completion_timestamp"
   | "non_successful_job_with_successful_audit_run"
   | "successful_audit_run_without_completion_timestamp"
-  | "duplicate_audit_run_snapshot_id";
+  | "duplicate_audit_run_snapshot_id"
+  | "duplicate_queue_job_snapshot_id";
 
 export interface AuditConsistencyFinding {
   issue: AuditConsistencyIssue;
@@ -61,8 +62,21 @@ export function findExecutionAuditConsistencyIssues(
     runs.filter((run) => runCounts.get(run.id) === 1).map((run) => [run.id, run]),
   );
   const findings: AuditConsistencyFinding[] = [];
+  const jobCounts = new Map<string, number>();
+  for (const job of jobs) jobCounts.set(job.id, (jobCounts.get(job.id) ?? 0) + 1);
+  const reportedDuplicateJobs = new Set<string>();
 
   for (const job of jobs) {
+    // Duplicate queue IDs mean the snapshot cannot reliably associate one
+    // queue record with one audit run. Report once per ID and do not let row
+    // ordering produce a misleading "healthy" diagnosis.
+    if ((jobCounts.get(job.id) ?? 0) > 1) {
+      if (!reportedDuplicateJobs.has(job.id)) {
+        findings.push({ issue: "duplicate_queue_job_snapshot_id", jobId: job.id, runId: null });
+        reportedDuplicateJobs.add(job.id);
+      }
+      continue;
+    }
     if (job.status === "succeeded" && !job.finished_at) {
       findings.push({ issue: "succeeded_job_without_queue_completion_timestamp", jobId: job.id, runId: job.run_id });
     }
