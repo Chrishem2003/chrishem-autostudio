@@ -41,6 +41,7 @@ This checklist is the release gate for P0 execution-integrity hardening. A code 
 - [x] Worker reports thrown/rejected finalization rather than claiming success; regression tests passed in CI run 38134707956. Staging recovery behavior remains to be verified.
 - [x] Disposable PostgreSQL smoke test verifies idempotent enqueue, conflicting-key rejection, lease fencing, terminal success/audit guard, and concurrent workers claim distinct jobs; CI run 38134707956.
 - [ ] Verify provider-specific retry attempts remain idempotent end-to-end in staging.
+- [x] Expand the staging runbook with provider-accepted/lost-response, confirmed-no-effect retry, stable-key, and provider idempotency-contract scenarios; staging execution remains required.
 - [x] Retry policy now routes malformed attempt counters, invalid maximum-attempt limits, and inconsistent attempts-above-limit records to `needs_review` without throwing; regression tests passed exact-head CI on `775180843f0e97a9ffc2e133af73507a28c68536`: [run 38533599636](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38533599636).
 - [x] Disposable PostgreSQL smoke test verifies expired queue leases route to `needs_review` and stale in-flight steps remain uncertain; CI run 38134707956.
 - [ ] Verify interrupted/expired running jobs in the actual staging deployment without duplicate side effects.
