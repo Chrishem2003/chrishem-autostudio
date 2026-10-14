@@ -171,7 +171,7 @@ describe("buildExecutionQueueAlerts", () => {
     const input = base();
     input.sampledAt = "not-a-timestamp";
     input.oldestQueuedAt = "also-not-a-timestamp";
-    input.counts = null as any;
+    input.counts = null as unknown as Record<ExecutionQueueStatus, number>;
     const result = buildExecutionQueueAlerts(input);
     expect(result.status).toBe("critical");
     expect(result.alerts).toContainEqual({
