@@ -87,6 +87,13 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
               retryable: true,
             };
           }
+          // RPC results are runtime data, not a trusted TypeScript guarantee.
+          // Only a bounded string token may authorize lease heartbeats or release.
+          // If the token shape is unknown, stop and let the lease expire rather
+          // than passing an arbitrary value through the execution path.
+          if (typeof executionLock !== "string" || executionLock.length > 200) {
+            throw new Error("Automation execution lease returned an invalid token.");
+          }
 
           // The queue lease and per-automation lease are separate fences. Renew
           // both before each new step so a long multi-step flow cannot outlive the
