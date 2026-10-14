@@ -560,3 +560,11 @@ A first side-by-side review of `main` and `audit/p0-hardening` found a behavior-
 - This does not establish hosted staging acceptance. Hosted migration/RLS/RPC checks, deployed cron authentication, provider-side duplicate-effect/idempotency proof, interrupted-worker recovery, deployed network-boundary checks, audit-history inspection, repository-wide lint disposition, branch reconciliation, and final independent P0 review remain open.
 
 **Release decision remains P0 OPEN; P1 is not authorized.** Do not merge, deploy, or enable production queue producers/workers or outbound transport until the outstanding acceptance gates pass.
+
+
+## Repository-wide lint disposition — exact-head CI 2026-10-14
+
+- The exact-head run for commit `682066dfdc02125a27a9a99ca1b141eb9fff8fb3` passed typecheck, the complete unit-test command, targeted execution-integrity lint, production build, and the disposable PostgreSQL queue/migration smoke test: [CI run 38524279719](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38524279719).
+- The same run's non-blocking repository-wide `bun run lint` step reported **3,148 errors and 6 warnings**; 3,090 errors were marked auto-fixable by ESLint. The log showed findings across 121 source files, including both legacy UI files and execution-related modules. Because this step uses `continue-on-error: true`, the green workflow does not mean repository-wide lint is clean.
+- Do not hide this baseline by broadening lint ignores or weakening rules. Prioritize formatter-only auto-fixes in reviewable batches, then rerun the complete lint command and targeted integrity checks. Preserve semantic/security changes for separate reviewed patches.
+- This lint debt remains an explicit P0 disposition gate. P0 remains open; P1 is not authorized.
