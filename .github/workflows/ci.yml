@@ -138,6 +138,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261014110000_scheduled_release_lock_order.sql
       - name: Apply statement-time worker lease expiry migration
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261014120000_execution_lease_statement_time.sql
+      - name: Apply fresh-clock stale-run reconciliation guard
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261014130000_stale_reconciliation_fresh_clock.sql
       - name: Verify idempotency, lease fencing and RPC permissions
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/execution_jobs_smoke.sql
       - name: Verify concurrent workers claim distinct jobs
