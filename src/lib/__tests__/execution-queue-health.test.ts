@@ -149,6 +149,44 @@ describe("buildExecutionQueueAlerts", () => {
     });
   });
 
+  test("fails closed when non-status diagnostic counters are negative or non-integer", async () => {
+    const { buildExecutionQueueAlerts } = await import("@/lib/execution-queue-health");
+    const input = base();
+    input.expiredLeaseCount = -1;
+    input.auditFindingCount = 1.5;
+    input.staleRunCount = Number.NaN;
+    const result = buildExecutionQueueAlerts(input);
+    expect(result.status).toBe("critical");
+    expect(result.alerts).toContainEqual({
+      code: "invalid_queue_diagnostic_input",
+      severity: "critical",
+      count: 3,
+      message: "Queue health diagnostic inputs are malformed; do not use this snapshot to authorize recovery.",
+    });
+  });
+
+  test("fails closed when timestamps or queue count envelope are malformed", async () => {
+    const { buildExecutionQueueAlerts } = await import("@/lib/execution-queue-health");
+    const input = base();
+    input.sampledAt = "not-a-timestamp";
+    input.oldestQueuedAt = "also-not-a-timestamp";
+    input.counts = null as any;
+    const result = buildExecutionQueueAlerts(input);
+    expect(result.status).toBe("critical");
+    expect(result.alerts).toContainEqual({
+      code: "invalid_queue_status_count",
+      severity: "critical",
+      count: 6,
+      message: "Queue status aggregates are malformed; verify the monitoring query before using this snapshot.",
+    });
+    expect(result.alerts).toContainEqual({
+      code: "invalid_queue_diagnostic_input",
+      severity: "critical",
+      count: 2,
+      message: "Queue health diagnostic inputs are malformed; do not use this snapshot to authorize recovery.",
+    });
+  });
+
   test("reports healthy only when no operational thresholds are breached", async () => {
     const { buildExecutionQueueAlerts } = await import("@/lib/execution-queue-health");
     expect(buildExecutionQueueAlerts(base())).toEqual({ status: "healthy", alerts: [] });
