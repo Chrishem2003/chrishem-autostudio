@@ -680,9 +680,10 @@ describe("processOneExecutionJob", () => {
     });
   });
 
-  test("does not claim finalization succeeded when the database response is lost after an external effect", async () => {
+  test("does not replay work when finalization committed but its response was lost", async () => {
     let executeCalls = 0;
     let finishCalls = 0;
+    let persistedStatus = "running";
     const { deps } = dependencies({
       execute: async () => {
         executeCalls++;
@@ -691,9 +692,10 @@ describe("processOneExecutionJob", () => {
           sideEffectCertainty: "effect_confirmed",
         };
       },
-      finish: async () => {
+      finish: async (_job, status) => {
         finishCalls++;
-        // Simulate a committed/unknown DB result whose response was lost.
+        // Model the server commit succeeding before the transport drops its response.
+        persistedStatus = status;
         throw new Error("connection reset after commit");
       },
     });
@@ -702,6 +704,7 @@ describe("processOneExecutionJob", () => {
       outcome: "finalization_rejected",
       jobId: "job-1",
     });
+    expect(persistedStatus).toBe("succeeded");
     expect(executeCalls).toBe(1);
     expect(finishCalls).toBe(1);
   });
