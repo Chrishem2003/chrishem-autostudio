@@ -135,6 +135,20 @@ describe("buildExecutionQueueAlerts", () => {
     staleRunSampleTruncated: false,
   });
 
+  test("treats malformed queue status aggregates as a critical diagnostic failure", async () => {
+    const { buildExecutionQueueAlerts } = await import("@/lib/execution-queue-health");
+    const input = base();
+    input.counts.queued = -1;
+    const result = buildExecutionQueueAlerts(input);
+    expect(result.status).toBe("critical");
+    expect(result.alerts).toContainEqual({
+      code: "invalid_queue_status_count",
+      severity: "critical",
+      count: 1,
+      message: "Queue status aggregates are malformed; verify the monitoring query before using this snapshot.",
+    });
+  });
+
   test("reports healthy only when no operational thresholds are breached", async () => {
     const { buildExecutionQueueAlerts } = await import("@/lib/execution-queue-health");
     expect(buildExecutionQueueAlerts(base())).toEqual({ status: "healthy", alerts: [] });
