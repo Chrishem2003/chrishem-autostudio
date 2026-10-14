@@ -17,6 +17,8 @@ This checklist is the release gate for P0 execution-integrity hardening. A code 
 - [x] Detect one audit run linked to multiple queue jobs, despite the database one-to-one association guard.
 - [x] Detect successful queue completion timestamps that precede the linked audit-run completion timestamp.
 - [x] Treat malformed/negative queue status aggregates as a critical health diagnostic instead of silently reporting healthy.
+- [x] Fail closed on malformed queue diagnostic counters, timestamps, and missing status-count envelopes.
+- [ ] Verify the queue-health input hardening and newly added regression tests on exact-head CI.
 - [x] Duplicate run-association and completion-ordering regressions passed in exact-head CI run [38530477937](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38530477937) on code checkpoint `6587cd7b00584d0a0fe19662cc00c28e9c17391f`.
 - [x] Detect one audit run linked to multiple queue jobs, despite the database one-to-one association guard.
 - [x] Detect successful queue completion timestamps that precede the linked audit-run completion timestamp.
