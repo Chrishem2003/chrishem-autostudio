@@ -1246,6 +1246,7 @@ declare
   heartbeat_definition text := lower(pg_get_functiondef('public.heartbeat_execution_job(uuid, uuid, integer)'::regprocedure));
   finish_definition text := lower(pg_get_functiondef('public.finish_execution_job(uuid, uuid, text, text, timestamp with time zone)'::regprocedure));
   claim_definition text := lower(pg_get_functiondef('public.claim_execution_job(integer)'::regprocedure));
+  attach_definition text := lower(pg_get_functiondef('public.attach_execution_job_run(uuid, uuid, uuid)'::regprocedure));
 begin
   if heartbeat_definition not like '%locked_until > clock_timestamp()%' then
     raise exception 'Worker heartbeat does not evaluate expiry at statement time';
@@ -1255,6 +1256,9 @@ begin
   end if;
   if claim_definition not like '%locked_until <= clock_timestamp()%' then
     raise exception 'Expired worker recovery does not evaluate expiry at statement time';
+  end if;
+  if attach_definition not like '%locked_until > clock_timestamp()%' then
+    raise exception 'Audit run association does not evaluate expiry at statement time';
   end if;
 end
 $statement_time_lease_check$;
