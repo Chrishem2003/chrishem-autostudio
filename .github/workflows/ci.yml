@@ -46,7 +46,9 @@ jobs:
         run: >-
           bunx eslint
           src/lib/execution-audit-consistency.ts
+          src/lib/__tests__/execution-audit-consistency.test.ts
           src/lib/execution-job-claim.ts
+          src/lib/__tests__/execution-job-claim.test.ts
           src/lib/execution-job-policy.ts
           src/lib/execution-job-worker.ts
           src/lib/execution-lease-token.ts
