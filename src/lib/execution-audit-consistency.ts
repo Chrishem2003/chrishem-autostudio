@@ -86,7 +86,7 @@ export function findExecutionAuditConsistencyIssues(
       }
       continue;
     }
-    if (job.finished_at && !hasValidCompletionTimestamp(job.finished_at)) {
+    if (job.finished_at != null && !hasValidCompletionTimestamp(job.finished_at)) {
       findings.push({ issue: "invalid_queue_completion_timestamp", jobId: job.id, runId: job.run_id });
     }
     if ((job.status === "queued" || job.status === "running") && job.finished_at != null) {
@@ -122,7 +122,7 @@ export function findExecutionAuditConsistencyIssues(
       continue;
     }
 
-    if (isSuccessfulAuditRun(run.status) && run.finished_at && !hasValidCompletionTimestamp(run.finished_at)) {
+    if (isSuccessfulAuditRun(run.status) && run.finished_at != null && !hasValidCompletionTimestamp(run.finished_at)) {
       findings.push({ issue: "invalid_audit_run_completion_timestamp", jobId: job.id, runId: run.id });
     }
     if (run.status === "running" && run.finished_at != null) {
