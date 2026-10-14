@@ -541,3 +541,12 @@ A first side-by-side review of `main` and `audit/p0-hardening` found a behavior-
 - **Plan-validation wrappers are not themselves the main conflict:** branch `withPreparedExecutionPlan` delegates to `preparePersistedExecutionPlan`; reconcile the route's preflight/recovery behavior around that shared trust boundary rather than duplicating or weakening validation.
 
 **Required resolution before a sync commit:** retain `main`'s fail-closed queue-only producer contract unless a reviewed rollout design explicitly authorizes a legacy mode; preserve the branch's stale-run recovery, live preflight, lease fencing, and audit-sanitization protections where compatible; replace ad-hoc idempotency construction with the shared helper; test that enqueue failure does not advance the schedule marker and that repeat calls for one schedule generation do not duplicate jobs. No route rewrite or branch synchronization was performed in this review.
+
+
+## Queue-only scheduled producer and lease-release confirmation — 2026-10-14
+
+- The scheduled cron route now fails closed with HTTP 503 when the durable queue rollout gate is disabled. The old inline scheduled execution path was removed; scheduled work is queued rather than executed inside the producer request.
+- The producer preserves live capability preflight before enqueue, derives the shared idempotency key from the schedule generation, and advances the schedule cursor only after enqueue succeeds.
+- Lease release is accepted only when the RPC has no error and returns literal `true`. For an ambiguous first-generation enqueue failure with no prior cursor, the producer retains the lease until expiry rather than changing the idempotency generation and risking a duplicate job.
+- Exact-head CI passed on commit `11ccd4a1ccbe3fff1877aed515e764525d164b1d`: typecheck, complete unit suite, targeted execution-integrity lint, production build, and disposable PostgreSQL migration/idempotency/lease-fencing/concurrent-worker smoke test. See [CI run 38522195285](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38522195285).
+- This is code and disposable-database evidence only. Hosted staging migration/RLS/RPC checks, deployed cron authentication, provider-side duplicate-effect/idempotency tests, interrupted-worker recovery, deployed HTTP/TLS/DNS/redirect/timeout checks, audit-history inspection, and repository-wide lint disposition remain open. P0 remains open; do not enable production queue/outbound transport or begin P1.
