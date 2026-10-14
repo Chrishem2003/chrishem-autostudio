@@ -72,6 +72,29 @@ describe("findExecutionAuditConsistencyIssues", () => {
     ]);
   });
 
+  test("flags audit runs linked to multiple queue jobs", () => {
+    expect(findExecutionAuditConsistencyIssues(
+      [
+        { id: "job-success", status: "succeeded", run_id: "shared-run", finished_at: "2026-10-13T12:00:02Z" },
+        { id: "job-retry", status: "queued", run_id: "shared-run" },
+      ],
+      [{ id: "shared-run", status: "success", finished_at: "2026-10-13T12:00:01Z" }],
+    )).toEqual([
+      { issue: "audit_run_linked_to_multiple_queue_jobs", jobId: "job-success", runId: "shared-run" },
+      { issue: "audit_run_linked_to_multiple_queue_jobs", jobId: "job-retry", runId: "shared-run" },
+      { issue: "non_successful_job_with_successful_audit_run", jobId: "job-retry", runId: "shared-run" },
+    ]);
+  });
+
+  test("flags queue success timestamp that predates its audit run completion", () => {
+    expect(findExecutionAuditConsistencyIssues(
+      [{ id: "out-of-order-job", status: "succeeded", run_id: "later-run", finished_at: "2026-10-13T12:00:00Z" }],
+      [{ id: "later-run", status: "success", finished_at: "2026-10-13T12:00:01Z" }],
+    )).toEqual([
+      { issue: "queue_completed_before_audit_run", jobId: "out-of-order-job", runId: "later-run" },
+    ]);
+  });
+
   test("accepts the canonical manual/scheduled audit status success for a succeeded queue job", () => {
     expect(findExecutionAuditConsistencyIssues(
       [{
