@@ -12,6 +12,7 @@ import { scheduledExecutionIdempotencyKey } from "@/lib/scheduled-execution-key"
 import { normalizeScheduledTriggerConfig } from "@/lib/scheduled-trigger-config";
 import { isScheduledLeaseReleaseConfirmed, runScheduledEnqueueAttempt, shouldReleaseScheduledLease } from "@/lib/scheduled-enqueue-attempt";
 import { isValidExecutionLeaseToken } from "@/lib/execution-lease-token";
+import { parseStaleExecutionRunReferences } from "@/lib/stale-execution-run-references";
 
 const MAX_SCHEDULED_FLOW_RUNTIME_MS = 4 * 60 * 1000;
 
@@ -49,7 +50,12 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
           console.error("[AutoStudio scheduler] Could not inspect stale runs; refusing to schedule new work.", { errorCode: staleQueryError.code });
           return withCronSecurityHeaders(new Response("stale-run reconciliation failed", { status: 500 }));
         }
-        for (const stale of staleRuns ?? []) {
+        const staleRunReferences = parseStaleExecutionRunReferences(staleRuns);
+        if (!staleRunReferences.success) {
+          console.error("[AutoStudio scheduler] Stale-run query returned an invalid result; refusing to schedule new work.");
+          return withCronSecurityHeaders(new Response("stale-run reconciliation failed", { status: 500 }));
+        }
+        for (const stale of staleRunReferences.runs) {
           const { data: recoveryResult, error: recoveryError } = await supabaseAdmin.rpc(
             "reconcile_stale_execution_run" as never,
             { _run_id: stale.id, _lock_token: null } as never,
