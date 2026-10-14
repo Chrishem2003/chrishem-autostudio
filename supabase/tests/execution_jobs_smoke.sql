@@ -1091,6 +1091,26 @@ begin
 end
 $$;
 
+
+-- Scheduled lease release must lock the automation parent before deleting
+-- the lease row, matching the claim RPC's parent-first order.
+do $scheduled_release_lock_order_check$
+declare
+  definition text := regexp_replace(pg_get_functiondef('public.release_scheduled_automation(uuid, uuid, timestamptz)'::regprocedure), '[[:space:]]+', ' ', 'g');
+  automation_lock_position integer;
+  lease_delete_position integer;
+begin
+  automation_lock_position := strpos(definition, 'from public.automations where id = _automation_id for update');
+  lease_delete_position := strpos(definition, 'delete from public.scheduled_run_locks');
+  if automation_lock_position = 0 or lease_delete_position = 0 then
+    raise exception 'Scheduled release is missing an expected parent/lease operation';
+  end if;
+  if automation_lock_position > lease_delete_position then
+    raise exception 'Scheduled release deletes the lease before locking automations; this can deadlock with a claimant';
+  end if;
+end
+$scheduled_release_lock_order_check$;
+
 -- The stale-run recovery RPC must preserve parent-first row-lock ordering.
 -- Its initial run lookup is intentionally unlocked; the automation lock must be
 -- acquired before the later SELECT ... FOR UPDATE of the run row.
