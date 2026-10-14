@@ -30,6 +30,7 @@ This checklist is the release gate for P0 execution-integrity hardening. A code 
 - [x] Queue-health consistency diagnostics expose a job-count mismatch when separately queried aggregate counts and inspected rows differ, avoiding a false impression that non-transactional snapshots are perfectly aligned.
 - [x] Queue-health audit findings distinguish the bounded job-scan limit from the response sample limit; findingsTruncated is true if either bound prevents a complete queue-wide finding list.
 - [ ] Final P0 head has focused and full test results recorded; this gate stays open until final code changes are complete.
+- [ ] Safe integration of P0 onto a clean branch from `main` is reviewed and verified; see [P0 main integration reconnaissance](./P0_MAIN_INTEGRATION_RECONNAISSANCE.md). A green CI run on the hardening branch does not validate a separately constructed integration branch.
 - [ ] Repository-wide lint baseline is remediated separately: the first full-repo run reported 2,683 errors (mostly Prettier formatting plus test-file `@ts-nocheck` violations). Do not mass-format unrelated application files as part of this safety patch.
 
 ## B. Execution lifecycle and recovery
