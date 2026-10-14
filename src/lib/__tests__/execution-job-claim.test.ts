@@ -1,3 +1,4 @@
+/* eslint @typescript-eslint/ban-ts-comment: off */
 // @ts-nocheck -- Bun's test runner supplies test types at runtime
 import { describe, expect, test } from "bun:test";
 import { parseClaimedExecutionJob, parseClaimedExecutionJobResponse } from "../execution-job-claim";
