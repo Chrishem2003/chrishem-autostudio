@@ -35,6 +35,9 @@ This checklist is the release gate for P0 execution-integrity hardening. A code 
 
 ## B. Execution lifecycle and recovery
 
+- [x] Shared flow-step engine fails closed when its runtime budget is malformed (non-finite start/limit, non-positive limit, or future start time); regression tests verify no executor runs and a no-effect failure outcome is persisted. Exact-head CI passed on `52596649c31909aee864eeeea8282c288e995e08`: typecheck, unit tests, focused execution-integrity lint, production build, and disposable PostgreSQL queue migration/concurrency smoke tests. [CI run 38535743213](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/38535743213).
+
+
 - [x] Worker rejects a `succeeded` result unless the executor reports `effect_confirmed`; contradictory or malformed executor results go to `needs_review` rather than false success or automatic replay. Regression tests added.
 - [x] Queue claim failure propagates without calling the executor or finalizer; regression test passed in CI run 38134707956.
 - [x] Run creation/association fails closed before execution starts; regression tests passed in prior green CI run.
