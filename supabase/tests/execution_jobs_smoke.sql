@@ -1238,3 +1238,24 @@ begin
 end
 $finished_run_expiry_check$;
 
+
+-- Worker lease fences must use statement-time clock reads, not transaction-
+-- stable now(), or a finalizer waiting on a row lock can outlive its lease.
+do $statement_time_lease_check$
+declare
+  heartbeat_definition text := lower(pg_get_functiondef('public.heartbeat_execution_job(uuid, uuid, integer)'::regprocedure));
+  finish_definition text := lower(pg_get_functiondef('public.finish_execution_job(uuid, uuid, text, text, timestamp with time zone)'::regprocedure));
+  claim_definition text := lower(pg_get_functiondef('public.claim_execution_job(integer)'::regprocedure));
+begin
+  if heartbeat_definition not like '%locked_until > clock_timestamp()%' then
+    raise exception 'Worker heartbeat does not evaluate expiry at statement time';
+  end if;
+  if finish_definition not like '%locked_until > clock_timestamp()%' then
+    raise exception 'Worker finalization does not evaluate expiry at statement time';
+  end if;
+  if claim_definition not like '%locked_until <= clock_timestamp()%' then
+    raise exception 'Expired worker recovery does not evaluate expiry at statement time';
+  end if;
+end
+$statement_time_lease_check$;
+
