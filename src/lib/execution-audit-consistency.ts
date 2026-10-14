@@ -122,7 +122,7 @@ export function findExecutionAuditConsistencyIssues(
       continue;
     }
 
-    if (isSuccessfulAuditRun(run.status) && run.finished_at != null && !hasValidCompletionTimestamp(run.finished_at)) {
+    if (run.finished_at != null && !hasValidCompletionTimestamp(run.finished_at)) {
       findings.push({ issue: "invalid_audit_run_completion_timestamp", jobId: job.id, runId: run.id });
     }
     if (run.status === "running" && run.finished_at != null) {
