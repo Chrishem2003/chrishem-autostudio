@@ -47,6 +47,8 @@ jobs:
           bunx eslint
           src/lib/execution-audit-consistency.ts
           src/lib/__tests__/execution-audit-consistency.test.ts
+          src/lib/execution-queue-health.ts
+          src/lib/__tests__/execution-queue-health.test.ts
           src/lib/execution-job-claim.ts
           src/lib/__tests__/execution-job-claim.test.ts
           src/lib/execution-job-policy.ts
