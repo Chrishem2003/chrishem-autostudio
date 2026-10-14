@@ -130,6 +130,16 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
             // A missing token without an RPC error means another scheduler owns
             // the lease; do not count normal concurrency as a failed automation.
             if (!queueLock) continue;
+            // Treat the RPC payload as untrusted runtime data. A malformed lease
+            // token cannot safely authorize enqueue/release operations; leave the
+            // lease to expire and report the automation as failed.
+            if (typeof queueLock !== "string" || queueLock.length > 200) {
+              console.error("[AutoStudio scheduler] Queue-enqueue lease returned an invalid token.", {
+                automationId: row.id,
+              });
+              failed++;
+              continue;
+            }
 
             const enqueuedAt = new Date().toISOString();
             const attempt = await runScheduledEnqueueAttempt({
