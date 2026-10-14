@@ -1096,7 +1096,7 @@ $$;
 -- acquired before the later SELECT ... FOR UPDATE of the run row.
 do $stale_run_lock_order_check$
 declare
-  definition text := regexp_replace(pg_get_functiondef('public.reconcile_stale_execution_run(uuid, uuid)'::regprocedure), '\\s+', ' ', 'g');
+  definition text := regexp_replace(pg_get_functiondef('public.reconcile_stale_execution_run(uuid, uuid)'::regprocedure), '[[:space:]]+', ' ', 'g');
   automation_lock_position integer;
   locked_run_position integer;
 begin
