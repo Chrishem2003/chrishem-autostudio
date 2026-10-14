@@ -110,6 +110,23 @@ describe("findExecutionAuditConsistencyIssues", () => {
     ]);
   });
 
+  test("detects completion timestamps on active records and missing timestamps on terminal failures", () => {
+    expect(findExecutionAuditConsistencyIssues(
+      [
+        { id: "active-job", status: "running", run_id: "active-run", finished_at: "2026-10-13T12:00:01Z" },
+        { id: "failed-job", status: "failed", run_id: "failed-run", finished_at: "2026-10-13T12:00:02Z" },
+      ],
+      [
+        { id: "active-run", status: "running", finished_at: "2026-10-13T12:00:00Z" },
+        { id: "failed-run", status: "failed", finished_at: null },
+      ],
+    )).toEqual([
+      { issue: "active_job_with_completion_timestamp", jobId: "active-job", runId: "active-run" },
+      { issue: "running_audit_run_with_completion_timestamp", jobId: "active-job", runId: "active-run" },
+      { issue: "terminal_audit_run_without_completion_timestamp", jobId: "failed-job", runId: "failed-run" },
+    ]);
+  });
+
   test("rejects malformed queue and audit completion timestamps", () => {
     expect(findExecutionAuditConsistencyIssues(
       [
