@@ -1,3 +1,4 @@
+import { validateComposePlan } from "@/lib/compose-plan-validation";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -15,44 +16,6 @@ export interface ComposeResult {
   error?: string;
 }
 
-/** Validate model output against the workflow contract; prompts alone are not a safety boundary. */
-function validateComposePlan(
-  plan: { defIds?: unknown; rationale?: unknown },
-  candidates: ComposeInput["candidates"],
-): ComposeResult {
-  if (!Array.isArray(plan.defIds) || plan.defIds.length < 3 || plan.defIds.length > 8) {
-    return { ok: false, defIds: [], rationale: "", error: "AI returned a plan outside the 3–8 step limit." };
-  }
-  if (plan.defIds.some((id) => typeof id !== "string")) {
-    return { ok: false, defIds: [], rationale: "", error: "AI returned invalid workflow step identifiers." };
-  }
-  const ids = plan.defIds as string[];
-  if (new Set(ids).size !== ids.length) {
-    return { ok: false, defIds: [], rationale: "", error: "AI returned duplicate workflow steps." };
-  }
-  const byId = new Map(candidates.map((candidate) => [candidate.id, candidate]));
-  const selected = ids.map((id) => byId.get(id));
-  if (selected.some((candidate) => !candidate)) {
-    return { ok: false, defIds: [], rationale: "", error: "AI selected a step outside the available catalog." };
-  }
-  const kinds = selected.map((candidate) => candidate!.kind.trim().toLowerCase());
-  if (kinds[0] !== "trigger" || kinds.filter((kind) => kind === "trigger").length !== 1) {
-    return { ok: false, defIds: [], rationale: "", error: "A valid workflow must start with exactly one trigger." };
-  }
-  return {
-    ok: true,
-    defIds: ids,
-    rationale: typeof plan.rationale === "string" ? plan.rationale.slice(0, 500) : "",
-  };
-}
-
-const GATEWAY = "https://ai.gateway.lovable.dev/v1/responses";
-
-/**
- * Turns a business outcome sentence into an ordered list of step ids picked from
- * the candidate catalog. Failure is never fatal — the client falls back to the
- * offline planner in `intent.ts`.
- */
 export const composeFlow = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: ComposeInput) => {
