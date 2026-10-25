@@ -46,12 +46,13 @@ export function CopilotBar({ vertical, flowName, currentDefIds = [], onApply }: 
           })),
         });
       } else {
-        setPlan({ ...fallback, notes: [...fallback.notes, res.error ?? "Planned offline."] });
+        setPlan({ ...fallback, notes: [...fallback.notes, res.error ?? "AI unavailable; using the offline planner."] });
       }
     } catch {
-      setPlan({ ...fallback, notes: [...fallback.notes, "Planned offline — the AI planner was unreachable."] });
+      setPlan({ ...fallback, notes: [...fallback.notes, "AI planner unavailable; a local fallback plan was created."] });
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   };
 
   return (
