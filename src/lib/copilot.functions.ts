@@ -54,6 +54,7 @@ export const composeFlow = createServerFn({ method: "POST" })
     try {
       const res = await fetch(GATEWAY, {
         method: "POST",
+        signal: AbortSignal.timeout(25_000),
         headers: { "Content-Type": "application/json", "Lovable-API-Key": key },
         body: JSON.stringify({
           model: "openai/gpt-6-astra",
@@ -96,7 +97,9 @@ export const composeFlow = createServerFn({ method: "POST" })
         ok: false,
         defIds: [],
         rationale: "",
-        error: err instanceof Error ? err.message : "AI planner failed.",
+        error: err instanceof Error && err.name === "TimeoutError"
+          ? "AI planner timed out after 25 seconds. The offline planner is available; please retry shortly."
+          : "AI planner request failed. The offline planner is available; please retry shortly.",
       };
     }
   });
