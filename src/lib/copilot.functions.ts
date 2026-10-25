@@ -16,6 +16,8 @@ export interface ComposeResult {
   error?: string;
 }
 
+const GATEWAY = "https://api.gateway.lovable.dev/v1/responses";
+
 export const composeFlow = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: ComposeInput) => {
