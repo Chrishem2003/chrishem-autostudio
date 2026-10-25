@@ -54,10 +54,10 @@ function Workspace() {
   };
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
-      <aside className="w-56 shrink-0 border-r border-border bg-surface p-4">
+    <div className="flex min-h-screen flex-col bg-background text-foreground md:flex-row">
+      <aside className="w-full shrink-0 border-b border-border bg-surface p-4 md:w-56 md:border-b-0 md:border-r">
         <Link to="/" className="font-display text-sm font-semibold">Chrishem AutoStudio</Link>
-        <nav className="mt-6 space-y-1 text-sm">
+        <nav className="mt-4 flex flex-wrap gap-1 text-sm md:mt-6 md:block md:space-y-1">
           {(
             [
               ["automations", "My Automations"],
@@ -66,7 +66,7 @@ function Workspace() {
             ] as const
           ).map(([id, label]) => (
             <button key={id} onClick={() => setSection(id)}
-              className={cn("block w-full rounded-lg px-3 py-2 text-left", section === id ? "bg-surface-raised text-foreground" : "text-muted-foreground hover:text-foreground")}>
+              className={cn("min-w-0 flex-1 rounded-lg px-3 py-2 text-left md:block md:w-full md:flex-none", section === id ? "bg-surface-raised text-foreground" : "text-muted-foreground hover:text-foreground")}>
               {label}
             </button>
           ))}
@@ -77,8 +77,8 @@ function Workspace() {
           <button onClick={signOut} className="mt-2 text-primary">Sign out</button>
         </div>
       </aside>
-      <main className="flex-1 p-6">
-        <div className="mb-6 flex items-center justify-between">
+      <main className="min-w-0 flex-1 p-4 md:p-6">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <h1 className="font-display text-xl font-semibold">
             {section === "automations" ? "My Automations" : section === "runs" ? "Run History" : "Integrations"}
           </h1>
