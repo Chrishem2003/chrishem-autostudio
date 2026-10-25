@@ -15,6 +15,37 @@ export interface ComposeResult {
   error?: string;
 }
 
+/** Validate model output against the workflow contract; prompts alone are not a safety boundary. */
+function validateComposePlan(
+  plan: { defIds?: unknown; rationale?: unknown },
+  candidates: ComposeInput["candidates"],
+): ComposeResult {
+  if (!Array.isArray(plan.defIds) || plan.defIds.length < 3 || plan.defIds.length > 8) {
+    return { ok: false, defIds: [], rationale: "", error: "AI returned a plan outside the 3–8 step limit." };
+  }
+  if (plan.defIds.some((id) => typeof id !== "string")) {
+    return { ok: false, defIds: [], rationale: "", error: "AI returned invalid workflow step identifiers." };
+  }
+  const ids = plan.defIds as string[];
+  if (new Set(ids).size !== ids.length) {
+    return { ok: false, defIds: [], rationale: "", error: "AI returned duplicate workflow steps." };
+  }
+  const byId = new Map(candidates.map((candidate) => [candidate.id, candidate]));
+  const selected = ids.map((id) => byId.get(id));
+  if (selected.some((candidate) => !candidate)) {
+    return { ok: false, defIds: [], rationale: "", error: "AI selected a step outside the available catalog." };
+  }
+  const kinds = selected.map((candidate) => candidate!.kind.trim().toLowerCase());
+  if (kinds[0] !== "trigger" || kinds.filter((kind) => kind === "trigger").length !== 1) {
+    return { ok: false, defIds: [], rationale: "", error: "A valid workflow must start with exactly one trigger." };
+  }
+  return {
+    ok: true,
+    defIds: ids,
+    rationale: typeof plan.rationale === "string" ? plan.rationale.slice(0, 500) : "",
+  };
+}
+
 const GATEWAY = "https://ai.gateway.lovable.dev/v1/responses";
 
 /**
@@ -75,12 +106,7 @@ export const composeFlow = createServerFn({ method: "POST" })
           return { ok: false, defIds: [], rationale: "", error: "Shared AI returned no valid workflow plan." };
         }
         const plan = JSON.parse(jsonSlice) as { defIds?: unknown; rationale?: unknown };
-        const allowed = new Set(data.candidates.map((c) => c.id));
-        const defIds = Array.isArray(plan.defIds)
-          ? plan.defIds.filter((id): id is string => typeof id === "string" && allowed.has(id)).slice(0, 8)
-          : [];
-        if (defIds.length === 0) return { ok: false, defIds: [], rationale: "", error: "Shared AI returned no usable catalog steps." };
-        return { ok: true, defIds, rationale: typeof plan.rationale === "string" ? plan.rationale : "" };
+        return validateComposePlan(plan, data.candidates);
       } catch {
         return { ok: false, defIds: [], rationale: "", error: "Shared AI gateway could not be reached; no alternate provider was called." };
       }
@@ -123,12 +149,7 @@ export const composeFlow = createServerFn({ method: "POST" })
 
       const jsonSlice = text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
       const plan = JSON.parse(jsonSlice) as { defIds?: unknown; rationale?: unknown };
-      const allowed = new Set(data.candidates.map((c) => c.id));
-      const defIds = Array.isArray(plan.defIds)
-        ? plan.defIds.filter((id): id is string => typeof id === "string" && allowed.has(id)).slice(0, 8)
-        : [];
-      if (defIds.length === 0) return { ok: false, defIds: [], rationale: "", error: "AI returned no usable steps." };
-      return { ok: true, defIds, rationale: typeof plan.rationale === "string" ? plan.rationale : "" };
+      return validateComposePlan(plan, data.candidates);
     } catch (err) {
       return {
         ok: false,
