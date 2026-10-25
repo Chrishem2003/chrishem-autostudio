@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
 import { validateComposePlan } from "./compose-plan-validation";
 
 const candidates = [
@@ -9,33 +10,34 @@ const candidates = [
 ];
 
 describe("validateComposePlan", () => {
-  test("accepts a catalog-only plan with one leading trigger", () => {
-    expect(validateComposePlan(
-      { defIds: ["trigger-1", "logic-1", "action-1"], rationale: "safe draft" }, candidates,
-    )).toEqual({ ok: true, defIds: ["trigger-1", "logic-1", "action-1"], rationale: "safe draft" });
+  it("accepts a catalog-only plan with one leading trigger", () => {
+    assert.deepEqual(
+      validateComposePlan({ defIds: ["trigger-1", "logic-1", "action-1"], rationale: "safe draft" }, candidates),
+      { ok: true, defIds: ["trigger-1", "logic-1", "action-1"], rationale: "safe draft" },
+    );
   });
 
-  test("rejects plans shorter than three or longer than eight steps", () => {
-    expect(validateComposePlan({ defIds: ["trigger-1", "action-1"] }, candidates).ok).toBe(false);
-    expect(validateComposePlan({ defIds: Array.from({ length: 9 }, (_, i) => "step-" + i) }, candidates).ok).toBe(false);
+  it("rejects plans shorter than three or longer than eight steps", () => {
+    assert.equal(validateComposePlan({ defIds: ["trigger-1", "action-1"] }, candidates).ok, false);
+    assert.equal(validateComposePlan({ defIds: Array.from({ length: 9 }, (_, i) => "step-" + i) }, candidates).ok, false);
   });
 
-  test("rejects unknown and duplicate catalog identifiers", () => {
-    expect(validateComposePlan({ defIds: ["trigger-1", "missing", "action-1"] }, candidates).ok).toBe(false);
-    expect(validateComposePlan({ defIds: ["trigger-1", "logic-1", "logic-1"] }, candidates).ok).toBe(false);
+  it("rejects unknown and duplicate catalog identifiers", () => {
+    assert.equal(validateComposePlan({ defIds: ["trigger-1", "missing", "action-1"] }, candidates).ok, false);
+    assert.equal(validateComposePlan({ defIds: ["trigger-1", "logic-1", "logic-1"] }, candidates).ok, false);
   });
 
-  test("rejects plans that do not start with a trigger", () => {
-    expect(validateComposePlan({ defIds: ["logic-1", "trigger-1", "action-1"] }, candidates).ok).toBe(false);
+  it("rejects plans that do not start with a trigger", () => {
+    assert.equal(validateComposePlan({ defIds: ["logic-1", "trigger-1", "action-1"] }, candidates).ok, false);
   });
 
-  test("rejects a second trigger anywhere in the plan", () => {
-    expect(validateComposePlan({ defIds: ["trigger-1", "trigger-2", "action-1"] }, candidates).ok).toBe(false);
+  it("rejects a second trigger anywhere in the plan", () => {
+    assert.equal(validateComposePlan({ defIds: ["trigger-1", "trigger-2", "action-1"] }, candidates).ok, false);
   });
 
-  test("bounds model-authored rationale", () => {
+  it("bounds model-authored rationale", () => {
     const result = validateComposePlan({ defIds: ["trigger-1", "logic-1", "action-1"], rationale: "x".repeat(900) }, candidates);
-    expect(result.ok).toBe(true);
-    expect(result.rationale).toHaveLength(500);
+    assert.equal(result.ok, true);
+    assert.equal(result.rationale.length, 500);
   });
 });
