@@ -19,8 +19,8 @@ import { Route as MarketplaceRouteImport } from './routes/marketplace'
 import { Route as SdkRouteImport } from './routes/sdk'
 import { Route as AuthenticatedWorkspaceRouteImport } from './routes/_authenticated/workspace'
 import { Route as OauthGmailReturnRouteImport } from './routes/oauth/gmail/return'
-import { Route as ApiPublicCronRunScheduledRouteImport } from './routes/api/public/cron/run-scheduled'
 import { Route as ApiPublicCronRunExecutionJobRouteImport } from './routes/api/public/cron/run-execution-job'
+import { Route as ApiPublicCronRunScheduledRouteImport } from './routes/api/public/cron/run-scheduled'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -71,16 +71,16 @@ const OauthGmailReturnRoute = OauthGmailReturnRouteImport.update({
   path: '/oauth/gmail/return',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicCronRunScheduledRoute =
-  ApiPublicCronRunScheduledRouteImport.update({
-    id: '/api/public/cron/run-scheduled',
-    path: '/api/public/cron/run-scheduled',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const ApiPublicCronRunExecutionJobRoute =
   ApiPublicCronRunExecutionJobRouteImport.update({
     id: '/api/public/cron/run-execution-job',
     path: '/api/public/cron/run-execution-job',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicCronRunScheduledRoute =
+  ApiPublicCronRunScheduledRouteImport.update({
+    id: '/api/public/cron/run-scheduled',
+    path: '/api/public/cron/run-scheduled',
     getParentRoute: () => rootRouteImport,
   } as any)
 
@@ -94,8 +94,8 @@ export interface FileRoutesByFullPath {
   '/sdk': typeof SdkRoute
   '/workspace': typeof AuthenticatedWorkspaceRoute
   '/oauth/gmail/return': typeof OauthGmailReturnRoute
-  '/api/public/cron/run-scheduled': typeof ApiPublicCronRunScheduledRoute
   '/api/public/cron/run-execution-job': typeof ApiPublicCronRunExecutionJobRoute
+  '/api/public/cron/run-scheduled': typeof ApiPublicCronRunScheduledRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -107,6 +107,7 @@ export interface FileRoutesByTo {
   '/sdk': typeof SdkRoute
   '/workspace': typeof AuthenticatedWorkspaceRoute
   '/oauth/gmail/return': typeof OauthGmailReturnRoute
+  '/api/public/cron/run-execution-job': typeof ApiPublicCronRunExecutionJobRoute
   '/api/public/cron/run-scheduled': typeof ApiPublicCronRunScheduledRoute
 }
 export interface FileRoutesById {
@@ -121,6 +122,7 @@ export interface FileRoutesById {
   '/sdk': typeof SdkRoute
   '/_authenticated/workspace': typeof AuthenticatedWorkspaceRoute
   '/oauth/gmail/return': typeof OauthGmailReturnRoute
+  '/api/public/cron/run-execution-job': typeof ApiPublicCronRunExecutionJobRoute
   '/api/public/cron/run-scheduled': typeof ApiPublicCronRunScheduledRoute
 }
 export interface FileRouteTypes {
@@ -135,8 +137,8 @@ export interface FileRouteTypes {
     | '/sdk'
     | '/workspace'
     | '/oauth/gmail/return'
-    | '/api/public/cron/run-scheduled'
     | '/api/public/cron/run-execution-job'
+    | '/api/public/cron/run-scheduled'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -148,8 +150,8 @@ export interface FileRouteTypes {
     | '/sdk'
     | '/workspace'
     | '/oauth/gmail/return'
-    | '/api/public/cron/run-scheduled'
     | '/api/public/cron/run-execution-job'
+    | '/api/public/cron/run-scheduled'
   id:
     | '__root__'
     | '/'
@@ -162,8 +164,8 @@ export interface FileRouteTypes {
     | '/sdk'
     | '/_authenticated/workspace'
     | '/oauth/gmail/return'
-    | '/api/public/cron/run-scheduled'
     | '/api/public/cron/run-execution-job'
+    | '/api/public/cron/run-scheduled'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -176,6 +178,7 @@ export interface RootRouteChildren {
   MarketplaceRoute: typeof MarketplaceRoute
   SdkRoute: typeof SdkRoute
   OauthGmailReturnRoute: typeof OauthGmailReturnRoute
+  ApiPublicCronRunExecutionJobRoute: typeof ApiPublicCronRunExecutionJobRoute
   ApiPublicCronRunScheduledRoute: typeof ApiPublicCronRunScheduledRoute
 }
 
@@ -251,18 +254,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OauthGmailReturnRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/cron/run-scheduled': {
-      id: '/api/public/cron/run-scheduled'
-      path: '/api/public/cron/run-scheduled'
-      fullPath: '/api/public/cron/run-scheduled'
-      preLoaderRoute: typeof ApiPublicCronRunScheduledRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/public/cron/run-execution-job': {
       id: '/api/public/cron/run-execution-job'
       path: '/api/public/cron/run-execution-job'
       fullPath: '/api/public/cron/run-execution-job'
       preLoaderRoute: typeof ApiPublicCronRunExecutionJobRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/cron/run-scheduled': {
+      id: '/api/public/cron/run-scheduled'
+      path: '/api/public/cron/run-scheduled'
+      fullPath: '/api/public/cron/run-scheduled'
+      preLoaderRoute: typeof ApiPublicCronRunScheduledRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -289,8 +292,8 @@ const rootRouteChildren: RootRouteChildren = {
   MarketplaceRoute: MarketplaceRoute,
   SdkRoute: SdkRoute,
   OauthGmailReturnRoute: OauthGmailReturnRoute,
-  ApiPublicCronRunScheduledRoute: ApiPublicCronRunScheduledRoute,
   ApiPublicCronRunExecutionJobRoute: ApiPublicCronRunExecutionJobRoute,
+  ApiPublicCronRunScheduledRoute: ApiPublicCronRunScheduledRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
