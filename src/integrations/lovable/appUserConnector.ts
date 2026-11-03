@@ -40,7 +40,7 @@ export async function authorizeAppUserOAuth(params: AppUserOAuthAuthorizeParams)
     "X-Client-Api-Key": params.clientAPIKey,
   };
   if (params.connectionAPIKey) headers["X-Connection-Api-Key"] = params.connectionAPIKey;
-  const res = await fetch(`${params.gatewayBaseUrl}/api/v1/app-users/oauth2/authorize`, {
+  const res = await fetch(buildAppUserGatewayUrl(params.gatewayBaseUrl, "/api/v1/app-users/oauth2/authorize"), {
     method: "POST",
     headers,
     redirect: "manual",
@@ -67,11 +67,29 @@ export async function authorizeAppUserOAuth(params: AppUserOAuthAuthorizeParams)
 function validateGatewayBaseUrl(value: string): URL {
   let url: URL;
   try { url = new URL(value); } catch { throw new Error("App User connector gateway URL is invalid."); }
-  const localHttp = url.protocol === "http:" && (url.hostname === "localhost" || url.hostname === "127.0.0.1");
-  if ((url.protocol !== "https:" && !localHttp) || url.username || url.password || url.search || url.hash || (url.pathname !== "/" && url.pathname !== "")) {
+  const trustedGateway = url.protocol === "https:" && url.hostname === "connector-gateway.lovable.dev" && !url.port;
+  if (!trustedGateway || url.username || url.password || url.search || url.hash || (url.pathname !== "/" && url.pathname !== "")) {
     throw new Error("App User connector gateway must be a trusted HTTPS origin.");
   }
   return url;
+}
+
+export function buildAppUserGatewayUrl(gatewayBaseUrl: string, endpointPath: string): string {
+  const base = validateGatewayBaseUrl(gatewayBaseUrl);
+  if (
+    !endpointPath.startsWith("/api/v1/app-users/") ||
+    endpointPath.startsWith("//") ||
+    endpointPath.includes("\\") ||
+    /[\u0000-\u0020\u007f#]/.test(endpointPath) ||
+    /%(?:2e|2f|5c)/i.test(endpointPath)
+  ) {
+    throw new Error("App User gateway endpoint is invalid.");
+  }
+  const target = new URL(endpointPath, base);
+  if (target.origin !== base.origin || !target.pathname.startsWith("/api/v1/app-users/")) {
+    throw new Error("App User gateway endpoint escaped its authorized path.");
+  }
+  return target.toString();
 }
 
 export function buildAppUserConnectorUrl(gatewayBaseUrl: string, connectorId: string, path: string): string {
@@ -117,7 +135,7 @@ export async function disconnectAppUser({ gatewayBaseUrl, connectionAPIKey, conn
   headers.set("Authorization", `Bearer ${requireApiKey()}`);
   headers.set("X-Connection-Api-Key", connectionAPIKey);
   headers.set("Content-Type", "application/json");
-  const res = await fetch(`${gatewayBaseUrl}/api/v1/app-users/connection`, {
+  const res = await fetch(buildAppUserGatewayUrl(gatewayBaseUrl, "/api/v1/app-users/connection"), {
     method: "DELETE",
     headers,
     redirect: "manual",
@@ -128,7 +146,7 @@ export async function disconnectAppUser({ gatewayBaseUrl, connectionAPIKey, conn
 }
 
 export async function exchangeAppUserOAuthCode(gatewayBaseUrl: string, code: string): Promise<{ connectionAPIKey: string; connectorId: string }> {
-  const res = await fetch(`${gatewayBaseUrl}/api/v1/app-users/oauth2/exchange`, {
+  const res = await fetch(buildAppUserGatewayUrl(gatewayBaseUrl, "/api/v1/app-users/oauth2/exchange"), {
     method: "POST",
     headers: { Authorization: `Bearer ${requireApiKey()}`, "Content-Type": "application/json" },
     redirect: "manual",
