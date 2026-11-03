@@ -20,7 +20,66 @@ declare
   interrupted_run_id uuid;
   terminal_job public.execution_jobs%rowtype;
   terminal_run_id uuid;
+  automation_lease_token uuid;
+  replacement_automation_lease_token uuid;
 begin
+  -- The queue worker must renew the shared automation lease as well as its
+  -- queue-job lease. Expired/superseded tokens may never extend ownership.
+  automation_lease_token := public.claim_manual_automation(
+    '00000000-0000-4000-8000-000000000002', 300
+  );
+  if automation_lease_token is null then
+    raise exception 'Could not claim the automation lease fixture';
+  end if;
+  if public.heartbeat_manual_automation(
+    '00000000-0000-4000-8000-000000000002', gen_random_uuid(), 300
+  ) then
+    raise exception 'Automation heartbeat accepted a stale token';
+  end if;
+  if not public.heartbeat_manual_automation(
+    '00000000-0000-4000-8000-000000000002', automation_lease_token, 300
+  ) then
+    raise exception 'Automation heartbeat rejected the current token';
+  end if;
+  update public.scheduled_run_locks
+     set locked_until = now() - interval '1 second'
+   where automation_id = '00000000-0000-4000-8000-000000000002';
+  if public.heartbeat_manual_automation(
+    '00000000-0000-4000-8000-000000000002', automation_lease_token, 300
+  ) then
+    raise exception 'Expired automation lease was renewed';
+  end if;
+  replacement_automation_lease_token := public.claim_manual_automation(
+    '00000000-0000-4000-8000-000000000002', 300
+  );
+  if replacement_automation_lease_token is null
+     or replacement_automation_lease_token = automation_lease_token then
+    raise exception 'Expired automation lease was not replaced with a new token';
+  end if;
+  if public.heartbeat_manual_automation(
+    '00000000-0000-4000-8000-000000000002', automation_lease_token, 300
+  ) then
+    raise exception 'Superseded automation lease token renewed ownership';
+  end if;
+  if not public.heartbeat_manual_automation(
+    '00000000-0000-4000-8000-000000000002', replacement_automation_lease_token, 300
+  ) then
+    raise exception 'Replacement automation lease could not be renewed';
+  end if;
+  if has_function_privilege('anon', 'public.heartbeat_manual_automation(uuid, uuid, integer)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.heartbeat_manual_automation(uuid, uuid, integer)', 'EXECUTE') then
+    raise exception 'Untrusted roles can execute the automation heartbeat RPC';
+  end if;
+  if not public.release_manual_automation(
+    '00000000-0000-4000-8000-000000000002', replacement_automation_lease_token
+  ) then
+    raise exception 'Current automation lease could not be released';
+  end if;
+  if public.heartbeat_manual_automation(
+    '00000000-0000-4000-8000-000000000002', replacement_automation_lease_token, 300
+  ) then
+    raise exception 'Released automation lease token renewed ownership';
+  end if;
   select * into first_job
     from public.enqueue_execution_job(
       '00000000-0000-4000-8000-000000000002',
