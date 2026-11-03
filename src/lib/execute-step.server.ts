@@ -8,12 +8,12 @@ import { mapFields } from "@/lib/field-mapping";
 import { evaluateFilterCondition, validateFilterCondition } from "@/lib/logic-filter";
 import { getConnectorManifestForNode, validateConnectorActionConfig } from "@/lib/connector-manifests";
 import type { WorkflowNode } from "@/lib/workflow";
+import { outboundTransportGateError } from "@/lib/outbound-transport-gate";
 
 const GMAIL_GATEWAY = "https://connector-gateway.lovable.dev";
 const GMAIL_CONNECTOR = "google_mail";
 const GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.send"];
 const GMAIL_VERIFICATION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
-const outboundTransportReady = () => process.env["AUTOSTUDIO_OUTBOUND_TRANSPORT_READY"] === "true";
 
 export type ExecutionMode = "dry" | "test" | "live";
 export type ExecutedStep = {
@@ -151,11 +151,15 @@ export async function executeStep(args: {
   if (unsupported) return result("failed", unsupported, 0);
 
   const liveTool = NODES[node.defId]?.tool;
+  const outboundGateError = outboundTransportGateError();
   if (
-    (node.defId === "action.http" || node.defId === "output.webhook" || isChatMessageStep(node.defId, liveTool)) &&
-    !outboundTransportReady()
+    (isGmailSendStep(node.defId) ||
+      node.defId === "action.http" ||
+      node.defId === "output.webhook" ||
+      isChatMessageStep(node.defId, liveTool)) &&
+    outboundGateError
   ) {
-    return result("failed", "Outbound HTTP transport has not passed the deployment runtime smoke test. No request was sent.", 0);
+    return result("failed", outboundGateError, 0);
   }
 
   if (isGmailSendStep(node.defId)) {
@@ -257,6 +261,8 @@ export async function livePreflightError(node: WorkflowNode, userId: string): Pr
 
   const definition = NODES[node.defId];
   if (isGmailSendStep(node.defId)) {
+    const outboundGateError = outboundTransportGateError();
+    if (outboundGateError) return outboundGateError;
     const connection = await getConnectionForUser(userId, GMAIL_CONNECTOR);
     if (!connection) return "Connect Gmail before enabling this flow.";
     const verifiedAt = connection.verifiedAt ? Date.parse(connection.verifiedAt) : 0;
@@ -279,9 +285,8 @@ export async function livePreflightError(node: WorkflowNode, userId: string): Pr
     if (isBlockedHost(url.hostname)) {
       return "The destination is private or local and cannot be used by a live flow.";
     }
-    if (!outboundTransportReady()) {
-      return "Outbound HTTP transport has not passed the deployment runtime smoke test. Keep this flow in Preview until an operator enables the verified transport.";
-    }
+    const outboundGateError = outboundTransportGateError();
+    if (outboundGateError) return outboundGateError;
     try {
       await resolvePublicTarget(url.hostname);
     } catch {
