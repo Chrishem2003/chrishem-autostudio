@@ -496,6 +496,7 @@ export type Database = {
       release_scheduled_automation: { Args: { _automation_id: string; _lock_token: string; _last_run_at: string }; Returns: boolean }
       claim_manual_automation: { Args: { _automation_id: string; _lease_seconds?: number }; Returns: string | null }
       heartbeat_manual_automation: { Args: { _automation_id: string; _lock_token: string; _lease_seconds?: number }; Returns: boolean }
+      reconcile_stale_execution_run: { Args: { _run_id: string; _lock_token?: string | null }; Returns: string }
       release_manual_automation: { Args: { _automation_id: string; _lock_token: string }; Returns: boolean }
       enqueue_execution_job: {
         Args: {
