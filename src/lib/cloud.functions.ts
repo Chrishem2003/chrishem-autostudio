@@ -434,47 +434,31 @@ export const listIntegrations = createServerFn({ method: "GET" })
     }));
   });
 
+/**
+ * Generic integration records are metadata only. Until a provider-specific
+ * OAuth/API-key verifier exists, clients must not self-assert connected or
+ * verified state. Keep these endpoints fail-closed rather than writing
+ * misleading credentials metadata.
+ */
 export const connectIntegration = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
-    z
-      .object({
-        provider: z.string().min(1).max(80),
-        accountLabel: z.string().max(160).optional(),
-        authKind: z.enum(["oauth2", "apiKey", "basic", "none"]).default("oauth2"),
-        scopes: z.array(z.string().max(80)).max(30).default([]),
-      })
-      .parse(input),
+    z.object({
+      provider: z.string().min(1).max(80),
+      accountLabel: z.string().max(160).optional(),
+      authKind: z.enum(["oauth2", "apiKey", "basic", "none"]).default("oauth2"),
+      scopes: z.array(z.string().max(80)).max(30).default([]),
+    }).parse(input),
   )
-  .handler(async ({ context, data }) => {
-    const { error } = await context.supabase.from("integrations").upsert(
-      {
-        user_id: context.userId,
-        provider: data.provider,
-        display_name: data.provider,
-        account_label: data.accountLabel ?? null,
-        auth_kind: data.authKind,
-        status: "connected",
-        scopes: data.scopes,
-        last_verified_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id,provider" },
-    );
-    if (error) throw new Error(error.message);
-    return { ok: true };
+  .handler(async () => {
+    throw new Error("This provider does not yet have a verified authorization flow. No connection was created.");
   });
 
 export const verifyIntegration = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ integrationId: z.string().uuid() }).parse(input))
-  .handler(async ({ context, data }) => {
-    const { error } = await context.supabase
-      .from("integrations")
-      .update({ status: "connected", last_verified_at: new Date().toISOString() })
-      .eq("id", data.integrationId)
-      .eq("user_id", context.userId);
-    if (error) throw new Error(error.message);
-    return { ok: true, verifiedAt: new Date().toISOString() };
+  .handler(async () => {
+    throw new Error("Integration verification must be performed by a provider-specific server handshake.");
   });
 
 export const disconnectIntegration = createServerFn({ method: "POST" })
