@@ -16,6 +16,7 @@ create table if not exists public.run_logs (
   id uuid primary key default gen_random_uuid(),
   automation_id uuid not null references public.automations(id) on delete cascade,
   status public.run_status not null default 'queued',
+  trigger_type text not null default 'manual',
   started_at timestamptz not null default now(),
   finished_at timestamptz,
   duration_ms integer,
