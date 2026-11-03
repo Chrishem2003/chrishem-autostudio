@@ -11,7 +11,7 @@ security definer
 set search_path = public
 as $heartbeat_manual_automation$
 begin
-  if _lease_seconds < 60 or _lease_seconds > 900 then
+  if _lease_seconds is null or _lease_seconds < 60 or _lease_seconds > 900 then
     raise exception 'Invalid automation lease duration';
   end if;
 
