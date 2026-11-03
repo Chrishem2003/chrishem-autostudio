@@ -8,6 +8,15 @@ export function isDurableQueueEnabled(env: RuntimeEnvironment = process.env): bo
   return env["AUTOSTUDIO_DURABLE_QUEUE_ENABLED"] === "true";
 }
 
+/**
+ * The worker has an independent rollout gate so operators can validate its
+ * protected empty-queue path without enabling scheduled/manual producers.
+ * Missing, misspelled, or non-literal values remain disabled.
+ */
+export function isDurableQueueWorkerEnabled(env: RuntimeEnvironment = process.env): boolean {
+  return env["AUTOSTUDIO_DURABLE_QUEUE_WORKER_ENABLED"] === "true";
+}
+
 export function isOutboundTransportReady(env: RuntimeEnvironment = process.env): boolean {
   return env["AUTOSTUDIO_OUTBOUND_TRANSPORT_READY"] === "true";
 }
