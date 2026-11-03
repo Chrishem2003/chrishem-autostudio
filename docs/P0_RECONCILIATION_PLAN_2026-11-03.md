@@ -97,3 +97,35 @@ Therefore, the task is **not** to copy the P0 branch wholesale. It is to compare
 ## Next engineering action
 
 Continue the file-by-file and migration-by-migration reconciliation against the current `main` snapshot. Prioritize independent queue rollout gates, dual-lease fencing, run/job association, and audit finalization because these are execution-integrity boundaries. Keep each port isolated and testable.
+
+
+## Reconciliation implementation checkpoint — 2026-11-03
+
+The following selected safeguards have now been ported to the clean integration branch from the divergent P0 work, adapted to the current `main` schema, and committed in draft PR #7:
+
+- Independent producer and worker rollout flags; worker can be tested without enabling producers.
+- Shared fail-closed cron authentication, generic exception fallbacks, and cache/security headers on scheduler and worker responses.
+- Queue-worker claim validation, bounded retry backoff, and fail-closed treatment of malformed or uncertain executor outcomes.
+- Dual queue-job and automation lease keepalive/fencing before provider actions, audit writes, and run finalization.
+- Read-only queue-health diagnostics and audit consistency checks. The lookup uses `run_logs.execution_job_id`, which exists on current `main`; it does not assume the divergent branch's `execution_jobs.run_id` column.
+- Atomic stale manual/scheduled run reconciliation with parent-first lock ordering and a fresh wall-clock lease check. Unfinished steps are marked uncertain; no provider actions are replayed.
+- Shared scheduled-trigger normalization and live capability preflight before enqueue; the worker repeats preflight immediately before execution.
+- Authenticated audit history is owner-scoped and read-only. Dry-run audit writes now use the server-only service-role client with bounded output/error sanitization.
+- Focused blocking lint for changed production execution-integrity and cron modules.
+- A staging runbook and an explicit staging acceptance record.
+
+### Exact-head automated verification
+
+- Branch: `audit/p0-reconciliation-2026-11-03`
+- Draft PR: [#7](https://github.com/Chrishem2003/chrishem-autostudio/pull/7)
+- Verified code checkpoint before documentation-only additions: `f53139a98d475940751d23947325736a36e476fd`
+- Exact-head PR CI: [run 41641171720 — passed](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/41641171720)
+- Passed: frozen dependency install, typecheck, full unit suite, focused production lint, production build, scheduler/heartbeat/stale-run/audit migrations, automation and queue lease fencing, stale-run recovery, audit read/write permissions, idempotency and concurrent worker claim tests.
+
+### Remaining release gates
+
+- Hosted non-production staging acceptance is **NOT RUN**. Complete `docs/P0_STAGING_ACCEPTANCE_RECORD.md` only from the actual dedicated staging deployment.
+- Obtain independent review of the exact integrated code and migration chain.
+- Reconcile any remaining P0-only changes not yet ported; do not copy the 144-file divergent branch wholesale.
+- Keep production producer, worker, and outbound transport flags disabled.
+- P0 remains **OPEN**; P1 remains **NOT AUTHORIZED** until explicit staging-backed P0 exit approval.
