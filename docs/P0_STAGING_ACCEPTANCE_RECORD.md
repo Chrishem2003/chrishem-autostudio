@@ -48,6 +48,7 @@ This record must be completed only from the actual dedicated non-production appl
 - [ ] Confirm producer and worker are independently gated.
 - [ ] Confirm queue-job and automation lease heartbeats both renew only for current tokens.
 - [ ] Confirm stale/expired/superseded lease tokens cannot renew or finalize.
+- [ ] With `AUTOSTUDIO_OUTBOUND_TRANSPORT_READY=false`, confirm Gmail, HTTP, webhook and chat steps all fail preflight before any provider request.
 - [ ] Confirm provider preflight rejection produces no external effect.
 - [ ] Confirm a reused idempotency key returns the same logical job.
 - [ ] Confirm changed logical input with a reused key is rejected.
