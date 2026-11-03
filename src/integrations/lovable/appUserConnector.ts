@@ -64,6 +64,28 @@ export async function authorizeAppUserOAuth(params: AppUserOAuthAuthorizeParams)
   return { authorizationUrl: validateOAuthAuthorizationUrl(body.authorization_url), sessionId: body.session_id ?? "" };
 }
 
+function validateGatewayBaseUrl(value: string): URL {
+  let url: URL;
+  try { url = new URL(value); } catch { throw new Error("App User connector gateway URL is invalid."); }
+  const localHttp = url.protocol === "http:" && (url.hostname === "localhost" || url.hostname === "127.0.0.1");
+  if ((url.protocol !== "https:" && !localHttp) || url.username || url.password || url.search || url.hash || (url.pathname !== "/" && url.pathname !== "")) {
+    throw new Error("App User connector gateway must be a trusted HTTPS origin.");
+  }
+  return url;
+}
+
+export function buildAppUserConnectorUrl(gatewayBaseUrl: string, connectorId: string, path: string): string {
+  const base = validateGatewayBaseUrl(gatewayBaseUrl);
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(connectorId)) throw new Error("App User connector identifier is invalid.");
+  if (!path.startsWith("/") || path.startsWith("//") || path.includes("\\") || /[\u0000-\u0020\u007f#]/.test(path) || /%(?:2e|2f|5c)/i.test(path)) {
+    throw new Error("App User connector path is invalid.");
+  }
+  const target = new URL("/" + connectorId + path, base);
+  if (target.origin !== base.origin || !target.pathname.startsWith("/" + connectorId + "/")) {
+    throw new Error("App User connector path escaped its authorized endpoint.");
+  }
+  return target.toString();
+}
 export interface CallAsAppUserParams {
   gatewayBaseUrl: string;
   connectionAPIKey: string;
@@ -74,12 +96,12 @@ export interface CallAsAppUserParams {
 }
 
 export async function callAsAppUser({ gatewayBaseUrl, connectionAPIKey, connectorId, path, init, requiredScopes }: CallAsAppUserParams): Promise<Response> {
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const targetUrl = buildAppUserConnectorUrl(gatewayBaseUrl, connectorId, path);
   const headers = new Headers(init?.headers);
   headers.set("Authorization", `Bearer ${requireApiKey()}`);
   headers.set("X-Connection-Api-Key", connectionAPIKey);
   if (requiredScopes?.length) headers.set("X-Lovable-Required-Scopes", requiredScopes.join(" "));
-  const res = await fetch(`${gatewayBaseUrl}/${connectorId}${normalizedPath}`, { ...init, headers, redirect: "manual" });
+  const res = await fetch(targetUrl, { ...init, headers, redirect: "manual" });
   if (res.status >= 300 && res.status < 400) throw new Error("App User connector request rejected an unexpected redirect.");
   return res;
 }
