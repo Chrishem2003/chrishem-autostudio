@@ -59,6 +59,8 @@ jobs:
           src/lib/live-execution-preflight.ts
           src/lib/scheduled-trigger-config.ts
           src/lib/execution.functions.ts
+          src/lib/outbound-transport-gate.ts
+          src/lib/execute-step.server.ts
           src/routes/api/public/cron/run-execution-job.ts
           src/routes/api/public/cron/run-scheduled.ts
           src/routes/api/public/cron/execution-queue-health.ts
