@@ -22,6 +22,9 @@ declare
   terminal_run_id uuid;
   automation_lease_token uuid;
   replacement_automation_lease_token uuid;
+  stale_run_id uuid;
+  recent_run_id uuid;
+  stale_reconcile_result text;
 begin
   -- The queue worker must renew the shared automation lease as well as its
   -- queue-job lease. Expired/superseded tokens may never extend ownership.
@@ -80,6 +83,89 @@ begin
   ) then
     raise exception 'Released automation lease token renewed ownership';
   end if;
+  if public.heartbeat_manual_automation(
+    '00000000-0000-4000-8000-000000000002', replacement_automation_lease_token, 300
+  ) then
+    raise exception 'Released automation lease token renewed ownership';
+  end if;
+
+  -- Stale manual/scheduled recovery is read-only until the automation lease
+  -- is expired. It marks in-flight steps uncertain and never replays effects.
+  insert into public.run_logs (
+    automation_id, trigger_type, status, started_at
+  ) values (
+    '00000000-0000-4000-8000-000000000002',
+    'manual',
+    'running',
+    now() - interval '30 minutes'
+  ) returning id into stale_run_id;
+  insert into public.run_step_logs (run_id, status, outcome_state, error_detail)
+  values (stale_run_id, 'running', 'uncertain', 'Worker was interrupted.');
+
+  automation_lease_token := public.claim_manual_automation(
+    '00000000-0000-4000-8000-000000000002', 300
+  );
+  if automation_lease_token is null then
+    raise exception 'Could not claim lease for active stale-run fixture';
+  end if;
+  stale_reconcile_result := public.reconcile_stale_execution_run(stale_run_id, null);
+  if stale_reconcile_result <> 'active_lease' then
+    raise exception 'Stale-run recovery ignored an active automation lease: %', stale_reconcile_result;
+  end if;
+  if not exists (select 1 from public.run_logs where id = stale_run_id and status = 'running') then
+    raise exception 'Active stale run was changed despite a live automation lease';
+  end if;
+
+  update public.scheduled_run_locks
+     set locked_until = now() - interval '1 second'
+   where automation_id = '00000000-0000-4000-8000-000000000002';
+  stale_reconcile_result := public.reconcile_stale_execution_run(stale_run_id, null);
+  if stale_reconcile_result <> 'reconciled' then
+    raise exception 'Expired-lease stale run was not reconciled: %', stale_reconcile_result;
+  end if;
+  if not exists (
+    select 1 from public.run_logs
+     where id = stale_run_id
+       and status = 'failed'
+       and finished_at is not null
+       and error_summary like 'The worker stopped before finalizing%'
+  ) then
+    raise exception 'Stale run summary was not safely finalized';
+  end if;
+  if not exists (
+    select 1 from public.run_step_logs
+     where run_id = stale_run_id
+       and status = 'failed'
+       and outcome_state = 'uncertain'
+       and error_detail like 'The worker stopped before confirming%'
+  ) then
+    raise exception 'Stale in-flight step was not marked uncertain';
+  end if;
+  if public.reconcile_stale_execution_run(stale_run_id, null) <> 'not_running' then
+    raise exception 'Stale-run recovery did not remain idempotent after finalization';
+  end if;
+
+  insert into public.run_logs (
+    automation_id, trigger_type, status, started_at
+  ) values (
+    '00000000-0000-4000-8000-000000000002',
+    'manual',
+    'running',
+    now() - interval '5 minutes'
+  ) returning id into recent_run_id;
+  if public.reconcile_stale_execution_run(recent_run_id, null) <> 'not_stale' then
+    raise exception 'Recent run was incorrectly reconciled';
+  end if;
+  if not exists (select 1 from public.run_logs where id = recent_run_id and status = 'running') then
+    raise exception 'Recent run was changed by stale-run recovery';
+  end if;
+
+  if has_function_privilege('anon', 'public.reconcile_stale_execution_run(uuid, uuid)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.reconcile_stale_execution_run(uuid, uuid)', 'EXECUTE') then
+    raise exception 'Untrusted roles can execute stale-run recovery RPC';
+  end if;
+
+  -- Existing durable queue tests continue below.
   select * into first_job
     from public.enqueue_execution_job(
       '00000000-0000-4000-8000-000000000002',
