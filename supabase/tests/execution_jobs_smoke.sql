@@ -7,8 +7,22 @@ values
 on conflict do nothing;
 
 insert into public.automations (id, user_id, status)
-values ('00000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000001', 'live')
+values
+  ('00000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000001', 'live'),
+  ('00000000-0000-4000-8000-000000000004', '00000000-0000-4000-8000-000000000003', 'live')
 on conflict (id) do update set user_id = excluded.user_id, status = excluded.status;
+
+insert into public.run_logs (id, automation_id, trigger_type, status)
+values
+  ('00000000-0000-4000-8000-000000000100', '00000000-0000-4000-8000-000000000002', 'manual', 'success'),
+  ('00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000004', 'manual', 'success')
+on conflict (id) do nothing;
+
+insert into public.run_step_logs (id, run_id, status, outcome_state)
+values
+  ('00000000-0000-4000-8000-000000000200', '00000000-0000-4000-8000-000000000100', 'success', 'confirmed'),
+  ('00000000-0000-4000-8000-000000000201', '00000000-0000-4000-8000-000000000101', 'success', 'confirmed')
+on conflict (id) do nothing;
 
 do $$
 declare
@@ -421,3 +435,60 @@ $$;
 
 select status, attempts from public.execution_jobs
 where idempotency_key = 'smoke-idempotency-key';
+
+-- Authenticated clients can read only their own audit rows and cannot mutate
+-- either parent or step history. Server-role writes remain available.
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-4000-8000-000000000001';
+do $audit_policy_test$
+begin
+  if not exists (
+    select 1 from public.run_logs
+     where id = '00000000-0000-4000-8000-000000000100'
+  ) then
+    raise exception 'Owner cannot read their run audit row';
+  end if;
+  if exists (
+    select 1 from public.run_logs
+     where id = '00000000-0000-4000-8000-000000000101'
+  ) then
+    raise exception 'Owner can read another user run audit row';
+  end if;
+  if not exists (
+    select 1 from public.run_step_logs
+     where id = '00000000-0000-4000-8000-000000000200'
+  ) then
+    raise exception 'Owner cannot read their step audit row';
+  end if;
+  if exists (
+    select 1 from public.run_step_logs
+     where id = '00000000-0000-4000-8000-000000000201'
+  ) then
+    raise exception 'Owner can read another user step audit row';
+  end if;
+
+  if has_table_privilege(current_user, 'public.run_logs', 'INSERT')
+     or has_table_privilege(current_user, 'public.run_logs', 'UPDATE')
+     or has_table_privilege(current_user, 'public.run_logs', 'DELETE')
+     or has_table_privilege(current_user, 'public.run_step_logs', 'INSERT')
+     or has_table_privilege(current_user, 'public.run_step_logs', 'UPDATE')
+     or has_table_privilege(current_user, 'public.run_step_logs', 'DELETE') then
+    raise exception 'Authenticated role retains execution-audit write privileges';
+  end if;
+end
+$audit_policy_test$;
+reset role;
+reset request.jwt.claim.sub;
+
+do $service_role_audit_privileges$
+begin
+  if not has_table_privilege('service_role', 'public.run_logs', 'INSERT')
+     or not has_table_privilege('service_role', 'public.run_logs', 'UPDATE')
+     or not has_table_privilege('service_role', 'public.run_logs', 'DELETE')
+     or not has_table_privilege('service_role', 'public.run_step_logs', 'INSERT')
+     or not has_table_privilege('service_role', 'public.run_step_logs', 'UPDATE')
+     or not has_table_privilege('service_role', 'public.run_step_logs', 'DELETE') then
+    raise exception 'Service role lost server-owned execution-audit write privileges';
+  end if;
+end
+$service_role_audit_privileges$;
