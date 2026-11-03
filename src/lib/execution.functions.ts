@@ -6,6 +6,8 @@ import { executeFlowSteps } from "@/lib/execute-flow-steps.server";
 import type { RunStep, WorkflowNode } from "@/lib/workflow";
 import { planLinearExecution } from "@/lib/execution-plan";
 import { buildRunFinalization } from "@/lib/run-finalization";
+import { sanitizeExecutionError } from "@/lib/execution-error-sanitizer";
+import { sanitizeRunOutput } from "@/lib/run-output-sanitizer";
 import { enqueueExecutionJob } from "@/lib/execution-job-queue.server";
 import { parsePersistedWorkflow } from "@/lib/persisted-workflow";
 import { isDurableQueueEnabled } from "@/lib/runtime-feature-gates";
@@ -127,13 +129,16 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
       return { queued: true as const, jobId: id, status, mode: "live" as const, steps: [] as RunStep[] };
     }
 
+    // Audit writes are service-owned; authenticated clients receive read-only
+    // owner-scoped access through RLS. This module remains server-only at runtime.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     let activeRunId: string | null = null;
     let runStartedMs = Date.now();
     try {
     const startedAt = new Date().toISOString();
     const startedMs = Date.now();
     runStartedMs = startedMs;
-    const { data: run, error: runError } = await context.supabase
+    const { data: run, error: runError } = await supabaseAdmin
       .from("run_logs")
       .insert({
         automation_id: row.id,
@@ -156,7 +161,7 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
       startedAtMs: startedMs,
       maxRuntimeMs: MAX_FLOW_RUNTIME_MS,
       persistIntent: async (node, index) => {
-        const { data: attempt, error: intentError } = await context.supabase
+        const { data: attempt, error: intentError } = await supabaseAdmin
           .from("run_step_logs")
           .insert({
             run_id: run.id,
@@ -174,14 +179,26 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
         return { id: attempt.id };
       },
       persistOutcome: async (intentId, step, outcomeState) => {
-        const { error: stepLogError } = await context.supabase.from("run_step_logs").update({
-          status: step.status,
-          outcome_state: outcomeState,
-          duration_ms: Math.max(0, Math.round(step.ms)),
-          error_detail: step.status === "failed" ? step.detail.slice(0, 500) : null,
-          output_snapshot: { detail: step.detail.slice(0, 500), outcomeState, ...(step.outputs ? { outputs: step.outputs } : {}) },
-        }).eq("id", intentId);
-        return !stepLogError;
+        const { data: persistedStep, error: stepLogError } = await supabaseAdmin
+          .from("run_step_logs")
+          .update({
+            status: step.status,
+            outcome_state: outcomeState,
+            duration_ms: Math.max(0, Math.round(step.ms)),
+            error_detail: step.status === "failed"
+              ? sanitizeExecutionError(step.detail, "Step failed; inspect the run summary and verify external effects before retrying.")
+              : null,
+            output_snapshot: (sanitizeRunOutput({
+              detail: step.detail,
+              outcomeState,
+              ...(step.outputs ? { outputs: step.outputs } : {}),
+            }) ?? null) as never,
+          })
+          .eq("id", intentId)
+          .eq("run_id", run.id)
+          .select("id")
+          .maybeSingle();
+        return !stepLogError && Boolean(persistedStep);
       },
       onUnexpectedError: (node, error) => {
         console.error("[AutoStudio executor] Step failed unexpectedly.", {
@@ -202,7 +219,7 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
     const finalization = buildRunFinalization({ steps, mode: data.mode, startedAtMs: startedMs });
     const finalStatus = finalization.status;
     const finishedAt = finalization.finishedAt;
-    const { error: finishError } = await context.supabase
+    const { data: finalizedRun, error: finishError } = await supabaseAdmin
       .from("run_logs")
       .update({
         status: finalization.status,
@@ -210,9 +227,12 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
         duration_ms: finalization.durationMs,
         error_summary: finalization.errorSummary,
       })
-      .eq("id", run.id);
-    if (finishError) {
-      throw new Error("The run's final status could not be saved. Verify external effects before retrying.");
+      .eq("id", run.id)
+      .eq("status", "running")
+      .select("id")
+      .maybeSingle();
+    if (finishError || !finalizedRun) {
+      throw new Error("The run's final status could not be confirmed as saved. Verify external effects before retrying.");
     }
     activeRunId = null;
 
@@ -236,20 +256,41 @@ export const executeAutomationFlow = createServerFn({ method: "POST" })
       if (activeRunId) {
         try {
           const failedAt = new Date().toISOString();
-          const { error: auditError } = await context.supabase
-            .from("run_logs")
+          const { error: stepRecoveryError } = await supabaseAdmin
+            .from("run_step_logs")
             .update({
               status: "failed",
-              finished_at: failedAt,
-              duration_ms: Date.now() - runStartedMs,
-              error_summary: "The manual run stopped unexpectedly. Verify external effects before retrying.",
+              outcome_state: "uncertain",
+              error_detail: "Worker stopped before confirming this step. Verify external effects before retrying.",
+              output_snapshot: { recoveryHint: "Manual run stopped after recording intent; verify external outcome before retrying." },
             })
-            .eq("id", activeRunId);
-          if (auditError) {
-            console.error("[AutoStudio executor] Could not mark interrupted manual run failed.", {
+            .eq("run_id", activeRunId)
+            .eq("status", "running")
+            .select("id");
+          let recoveredRun: { id: string } | null = null;
+          let auditError: { code?: string } | null = null;
+          if (!stepRecoveryError) {
+            const recovery = await supabaseAdmin
+              .from("run_logs")
+              .update({
+                status: "failed",
+                finished_at: failedAt,
+                duration_ms: Math.max(0, Date.now() - runStartedMs),
+                error_summary: "The manual run stopped unexpectedly. Verify uncertain step outcomes before retrying.",
+              })
+              .eq("id", activeRunId)
+              .eq("status", "running")
+              .select("id")
+              .maybeSingle();
+            recoveredRun = recovery.data;
+            auditError = recovery.error;
+          }
+          if (stepRecoveryError || auditError || !recoveredRun) {
+            console.error("[AutoStudio executor] Could not confirm interrupted manual run recovery.", {
               automationId: row.id,
               runId: activeRunId,
-              errorCode: auditError.code,
+              stepRecoveryFailed: Boolean(stepRecoveryError),
+              runRecoveryFailed: Boolean(auditError),
             });
           }
         } catch {

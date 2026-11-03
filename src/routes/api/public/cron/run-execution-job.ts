@@ -1,5 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { authenticateCronRequest } from "@/integrations/supabase/cron-auth";
+import {
+  authenticateCronRequestSafely,
+  runCronTaskWithFallback,
+  withCronSecurityHeaders,
+} from "@/lib/cron-task-guard";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { classifyExecutionOutcome } from "@/lib/execution-outcome";
 import { sanitizeExecutionError } from "@/lib/execution-error-sanitizer";
@@ -9,8 +14,14 @@ import { createSupabaseExecutionJobDependencies } from "@/lib/execution-job-queu
 import { processOneExecutionJob } from "@/lib/execution-job-worker";
 import { buildRunFinalization } from "@/lib/run-finalization";
 import { preparePersistedExecutionPlan } from "@/lib/prepare-execution-plan";
-import { isDurableQueueEnabled } from "@/lib/runtime-feature-gates";
+import { isDurableQueueWorkerEnabled } from "@/lib/runtime-feature-gates";
+import {
+  confirmExecutionLeaseHeartbeat,
+  runWithExecutionLeaseKeepalive,
+} from "@/lib/execution-lease-keepalive.server";
+import { isValidExecutionLeaseToken } from "@/lib/execution-lease-token";
 import { executeStep, livePreflightError } from "@/lib/execute-step.server";
+import { firstLivePreflightError } from "@/lib/live-execution-preflight";
 import type { Workflow } from "@/lib/workflow";
 
 const MAX_JOB_RUNTIME_MS = 4 * 60 * 1000;
@@ -25,12 +36,20 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const denied = await authenticateCronRequest(request);
-        if (denied) return denied;
-        if (!isDurableQueueEnabled()) {
+        const response = await runCronTaskWithFallback(async () => {
+        const denied = await authenticateCronRequestSafely(request, authenticateCronRequest);
+        if (denied !== null) return denied;
+        if (!isDurableQueueWorkerEnabled()) {
           return Response.json(
-            { error: "Durable execution queue is disabled by rollout policy." },
-            { status: 503 },
+            { error: "Durable execution worker is disabled by rollout policy." },
+            {
+              status: 503,
+              headers: {
+                "Cache-Control": "no-store",
+                "Pragma": "no-cache",
+                "X-Content-Type-Options": "nosniff",
+              },
+            },
           );
         }
 
@@ -68,16 +87,18 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
           // Re-run live capability checks in the worker. The workflow or its
           // credentials may have changed after enqueue, so producer-side preflight
           // alone is not a sufficient authorization/safety boundary.
-          for (const node of plan.nodes) {
-            const preflightError = await livePreflightError(node, automation.user_id);
-            if (preflightError) {
-              return {
-                status: "failed" as const,
-                sideEffectCertainty: "not_attempted" as const,
-                error: preflightError,
-                retryable: false,
-              };
-            }
+          const preflightError = await firstLivePreflightError(
+            plan.nodes,
+            automation.user_id,
+            livePreflightError,
+          );
+          if (preflightError) {
+            return {
+              status: "failed" as const,
+              sideEffectCertainty: "not_attempted" as const,
+              error: preflightError,
+              retryable: false,
+            };
           }
 
           // Serialize queue jobs per automation with the same lease used by
@@ -98,6 +119,33 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
               retryable: true,
             };
           }
+          if (!isValidExecutionLeaseToken(executionLock)) {
+            throw new Error("Automation execution lease returned an invalid token.");
+          }
+
+          // Queue-job and automation leases fence different resources. Both must
+          // remain current before any provider action or audit mutation.
+          const heartbeatAutomationLease = async (): Promise<boolean> =>
+            confirmExecutionLeaseHeartbeat(async () => {
+              const { data: alive, error } = await supabaseAdmin.rpc("heartbeat_manual_automation", {
+                _automation_id: automation.id,
+                _lock_token: executionLock,
+                _lease_seconds: 300,
+              });
+              return !error && alive === true;
+            });
+          let executionLeaseLost = false;
+          const heartbeatBothLeases = async (): Promise<boolean> => {
+            if (!(await context.heartbeat())) {
+              executionLeaseLost = true;
+              return false;
+            }
+            if (!(await heartbeatAutomationLease())) {
+              executionLeaseLost = true;
+              return false;
+            }
+            return true;
+          };
 
           let activeRunId: string | null = null;
           let runStartedMs = Date.now();
@@ -134,15 +182,16 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
             startedAtMs: started,
             maxRuntimeMs: MAX_JOB_RUNTIME_MS,
             execute: async (args) => {
-              const alive = await context.heartbeat();
-              if (!alive) {
-                throw new Error("Execution lease was lost; stop before starting another external action.");
+              if (!(await heartbeatBothLeases())) {
+                throw new Error("Execution lease ownership was lost; stop before starting another external action.");
               }
-              return executeStep(args);
+              return runWithExecutionLeaseKeepalive(
+                () => executeStep(args),
+                heartbeatBothLeases,
+              );
             },
             persistIntent: async (node, index) => {
-              const alive = await context.heartbeat();
-              if (!alive) return null;
+              if (!(await heartbeatBothLeases())) return null;
               const { data: intent, error } = await supabaseAdmin
                 .from("run_step_logs")
                 .insert({
@@ -161,7 +210,8 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
               return { id: intent.id };
             },
             persistOutcome: async (intentId, step, outcomeState) => {
-              const { error } = await supabaseAdmin
+              if (!(await heartbeatBothLeases())) return false;
+              const { data: persistedStep, error } = await supabaseAdmin
                 .from("run_step_logs")
                 .update({
                   status: step.status,
@@ -177,8 +227,10 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
                   }) ?? null) as never,
                 })
                 .eq("id", intentId)
-                .eq("run_id", run.id);
-              return !error;
+                .eq("run_id", run.id)
+                .select("id")
+                .maybeSingle();
+              return !error && Boolean(persistedStep);
             },
             onUnexpectedError: (node, error) => {
               console.error("[AutoStudio queue worker] Step execution failed.", {
@@ -198,12 +250,15 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
             },
           });
 
+          if (!(await heartbeatBothLeases())) {
+            throw new Error("Execution lease ownership was lost before run finalization; audit recovery is required.");
+          }
           const finalization = buildRunFinalization({
             steps: execution.steps,
             mode: "live",
             startedAtMs: started,
           });
-          const { error: finishRunError } = await supabaseAdmin
+          const { data: finalizedRun, error: finishRunError } = await supabaseAdmin
             .from("run_logs")
             .update({
               status: finalization.status,
@@ -212,11 +267,13 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
               error_summary: finalization.errorSummary,
             })
             .eq("id", run.id)
-            .eq("status", "running");
+            .eq("status", "running")
+            .select("id")
+            .maybeSingle();
 
-          if (finishRunError) {
-            // Do not return success to the queue when the audit summary is unknown.
-            throw new Error("Run summary could not be persisted; inspect step audit records before retrying.");
+          if (finishRunError || !finalizedRun) {
+            // A zero-row update is also an unconfirmed finalization, not success.
+            throw new Error("Run summary could not be confirmed as persisted; inspect step audit records before retrying.");
           }
 
           if (finalization.status === "failed") {
@@ -235,50 +292,76 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
 
           return { status: "succeeded" as const, sideEffectCertainty: "effect_confirmed" as const };
           } catch (executionError) {
-            // Keep run history reconcilable when an unexpected error occurs after
-            // the run row exists. In-flight step intents stay explicitly uncertain.
-            if (activeRunId) {
-              const finishedAt = new Date().toISOString();
-              const { error: stepRecoveryError } = await supabaseAdmin
-                .from("run_step_logs")
-                .update({
-                  status: "failed",
-                  outcome_state: "uncertain",
-                  error_detail: "Worker stopped before confirming this step. Verify external effects before retrying.",
-                  output_snapshot: { recoveryHint: "Queued worker failed after recording intent; verify the external outcome before retrying." },
-                })
-                .eq("run_id", activeRunId)
-                .eq("status", "running");
-              const { error: runRecoveryError } = await supabaseAdmin
-                .from("run_logs")
-                .update({
-                  status: "failed",
-                  finished_at: finishedAt,
-                  duration_ms: Math.max(0, Date.now() - runStartedMs),
-                  error_summary: "Queued execution stopped unexpectedly. Verify uncertain step outcomes before retrying.",
-                })
-                .eq("id", activeRunId)
-                .eq("status", "running");
-              if (stepRecoveryError || runRecoveryError) {
-                console.error("[AutoStudio queue worker] Interrupted run recovery was incomplete.", {
+            // A worker that lost either fence must not rewrite audit state. Leave
+            // recovery to the stale-run reconciler rather than racing a new owner.
+            if (activeRunId && !executionLeaseLost && await confirmExecutionLeaseHeartbeat(heartbeatBothLeases)) {
+              try {
+                const finishedAt = new Date().toISOString();
+                const { error: stepRecoveryError } = await supabaseAdmin
+                  .from("run_step_logs")
+                  .update({
+                    status: "failed",
+                    outcome_state: "uncertain",
+                    error_detail: "Worker stopped before confirming this step. Verify external effects before retrying.",
+                    output_snapshot: { recoveryHint: "Queued worker failed after recording intent; verify the external outcome before retrying." },
+                  })
+                  .eq("run_id", activeRunId)
+                  .eq("status", "running")
+                  .select("id");
+                let recoveredRun: { id: string } | null = null;
+                let runRecoveryError: { code?: string } | null = null;
+                if (!stepRecoveryError) {
+                  const recovery = await supabaseAdmin
+                    .from("run_logs")
+                    .update({
+                      status: "failed",
+                      finished_at: finishedAt,
+                      duration_ms: Math.max(0, Date.now() - runStartedMs),
+                      error_summary: "Queued execution stopped unexpectedly. Verify uncertain step outcomes before retrying.",
+                    })
+                    .eq("id", activeRunId)
+                    .eq("status", "running")
+                    .select("id")
+                    .maybeSingle();
+                  recoveredRun = recovery.data;
+                  runRecoveryError = recovery.error;
+                }
+                if (stepRecoveryError || runRecoveryError || !recoveredRun) {
+                  console.error("[AutoStudio queue worker] Interrupted run recovery was incomplete.", {
+                    jobId: job.id,
+                    runId: activeRunId,
+                    stepRecoveryFailed: Boolean(stepRecoveryError),
+                    runRecoveryFailed: Boolean(runRecoveryError),
+                  });
+                }
+              } catch (recoveryError) {
+                console.error("[AutoStudio queue worker] Interrupted run recovery threw.", {
                   jobId: job.id,
                   runId: activeRunId,
-                  stepRecoveryFailed: Boolean(stepRecoveryError),
-                  runRecoveryFailed: Boolean(runRecoveryError),
+                  errorName: recoveryError instanceof Error ? recoveryError.name : "UnknownError",
                 });
               }
             }
-            throw executionError;
-          } finally {
-            const { error: releaseError } = await supabaseAdmin.rpc("release_manual_automation", {
-              _automation_id: automation.id,
-              _lock_token: executionLock,
-            });
-            if (releaseError) {
-              console.error("[AutoStudio queue worker] Automation lease release failed.", {
+            throw executionError;          } finally {
+            // Cleanup is best-effort; a transport error must not overwrite a
+            // confirmed execution result. The lease expires safely if release is unknown.
+            try {
+              const { error: releaseError } = await supabaseAdmin.rpc("release_manual_automation", {
+                _automation_id: automation.id,
+                _lock_token: executionLock,
+              });
+              if (releaseError) {
+                console.error("[AutoStudio queue worker] Automation lease release failed.", {
+                  jobId: job.id,
+                  automationId: automation.id,
+                  errorCode: releaseError.code,
+                });
+              }
+            } catch (releaseError) {
+              console.error("[AutoStudio queue worker] Automation lease release threw.", {
                 jobId: job.id,
                 automationId: automation.id,
-                errorCode: releaseError.code,
+                errorName: releaseError instanceof Error ? releaseError.name : "UnknownError",
               });
             }
           }
@@ -293,6 +376,8 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
           });
           return new Response("Queue worker failed safely", { status: 500 });
         }
+        }, () => new Response("Queue worker failed safely", { status: 500 }));
+        return withCronSecurityHeaders(response);
       },
     },
   },

@@ -1,12 +1,28 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
+const CONNECTION_VERIFICATION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
+export function isConnectionVerificationFresh(verifiedAt: string | null | undefined, nowMs = Date.now()): boolean {
+  if (typeof verifiedAt !== "string" || !Number.isFinite(nowMs)) return false;
+  const timestamp = Date.parse(verifiedAt);
+  if (!Number.isFinite(timestamp) || timestamp > nowMs) return false;
+  return nowMs - timestamp < CONNECTION_VERIFICATION_MAX_AGE_MS;
+}
+
 function key(): Buffer {
   const raw = process.env["APP_USER_CONNECTION_KEY_SECRET"];
   if (!raw) throw new Error("APP_USER_CONNECTION_KEY_SECRET is not set");
-  return Buffer.from(raw, "base64");
+  const decoded = Buffer.from(raw, "base64");
+  if (decoded.length !== 32 || decoded.toString("base64") !== raw) {
+    throw new Error("APP_USER_CONNECTION_KEY_SECRET must be canonical base64 for exactly 32 bytes");
+  }
+  return decoded;
 }
 
 export function encryptConnectionKey(plaintext: string): string {
+  if (typeof plaintext !== "string" || plaintext.length === 0) {
+    throw new Error("A non-empty connector credential is required");
+  }
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", key(), iv);
   const ct = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
@@ -14,10 +30,23 @@ export function encryptConnectionKey(plaintext: string): string {
 }
 
 export function decryptConnectionKey(stored: string): string {
+  const encryptionKey = key();
+  if (typeof stored !== "string" || stored.length === 0) {
+    throw new Error("Stored connector credential is invalid");
+  }
   const buf = Buffer.from(stored, "base64");
-  const decipher = createDecipheriv("aes-256-gcm", key(), buf.subarray(0, 12));
-  decipher.setAuthTag(buf.subarray(12, 28));
-  return Buffer.concat([decipher.update(buf.subarray(28)), decipher.final()]).toString("utf8");
+  if (buf.length < 29 || buf.toString("base64") !== stored) {
+    throw new Error("Stored connector credential envelope is invalid");
+  }
+  try {
+    const decipher = createDecipheriv("aes-256-gcm", encryptionKey, buf.subarray(0, 12));
+    decipher.setAuthTag(buf.subarray(12, 28));
+    const plaintext = Buffer.concat([decipher.update(buf.subarray(28)), decipher.final()]).toString("utf8");
+    if (!plaintext) throw new Error("Empty credential");
+    return plaintext;
+  } catch {
+    throw new Error("Stored connector credential could not be decrypted");
+  }
 }
 
 export async function saveConnectionKeyForUser(userId: string, connectorId: string, connectionAPIKey: string, accountEmail?: string | null) {
@@ -50,7 +79,11 @@ export async function getConnectionForUser(userId: string, connectorId: string) 
 
 export async function setAccountEmail(userId: string, connectorId: string, email: string) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  await supabaseAdmin.from("app_user_connections").update({ account_email: email }).eq("user_id", userId).eq("connector_id", connectorId);
+  const { error } = await supabaseAdmin.from("app_user_connections")
+    .update({ account_email: email, updated_at: new Date().toISOString() })
+    .eq("user_id", userId)
+    .eq("connector_id", connectorId);
+  if (error) throw error;
 }
 
 export async function deleteConnectionForUser(userId: string, connectorId: string) {

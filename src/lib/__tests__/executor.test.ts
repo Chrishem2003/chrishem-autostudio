@@ -102,6 +102,21 @@ describe("server-side execution guardrails", () => {
       mode: "live",
     });
     expect(result.status).toBe("failed");
-    expect(result.detail).toMatch(/runtime smoke test/i);
+    expect(result.detail).toMatch(/outbound provider transport is disabled/i);
+  });
+
+  it("fails closed on verified Gmail until the global outbound transport is enabled", async () => {
+    const result = await executeStep({
+      node: node("action.gmail", {
+        to: "recipient@example.com",
+        subject: "Safe rollout check",
+        body: "This must not be sent while the outbound gate is disabled.",
+      }),
+      flowName: "Gmail rollout gate",
+      userId: "user_1",
+      mode: "live",
+    });
+    expect(result.status).toBe("failed");
+    expect(result.detail).toMatch(/outbound provider transport is disabled/i);
   });
 });

@@ -42,6 +42,29 @@ jobs:
         run: bun run typecheck
       - name: Unit tests
         run: bun run test
+      - name: Lint execution-integrity and cron modules
+        run: >-
+          bunx eslint
+          src/lib/runtime-feature-gates.ts
+          src/lib/cron-task-guard.ts
+          src/lib/execution-lease-keepalive.server.ts
+          src/lib/execution-lease-token.ts
+          src/lib/execution-job-policy.ts
+          src/lib/execution-job-worker.ts
+          src/lib/execution-retry-schedule.ts
+          src/lib/execution-queue-health.ts
+          src/lib/execution-audit-consistency.ts
+          src/lib/stale-execution-run-references.ts
+          src/lib/stale-run-reconciliation-result.ts
+          src/lib/live-execution-preflight.ts
+          src/lib/scheduled-trigger-config.ts
+          src/lib/execution.functions.ts
+          src/lib/outbound-transport-gate.ts
+          src/lib/execute-step.server.ts
+          src/routes/api/public/cron/run-execution-job.ts
+          src/routes/api/public/cron/run-scheduled.ts
+          src/routes/api/public/cron/execution-queue-health.ts
+          --rule 'prettier/prettier: off'
       - name: Production build
         run: bun run build
 
@@ -76,6 +99,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - name: Prepare disposable Supabase-like schema
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/execution_jobs_bootstrap.sql
+      - name: Apply scheduler lease foundation
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261010130000_scheduler_leases.sql
+      - name: Apply automation lease heartbeat
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261103120000_automation_lease_heartbeat.sql
       - name: Apply durable queue migration
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261010170000_durable_execution_jobs.sql
       - name: Apply execution requester ownership guard
@@ -84,7 +111,15 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261011070000_execution_job_run_reconciliation.sql
       - name: Apply queue review visibility
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261011080000_execution_job_review_visibility.sql
+      - name: Apply stale manual/scheduled run reconciliation
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261103130000_stale_execution_run_reconciliation.sql
+      - name: Lock authenticated execution-audit writes
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261103140000_lock_execution_audit_writes.sql
+      - name: Apply statement-time queue lease fencing
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261103150000_statement_time_queue_lease_fencing.sql
       - name: Verify idempotency, lease fencing and RPC permissions
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/execution_jobs_smoke.sql
+      - name: Verify statement-time queue lease lock-wait races
+        run: bash supabase/tests/execution_job_expiry_lock_race.sh
       - name: Verify concurrent workers claim distinct jobs
         run: bash supabase/tests/execution_jobs_concurrency.sh

@@ -1,0 +1,188 @@
+export type AuditConsistencyJobStatus =
+  | "queued" | "running" | "succeeded" | "failed" | "needs_review" | "dead_letter";
+
+export interface AuditConsistencyJob {
+  id: string;
+  status: AuditConsistencyJobStatus;
+  run_id: string | null;
+  finished_at?: string | null;
+}
+
+export interface AuditConsistencyRun {
+  id: string;
+  status: string;
+  finished_at?: string | null;
+}
+
+export type AuditConsistencyIssue =
+  | "running_job_without_audit_run"
+  | "nonrunning_job_with_running_audit_run"
+  | "running_job_with_terminal_audit_run"
+  | "review_job_with_running_audit_run"
+  | "linked_run_missing"
+  | "succeeded_job_without_confirmed_successful_run"
+  | "succeeded_job_without_queue_completion_timestamp"
+  | "non_successful_job_with_successful_audit_run"
+  | "successful_audit_run_without_completion_timestamp"
+  | "duplicate_audit_run_snapshot_id"
+  | "duplicate_queue_job_snapshot_id"
+  | "invalid_queue_completion_timestamp"
+  | "invalid_audit_run_completion_timestamp"
+  | "active_job_with_completion_timestamp"
+  | "running_audit_run_with_completion_timestamp"
+  | "terminal_audit_run_without_completion_timestamp"
+  | "audit_run_linked_to_multiple_queue_jobs"
+  | "queue_completed_before_audit_run";
+
+export interface AuditConsistencyFinding {
+  issue: AuditConsistencyIssue;
+  jobId: string;
+  runId: string | null;
+}
+
+const isSuccessfulAuditRun = (status: string) => status === "success" || status === "succeeded";
+
+function hasValidCompletionTimestamp(value: string | null | undefined): value is string {
+  return typeof value === "string" && value.trim().length > 0 && Number.isFinite(Date.parse(value));
+}
+
+const TERMINAL_AUDIT_RUN_STATUSES = new Set([
+  "success",
+  "succeeded",
+  "failed",
+  "cancelled",
+  "canceled",
+  "timed_out",
+  "abandoned",
+]);
+
+/**
+ * Compares a bounded snapshot of queue jobs and their linked audit runs.
+ * Findings are advisory: this function never mutates jobs or audit history.
+ */
+export function findExecutionAuditConsistencyIssues(
+  jobs: AuditConsistencyJob[],
+  runs: AuditConsistencyRun[],
+): AuditConsistencyFinding[] {
+  const runCounts = new Map<string, number>();
+  for (const run of runs) runCounts.set(run.id, (runCounts.get(run.id) ?? 0) + 1);
+  // A duplicate primary key should be impossible in a consistent database
+  // snapshot. Never let arbitrary row ordering decide whether a linked job
+  // appears healthy if the diagnostic input contains conflicting duplicates.
+  const runsById = new Map(
+    runs.filter((run) => runCounts.get(run.id) === 1).map((run) => [run.id, run]),
+  );
+  const findings: AuditConsistencyFinding[] = [];
+  const jobCounts = new Map<string, number>();
+  for (const job of jobs) jobCounts.set(job.id, (jobCounts.get(job.id) ?? 0) + 1);
+  const reportedDuplicateJobs = new Set<string>();
+  const runAssociationCounts = new Map<string, number>();
+  for (const job of jobs) {
+    if ((jobCounts.get(job.id) ?? 0) === 1 && job.run_id !== null) {
+      runAssociationCounts.set(job.run_id, (runAssociationCounts.get(job.run_id) ?? 0) + 1);
+    }
+  }
+
+  for (const job of jobs) {
+    // Duplicate queue IDs mean the snapshot cannot reliably associate one
+    // queue record with one audit run. Report once per ID and do not let row
+    // ordering produce a misleading "healthy" diagnosis.
+    if ((jobCounts.get(job.id) ?? 0) > 1) {
+      if (!reportedDuplicateJobs.has(job.id)) {
+        findings.push({ issue: "duplicate_queue_job_snapshot_id", jobId: job.id, runId: null });
+        reportedDuplicateJobs.add(job.id);
+      }
+      continue;
+    }
+    if (job.finished_at != null && !hasValidCompletionTimestamp(job.finished_at)) {
+      findings.push({ issue: "invalid_queue_completion_timestamp", jobId: job.id, runId: job.run_id });
+    }
+    if ((job.status === "queued" || job.status === "running") && job.finished_at != null) {
+      findings.push({ issue: "active_job_with_completion_timestamp", jobId: job.id, runId: job.run_id });
+    }
+    if (job.status === "succeeded" && !hasValidCompletionTimestamp(job.finished_at)) {
+      findings.push({ issue: "succeeded_job_without_queue_completion_timestamp", jobId: job.id, runId: job.run_id });
+    }
+    if (job.status === "running" && job.run_id === null) {
+      findings.push({ issue: "running_job_without_audit_run", jobId: job.id, runId: null });
+      continue;
+    }
+    if (job.status === "succeeded" && job.run_id === null) {
+      findings.push({ issue: "succeeded_job_without_confirmed_successful_run", jobId: job.id, runId: null });
+      continue;
+    }
+    if (job.run_id === null) continue;
+
+    if ((runAssociationCounts.get(job.run_id) ?? 0) > 1) {
+      findings.push({ issue: "audit_run_linked_to_multiple_queue_jobs", jobId: job.id, runId: job.run_id });
+    }
+
+    if ((runCounts.get(job.run_id) ?? 0) > 1) {
+      findings.push({ issue: "duplicate_audit_run_snapshot_id", jobId: job.id, runId: job.run_id });
+      if (job.status === "succeeded") {
+        findings.push({ issue: "succeeded_job_without_confirmed_successful_run", jobId: job.id, runId: job.run_id });
+      }
+      continue;
+    }
+
+    const run = runsById.get(job.run_id);
+    if (!run) {
+      findings.push({ issue: "linked_run_missing", jobId: job.id, runId: job.run_id });
+      if (job.status === "succeeded") {
+        findings.push({ issue: "succeeded_job_without_confirmed_successful_run", jobId: job.id, runId: job.run_id });
+      }
+      continue;
+    }
+
+    if (run.finished_at != null && !hasValidCompletionTimestamp(run.finished_at)) {
+      findings.push({ issue: "invalid_audit_run_completion_timestamp", jobId: job.id, runId: run.id });
+    }
+    if (run.status === "running" && run.finished_at != null) {
+      findings.push({ issue: "running_audit_run_with_completion_timestamp", jobId: job.id, runId: run.id });
+    }
+    if (
+      TERMINAL_AUDIT_RUN_STATUSES.has(run.status) &&
+      !isSuccessfulAuditRun(run.status) &&
+      !hasValidCompletionTimestamp(run.finished_at)
+    ) {
+      findings.push({ issue: "terminal_audit_run_without_completion_timestamp", jobId: job.id, runId: run.id });
+    }
+    if (isSuccessfulAuditRun(run.status) && !hasValidCompletionTimestamp(run.finished_at)) {
+      findings.push({ issue: "successful_audit_run_without_completion_timestamp", jobId: job.id, runId: run.id });
+    }
+    if (
+      job.status === "succeeded" &&
+      hasValidCompletionTimestamp(job.finished_at) &&
+      hasValidCompletionTimestamp(run.finished_at) &&
+      Date.parse(job.finished_at) < Date.parse(run.finished_at)
+    ) {
+      findings.push({ issue: "queue_completed_before_audit_run", jobId: job.id, runId: run.id });
+    }
+    if (job.status === "succeeded" && (!isSuccessfulAuditRun(run.status) || !hasValidCompletionTimestamp(run.finished_at))) {
+      findings.push({ issue: "succeeded_job_without_confirmed_successful_run", jobId: job.id, runId: run.id });
+    }
+    if (
+      ["queued", "failed", "needs_review", "dead_letter"].includes(job.status) &&
+      isSuccessfulAuditRun(run.status) &&
+      hasValidCompletionTimestamp(run.finished_at)
+    ) {
+      findings.push({ issue: "non_successful_job_with_successful_audit_run", jobId: job.id, runId: run.id });
+    }
+
+    if (job.status === "needs_review" && run.status === "running") {
+      findings.push({ issue: "review_job_with_running_audit_run", jobId: job.id, runId: run.id });
+    } else if (
+      ["queued", "failed", "dead_letter"].includes(job.status) &&
+      run.status === "running"
+    ) {
+      findings.push({ issue: "nonrunning_job_with_running_audit_run", jobId: job.id, runId: run.id });
+    } else if (
+      job.status === "running" &&
+      TERMINAL_AUDIT_RUN_STATUSES.has(run.status)
+    ) {
+      findings.push({ issue: "running_job_with_terminal_audit_run", jobId: job.id, runId: run.id });
+    }
+  }
+
+  return findings;
+}

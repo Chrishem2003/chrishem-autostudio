@@ -53,10 +53,12 @@ export function GmailConnect() {
       const done = waitForCode(popup);
       popup.location.href = authorizationUrl;
       const code = await done;
+      if (!code) throw new Error("Google did not return an authorization code. Gmail was not connected.");
       const was = state?.connected;
-      if (code) await complete({ data: { code } });
+      await complete({ data: { code } });
       const next = await status();
       setState(next);
+      if (!next.connected) throw new Error("Google authorization completed, but the account could not be verified. Please reconnect.");
       toast.success(was ? "Reconnected to Gmail." : `Gmail connected${next.email ? ` as ${next.email}` : ""}.`);
     } catch (e) {
       popup.close();
@@ -68,10 +70,15 @@ export function GmailConnect() {
 
   const remove = async () => {
     setBusy(true);
-    await disconnect().catch(() => toast.error("Couldn't disconnect Gmail."));
-    setState({ connected: false, email: null });
-    setBusy(false);
-    toast.success("Gmail disconnected.");
+    try {
+      await disconnect();
+      setState({ connected: false, email: null });
+      toast.success("Gmail disconnected.");
+    } catch {
+      toast.error("Gmail could not be disconnected at the provider. Your saved connection was kept unchanged.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
