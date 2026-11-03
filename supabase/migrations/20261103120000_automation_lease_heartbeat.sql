@@ -9,7 +9,7 @@ returns boolean
 language plpgsql
 security definer
 set search_path = public
-as $
+as $heartbeat_manual_automation$
 begin
   if _lease_seconds < 60 or _lease_seconds > 900 then
     raise exception 'Invalid automation lease duration';
@@ -34,7 +34,7 @@ begin
 
   return found;
 end;
-$$;
+$heartbeat_manual_automation$;
 
 revoke all on function public.heartbeat_manual_automation(uuid, uuid, integer) from public, anon, authenticated;
 grant execute on function public.heartbeat_manual_automation(uuid, uuid, integer) to service_role;
