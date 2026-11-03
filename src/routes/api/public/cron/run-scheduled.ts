@@ -11,6 +11,9 @@ import { isDurableQueueEnabled } from "@/lib/runtime-feature-gates";
 import { preparePersistedExecutionPlan } from "@/lib/prepare-execution-plan";
 import { isDue } from "@/lib/schedule";
 import { scheduledExecutionIdempotencyKey } from "@/lib/scheduled-execution-key";
+import { firstLivePreflightError } from "@/lib/live-execution-preflight";
+import { normalizeScheduledTriggerConfig } from "@/lib/scheduled-trigger-config";
+import { livePreflightError } from "@/lib/execute-step.server";
 import { parseStaleExecutionRunReferences } from "@/lib/stale-execution-run-references";
 import { isSafeStaleRunReconciliationResult } from "@/lib/stale-run-reconciliation-result";
 
@@ -76,7 +79,7 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
 
         const { data: rows, error } = await supabaseAdmin
           .from("automations")
-          .select("id, flow_json, last_run_at, workspace_id")
+          .select("id, user_id, flow_json, last_run_at, workspace_id")
           .eq("status", "live")
           .limit(500);
 
@@ -99,11 +102,25 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
           const trigger = prepared.workflow.nodes.find((node) => node.defId === "trigger.schedule");
           if (!trigger) continue;
 
-          const cadenceValue = trigger.config?.["cadence"];
-          const cadence = typeof cadenceValue === "string" ? cadenceValue : "Hourly";
-          const timezoneValue = trigger.config?.["timezone"];
-          const timezone = typeof timezoneValue === "string" ? timezoneValue : "UTC";
+          const normalizedConfig = normalizeScheduledTriggerConfig(trigger.config);
+          if (!normalizedConfig) {
+            skippedInvalid++;
+            continue;
+          }
+          const { cadence, timezone } = normalizedConfig;
           if (!isDue(cadence, row.last_run_at ? new Date(row.last_run_at) : null, now, timezone)) continue;
+
+          // Avoid queueing jobs that cannot pass current live capability checks.
+          // The worker repeats this preflight immediately before any provider action.
+          const preflightError = await firstLivePreflightError(
+            prepared.plan.nodes,
+            row.user_id,
+            livePreflightError,
+          );
+          if (preflightError) {
+            skippedInvalid++;
+            continue;
+          }
 
           let idempotencyKey: string;
           try {
