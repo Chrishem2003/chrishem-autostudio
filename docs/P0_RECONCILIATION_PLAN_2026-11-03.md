@@ -110,6 +110,7 @@ The following selected safeguards have now been ported to the clean integration 
 - Read-only queue-health diagnostics and audit consistency checks. The lookup uses `run_logs.execution_job_id`, which exists on current `main`; it does not assume the divergent branch's `execution_jobs.run_id` column.
 - Atomic stale manual/scheduled run reconciliation with parent-first lock ordering and a fresh wall-clock lease check. Unfinished steps are marked uncertain; no provider actions are replayed.
 - Shared scheduled-trigger normalization and live capability preflight before enqueue; the worker repeats preflight immediately before execution.
+- One fail-closed outbound transport gate now also covers Gmail sends, not just HTTP/webhook/chat, so the rollout flag cannot be bypassed through the verified Gmail connector.
 - Authenticated audit history is owner-scoped and read-only. Dry-run audit writes now use the server-only service-role client with bounded output/error sanitization.
 - Focused blocking lint for changed production execution-integrity and cron modules.
 - A staging runbook and an explicit staging acceptance record.
