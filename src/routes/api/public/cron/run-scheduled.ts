@@ -1,5 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { authenticateCronRequest } from "@/integrations/supabase/cron-auth";
+import {
+  authenticateCronRequestSafely,
+  runCronTaskWithFallback,
+  withCronSecurityHeaders,
+} from "@/lib/cron-task-guard";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { enqueueExecutionJob } from "@/lib/execution-job-queue.server";
 import { isDurableQueueEnabled } from "@/lib/runtime-feature-gates";
@@ -16,8 +21,9 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const denied = await authenticateCronRequest(request);
-        if (denied) return denied;
+        const response = await runCronTaskWithFallback(async () => {
+        const denied = await authenticateCronRequestSafely(request, authenticateCronRequest);
+        if (denied !== null) return denied;
 
         // Fail closed before reading/processing automations while queue rollout
         // is disabled. This endpoint must not fall back to inline execution.
@@ -103,6 +109,8 @@ export const Route = createFileRoute("/api/public/cron/run-scheduled")({
         }
 
         return Response.json({ checked, enqueued, skippedInvalid, enqueueFailures });
+        }, () => new Response("Scheduled execution is temporarily unavailable.", { status: 503 }));
+        return withCronSecurityHeaders(response);
       },
     },
   },
