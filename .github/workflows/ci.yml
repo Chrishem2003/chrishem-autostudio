@@ -115,6 +115,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261103130000_stale_execution_run_reconciliation.sql
       - name: Lock authenticated execution-audit writes
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261103140000_lock_execution_audit_writes.sql
+      - name: Apply statement-time queue lease fencing
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261103150000_statement_time_queue_lease_fencing.sql
       - name: Verify idempotency, lease fencing and RPC permissions
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/execution_jobs_smoke.sql
       - name: Verify concurrent workers claim distinct jobs
