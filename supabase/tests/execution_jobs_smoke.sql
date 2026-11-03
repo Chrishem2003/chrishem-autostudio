@@ -58,6 +58,17 @@ begin
   ) then
     raise exception 'Automation heartbeat rejected the current token';
   end if;
+  -- NULL bypasses ordinary SQL range comparisons; reject it explicitly.
+  begin
+    perform public.heartbeat_manual_automation(
+      '00000000-0000-4000-8000-000000000002', automation_lease_token, null
+    );
+    raise exception 'NULL automation lease duration was accepted';
+  exception when others then
+    if sqlerrm not like 'Invalid automation lease duration%' then
+      raise;
+    end if;
+  end;
   update public.scheduled_run_locks
      set locked_until = now() - interval '1 second'
    where automation_id = '00000000-0000-4000-8000-000000000002';
