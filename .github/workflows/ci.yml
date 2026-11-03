@@ -56,6 +56,8 @@ jobs:
           src/lib/execution-audit-consistency.ts
           src/lib/stale-execution-run-references.ts
           src/lib/stale-run-reconciliation-result.ts
+          src/lib/live-execution-preflight.ts
+          src/lib/scheduled-trigger-config.ts
           src/routes/api/public/cron/run-execution-job.ts
           src/routes/api/public/cron/run-scheduled.ts
           src/routes/api/public/cron/execution-queue-health.ts
