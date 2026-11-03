@@ -71,7 +71,7 @@ as $owns_run$
   )
 $owns_run$;
 
-do $
+do $create_roles$
 begin
   if not exists (select 1 from pg_roles where rolname = 'anon') then
     execute 'create ' || 'role anon nologin';
@@ -83,4 +83,4 @@ begin
     execute 'create ' || 'role service_role nologin bypassrls';
   end if;
 end
-$$;
+$create_roles$;
