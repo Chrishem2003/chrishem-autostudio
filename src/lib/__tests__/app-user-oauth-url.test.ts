@@ -49,7 +49,7 @@ describe("buildAppUserConnectorUrl", () => {
       "/%2f%2fevil.test",
       "/\\\\evil.test/profile",
       "/profile#fragment",
-      "/profile\\nX-Injected: yes",
+      "/profile" + String.fromCharCode(10) + "X-Injected: yes",
     ]) {
       expect(() => buildAppUserConnectorUrl("https://connector-gateway.lovable.dev", "google_mail", path)).toThrow();
     }
