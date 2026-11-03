@@ -165,13 +165,16 @@ describe("processOneExecutionJob", () => {
   test("parks an unconfirmed success for review without replaying the provider action", async () => {
     let executeCalls = 0;
     let finishCalls = 0;
-    const { deps, calls } = dependencies({
+    const finishStatuses: string[] = [];
+    const { deps } = dependencies({
       execute: async () => {
         executeCalls++;
         return { status: "succeeded", sideEffectCertainty: "effect_confirmed" };
       },
-      finish: async (_job, status) => {
+      finish: async (_job, status, _error, retryAt) => {
         finishCalls++;
+        finishStatuses.push(status);
+        if (status === "needs_review") expect(retryAt).toBeNull();
         return finishCalls === 1 ? false : status === "needs_review";
       },
     });
@@ -182,8 +185,8 @@ describe("processOneExecutionJob", () => {
       status: "needs_review",
     });
     expect(executeCalls).toBe(1);
-    expect(calls.finished.map((call) => call.status)).toEqual(["succeeded", "needs_review"]);
-    expect(calls.finished[1].retryAt).toBeNull();
+    expect(finishStatuses).toEqual(["succeeded", "needs_review"]);
+    expect(finishCalls).toBe(2);
   });
 
   test("does not execute jobs with unsupported trigger or malformed idempotency keys", async () => {
