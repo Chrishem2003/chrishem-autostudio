@@ -26,11 +26,11 @@ begin
   end if;
 
   update public.scheduled_run_locks
-     set locked_until = now() + make_interval(secs => _lease_seconds),
-         updated_at = now()
+     set locked_until = clock_timestamp() + make_interval(secs => _lease_seconds),
+         updated_at = clock_timestamp()
    where automation_id = _automation_id
      and lock_token = _lock_token
-     and locked_until > now();
+     and locked_until > clock_timestamp();
 
   return found;
 end;
