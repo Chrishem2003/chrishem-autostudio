@@ -16,6 +16,23 @@ export interface AppUserOAuthAuthorizeParams {
   credentialsConfiguration?: Record<string, unknown>;
 }
 
+export function validateOAuthAuthorizationUrl(value: string): string {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error("OAuth provider returned an invalid authorization URL.");
+  }
+  if (
+    url.protocol !== "https:" ||
+    url.hostname !== "accounts.google.com" ||
+    !url.pathname.startsWith("/o/oauth2/")
+  ) {
+    throw new Error("OAuth provider returned an untrusted authorization URL.");
+  }
+  return url.toString();
+}
+
 export async function authorizeAppUserOAuth(params: AppUserOAuthAuthorizeParams): Promise<{ authorizationUrl: string; sessionId: string }> {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${requireApiKey()}`,
@@ -44,7 +61,7 @@ export async function authorizeAppUserOAuth(params: AppUserOAuthAuthorizeParams)
     throw new Error("App User OAuth start returned invalid JSON.");
   }
   if (!body.authorization_url) throw new Error("App User OAuth start response missing authorization_url");
-  return { authorizationUrl: body.authorization_url, sessionId: body.session_id ?? "" };
+  return { authorizationUrl: validateOAuthAuthorizationUrl(body.authorization_url), sessionId: body.session_id ?? "" };
 }
 
 export interface CallAsAppUserParams {
