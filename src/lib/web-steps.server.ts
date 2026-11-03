@@ -146,13 +146,26 @@ export async function resolvePublicTarget(
   } finally {
     if (timeout) clearTimeout(timeout);
   }
-  if (!records.length || records.some((record) => isBlockedHost(record.address))) {
-    throw new Error("The hostname resolves to a private, local, or special-use address.");
+
+  // Validate the resolver envelope as well as the address policy. An unexpected
+  // or malformed resolver result must never be trusted merely because its
+  // claimed family is 4/6; otherwise a non-IP string could reach the pinned
+  // socket lookup and undermine the DNS-to-connection safety boundary.
+  const invalidOrUnsafeAnswer = !Array.isArray(records) || records.length === 0 ||
+    records.some((record) => {
+      if (!record || typeof record.address !== "string") return true;
+      const actualFamily = isIP(record.address);
+      return actualFamily === 0 ||
+        (record.family !== 4 && record.family !== 6) ||
+        actualFamily !== record.family ||
+        isBlockedHost(record.address);
+    });
+  if (invalidOrUnsafeAnswer) {
+    throw new Error("The hostname returned an invalid, private, local, or special-use address.");
   }
+
   const selected = records[0]!;
-  const selectedFamily = selected.family === 4 || selected.family === 6 ? selected.family : isIP(selected.address);
-  if (selectedFamily !== 4 && selectedFamily !== 6) throw new Error("The hostname did not resolve to a valid IP address.");
-  return { address: selected.address, family: selectedFamily };
+  return { address: selected.address, family: selected.family as 4 | 6 };
 }
 
 function pinnedLookup(target: PinnedAddress): NonNullable<import("node:http").RequestOptions["lookup"]> {
