@@ -722,7 +722,9 @@ describe("processOneExecutionJob", () => {
       },
       finish: async (_job, status) => {
         finishCalls++;
-        // Model the server commit succeeding before the transport drops its response.
+        // Model the database's status guard: once success commits, the guarded
+        // needs_review fallback cannot rewrite the already-terminal row.
+        if (persistedStatus !== "running") return false;
         persistedStatus = status;
         throw new Error("connection reset after commit");
       },
@@ -734,7 +736,7 @@ describe("processOneExecutionJob", () => {
     });
     expect(persistedStatus).toBe("succeeded");
     expect(executeCalls).toBe(1);
-    expect(finishCalls).toBe(1);
+    expect(finishCalls).toBe(2);
   });
 
   test("treats an explicit rejected finalization as unknown and never reruns within the same worker call", async () => {
