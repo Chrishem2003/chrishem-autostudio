@@ -1,5 +1,14 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
+const CONNECTION_VERIFICATION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
+export function isConnectionVerificationFresh(verifiedAt: string | null | undefined, nowMs = Date.now()): boolean {
+  if (typeof verifiedAt !== "string" || !Number.isFinite(nowMs)) return false;
+  const timestamp = Date.parse(verifiedAt);
+  if (!Number.isFinite(timestamp) || timestamp > nowMs) return false;
+  return nowMs - timestamp < CONNECTION_VERIFICATION_MAX_AGE_MS;
+}
+
 function key(): Buffer {
   const raw = process.env["APP_USER_CONNECTION_KEY_SECRET"];
   if (!raw) throw new Error("APP_USER_CONNECTION_KEY_SECRET is not set");
