@@ -119,8 +119,8 @@ The following selected safeguards have now been ported to the clean integration 
 
 - Branch: `audit/p0-reconciliation-2026-11-03`
 - Draft PR: [#7](https://github.com/Chrishem2003/chrishem-autostudio/pull/7)
-- Verified code checkpoint before documentation-only additions: `f53139a98d475940751d23947325736a36e476fd`
-- Exact-head PR CI: [run 41641171720 — passed](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/41641171720)
+- Verified code checkpoint before documentation-only additions: `f318871e3b2eb3b0e05552bab64487d5c7de08a0`
+- Exact-head PR CI: [run 41642099322 — passed](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/41641171720)
 - Passed: frozen dependency install, typecheck, full unit suite, focused production lint, production build, scheduler/heartbeat/stale-run/audit migrations, automation and queue lease fencing, stale-run recovery, audit read/write permissions, idempotency and concurrent worker claim tests.
 
 ### Remaining release gates
