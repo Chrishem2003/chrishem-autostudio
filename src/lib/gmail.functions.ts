@@ -75,9 +75,10 @@ export const completeGmailConnect = createServerFn({ method: "POST" })
 export const getGmailStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { getConnectionForUser } = await import("./app-user-connections.server");
+    const { getConnectionForUser, isConnectionVerificationFresh } = await import("./app-user-connections.server");
     const conn = await getConnectionForUser(context.userId, CONNECTOR);
-    return { connected: !!conn?.verifiedAt, email: conn?.verifiedAt ? conn.email : null };
+    const connected = isConnectionVerificationFresh(conn?.verifiedAt);
+    return { connected, email: connected ? conn?.email ?? null : null };
   });
 
 export const disconnectGmail = createServerFn({ method: "POST" })
