@@ -292,8 +292,21 @@ begin
     raise exception 'Heartbeat rejected the current worker token';
   end if;
 
+  if public.finish_execution_job(claimed.id, claimed.worker_token, 'succeeded', null, null) then
+    raise exception 'Worker finalized success without a persisted successful audit run';
+  end if;
+  insert into public.run_logs (
+    automation_id, execution_job_id, status, started_at, finished_at, duration_ms
+  ) values (
+    '00000000-0000-4000-8000-000000000002',
+    claimed.id,
+    'success',
+    now() - interval '5 seconds',
+    now(),
+    5000
+  );
   if not public.finish_execution_job(claimed.id, claimed.worker_token, 'succeeded', null, null) then
-    raise exception 'Current worker could not finalize job';
+    raise exception 'Current worker could not finalize job with its persisted successful audit run';
   end if;
   if public.finish_execution_job(claimed.id, claimed.worker_token, 'succeeded', null, null) then
     raise exception 'Finalization accepted a stale/reused worker token';
