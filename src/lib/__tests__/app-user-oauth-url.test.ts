@@ -1,6 +1,6 @@
 // @ts-nocheck -- Bun's test runner supplies test types at runtime
 import { describe, expect, test } from "bun:test";
-import { buildAppUserConnectorUrl, validateOAuthAuthorizationUrl } from "../../integrations/lovable/appUserConnector";
+import { buildAppUserConnectorUrl, buildAppUserGatewayUrl, validateOAuthAuthorizationUrl } from "../../integrations/lovable/appUserConnector";
 
 describe("validateOAuthAuthorizationUrl", () => {
   test("accepts the Google OAuth authorization endpoint", () => {
@@ -52,6 +52,27 @@ describe("buildAppUserConnectorUrl", () => {
       "/profile" + String.fromCharCode(10) + "X-Injected: yes",
     ]) {
       expect(() => buildAppUserConnectorUrl("https://connector-gateway.lovable.dev", "google_mail", path)).toThrow();
+    }
+  });
+});
+
+describe("buildAppUserGatewayUrl", () => {
+  test("builds only approved App User gateway endpoints", () => {
+    expect(buildAppUserGatewayUrl("https://connector-gateway.lovable.dev", "/api/v1/app-users/connection"))
+      .toBe("https://connector-gateway.lovable.dev/api/v1/app-users/connection");
+  });
+
+  test("rejects untrusted origins and escaped gateway paths", () => {
+    for (const [gateway, path] of [
+      ["https://evil.test", "/api/v1/app-users/connection"],
+      ["http://connector-gateway.lovable.dev", "/api/v1/app-users/connection"],
+      ["https://user:pass@connector-gateway.lovable.dev", "/api/v1/app-users/connection"],
+      ["https://connector-gateway.lovable.dev:8443", "/api/v1/app-users/connection"],
+      ["https://connector-gateway.lovable.dev", "//evil.test/api/v1/app-users/connection"],
+      ["https://connector-gateway.lovable.dev", "/api/v1/app-users/../other"],
+      ["https://connector-gateway.lovable.dev", "/api/v1/app-users/%2e%2e/other"],
+    ]) {
+      expect(() => buildAppUserGatewayUrl(gateway, path)).toThrow();
     }
   });
 });
