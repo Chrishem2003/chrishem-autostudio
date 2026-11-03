@@ -21,8 +21,10 @@ export const startGmailConnect = createServerFn({ method: "POST" })
     const { getConnectionForUser } = await import("./app-user-connections.server");
     const request = getRequest();
     const url = new URL(request.url);
-    const sandboxHost = url.hostname === "localhost" ? request.headers.get("x-forwarded-host") : null;
-    const returnUrl = new URL("/oauth/gmail/return", sandboxHost ? `https://${sandboxHost}` : url.origin).toString();
+    if (url.protocol !== "https:" && url.hostname !== "localhost") {
+      throw new Error("Gmail authorization requires a secure application origin.");
+    }
+    const returnUrl = new URL("/oauth/gmail/return", url.origin).toString();
     const existing = await getConnectionForUser(context.userId, CONNECTOR);
     const { authorizationUrl } = await authorizeAppUserOAuth({
       gatewayBaseUrl: GATEWAY,
@@ -39,9 +41,12 @@ export const startGmailConnect = createServerFn({ method: "POST" })
 async function lookupEmail(key: string): Promise<string | null> {
   const { callAsAppUser } = await import("@/integrations/lovable/appUserConnector");
   const res = await callAsAppUser({ gatewayBaseUrl: GATEWAY, connectionAPIKey: key, connectorId: CONNECTOR, path: "/gmail/v1/users/me/profile", requiredScopes: SCOPES });
-  if (!res.ok) return null;
+  if (!res.ok) throw new Error("Google account verification failed.");
   const j = (await res.json()) as { emailAddress?: string };
-  return j.emailAddress ?? null;
+  if (typeof j.emailAddress !== "string" || !j.emailAddress.includes("@")) {
+    throw new Error("Google account verification returned no valid account address.");
+  }
+  return j.emailAddress;
 }
 
 export const completeGmailConnect = createServerFn({ method: "POST" })
@@ -49,11 +54,18 @@ export const completeGmailConnect = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ code: z.string().min(1).max(4000) }).parse(d))
   .handler(async ({ data, context }) => {
     const { exchangeAppUserOAuthCode } = await import("@/integrations/lovable/appUserConnector");
-    const { saveConnectionKeyForUser } = await import("./app-user-connections.server");
+    const { saveConnectionKeyForUser, markConnectionVerified } = await import("./app-user-connections.server");
+    const { disconnectAppUser } = await import("@/integrations/lovable/appUserConnector");
     const { connectionAPIKey, connectorId } = await exchangeAppUserOAuthCode(GATEWAY, data.code);
     if (connectorId !== CONNECTOR) throw new Error("Connection returned for the wrong app.");
-    const email = await lookupEmail(connectionAPIKey).catch(() => null);
-    await saveConnectionKeyForUser(context.userId, CONNECTOR, connectionAPIKey, email);
+    const email = await lookupEmail(connectionAPIKey);
+    try {
+      await saveConnectionKeyForUser(context.userId, CONNECTOR, connectionAPIKey, email);
+      await markConnectionVerified(context.userId, CONNECTOR);
+    } catch {
+      await disconnectAppUser({ gatewayBaseUrl: GATEWAY, connectionAPIKey, connectorId: CONNECTOR }).catch(() => {});
+      throw new Error("Gmail authorization could not be safely saved. Please reconnect.");
+    }
     return { ok: true, email };
   });
 
@@ -62,7 +74,7 @@ export const getGmailStatus = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { getConnectionForUser } = await import("./app-user-connections.server");
     const conn = await getConnectionForUser(context.userId, CONNECTOR);
-    return { connected: !!conn, email: conn?.email ?? null };
+    return { connected: !!conn?.verifiedAt, email: conn?.verifiedAt ? conn.email : null };
   });
 
 export const disconnectGmail = createServerFn({ method: "POST" })
@@ -72,7 +84,7 @@ export const disconnectGmail = createServerFn({ method: "POST" })
     const { getConnectionForUser, deleteConnectionForUser } = await import("./app-user-connections.server");
     const conn = await getConnectionForUser(context.userId, CONNECTOR);
     if (conn) {
-      await disconnectAppUser({ gatewayBaseUrl: GATEWAY, connectionAPIKey: conn.key, connectorId: CONNECTOR }).catch(() => {});
+      await disconnectAppUser({ gatewayBaseUrl: GATEWAY, connectionAPIKey: conn.key, connectorId: CONNECTOR });
       await deleteConnectionForUser(context.userId, CONNECTOR);
     }
     return { ok: true };
