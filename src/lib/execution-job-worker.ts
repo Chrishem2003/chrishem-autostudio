@@ -343,15 +343,31 @@ export async function processOneExecutionJob(
   // executor-supplied retry timestamp to terminal/manual-review finalization.
   if (finalStatus !== "queued") finalRetryAt = null;
 
-  let finalized: boolean;
+  let finalized = false;
   try {
     // RPC adapters are expected to return a boolean, but enforce the contract
     // here too: only literal true confirms durable finalization.
     finalized = (await dependencies.finish(job, finalStatus, error, finalRetryAt)) === true;
   } catch {
     // A database/network error means finalization is unknown, not successful.
-    return { outcome: "finalization_rejected", jobId: job.id };
+    // A guarded needs_review fallback below is safe: the database rejects it
+    // if the original success already committed or this worker lost its lease.
   }
+
+  if (!finalized && finalStatus === "succeeded") {
+    // Never leave a job apparently running merely because the success audit
+    // guard rejected completion. Park it for review if this same lease still
+    // owns the row; do not replay the provider action.
+    const reviewError =
+      "Success could not be confirmed against the persisted audit record. Verify the external outcome and audit history before retrying.";
+    try {
+      finalized = (await dependencies.finish(job, "needs_review", reviewError, null)) === true;
+    } catch {
+      finalized = false;
+    }
+    if (finalized) return { outcome: "finished", jobId: job.id, status: "needs_review" };
+  }
+
   if (!finalized) return { outcome: "finalization_rejected", jobId: job.id };
   return { outcome: "finished", jobId: job.id, status: finalStatus };
 }
