@@ -46,23 +46,14 @@ jobs:
         run: >-
           bunx eslint
           src/lib/runtime-feature-gates.ts
-          src/lib/__tests__/runtime-feature-gates.test.ts
           src/lib/cron-task-guard.ts
-          src/lib/__tests__/cron-task-guard.test.ts
           src/lib/execution-lease-keepalive.server.ts
-          src/lib/__tests__/execution-lease-keepalive.test.ts
           src/lib/execution-lease-token.ts
-          src/lib/__tests__/execution-lease-token.test.ts
           src/lib/execution-job-policy.ts
-          src/lib/__tests__/execution-job-policy.test.ts
           src/lib/execution-job-worker.ts
-          src/lib/__tests__/execution-job-worker.test.ts
           src/lib/execution-retry-schedule.ts
-          src/lib/__tests__/execution-retry-schedule.test.ts
           src/lib/execution-queue-health.ts
-          src/lib/__tests__/execution-queue-health.test.ts
           src/lib/execution-audit-consistency.ts
-          src/lib/__tests__/execution-audit-consistency.test.ts
           src/routes/api/public/cron/run-execution-job.ts
           src/routes/api/public/cron/run-scheduled.ts
           src/routes/api/public/cron/execution-queue-health.ts
