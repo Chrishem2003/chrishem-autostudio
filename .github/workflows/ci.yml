@@ -54,6 +54,8 @@ jobs:
           src/lib/execution-retry-schedule.ts
           src/lib/execution-queue-health.ts
           src/lib/execution-audit-consistency.ts
+          src/lib/stale-execution-run-references.ts
+          src/lib/stale-run-reconciliation-result.ts
           src/routes/api/public/cron/run-execution-job.ts
           src/routes/api/public/cron/run-scheduled.ts
           src/routes/api/public/cron/execution-queue-health.ts
