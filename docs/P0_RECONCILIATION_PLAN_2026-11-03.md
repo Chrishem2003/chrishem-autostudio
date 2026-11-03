@@ -111,6 +111,7 @@ The following selected safeguards have now been ported to the clean integration 
 - Atomic stale manual/scheduled run reconciliation with parent-first lock ordering and a fresh wall-clock lease check. Unfinished steps are marked uncertain; no provider actions are replayed.
 - Shared scheduled-trigger normalization and live capability preflight before enqueue; the worker repeats preflight immediately before execution.
 - One fail-closed outbound transport gate now also covers Gmail sends, not just HTTP/webhook/chat, so the rollout flag cannot be bypassed through the verified Gmail connector.
+- Queue-job claim, heartbeat and finalization functions now use statement-time expiry checks after row locks; successful queue finalization requires a persisted successful audit run. Multi-session tests cover expired queue and automation heartbeats/finalizers after lock waits.
 - Authenticated audit history is owner-scoped and read-only. Dry-run audit writes now use the server-only service-role client with bounded output/error sanitization.
 - Focused blocking lint for changed production execution-integrity and cron modules.
 - A staging runbook and an explicit staging acceptance record.
@@ -119,8 +120,8 @@ The following selected safeguards have now been ported to the clean integration 
 
 - Branch: `audit/p0-reconciliation-2026-11-03`
 - Draft PR: [#7](https://github.com/Chrishem2003/chrishem-autostudio/pull/7)
-- Verified code checkpoint before documentation-only additions: `f318871e3b2eb3b0e05552bab64487d5c7de08a0`
-- Exact-head PR CI: [run 41642099322 — passed](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/41641171720)
+- Verified code checkpoint before documentation-only additions: `8c03d02f25be2b20bdce7aff6a1b171e9aa8319f`
+- Exact-head PR CI: [run 41642857376 — passed](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/41641171720)
 - Passed: frozen dependency install, typecheck, full unit suite, focused production lint, production build, scheduler/heartbeat/stale-run/audit migrations, automation and queue lease fencing, stale-run recovery, audit read/write permissions, idempotency and concurrent worker claim tests.
 
 ### Remaining release gates
