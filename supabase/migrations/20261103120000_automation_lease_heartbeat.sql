@@ -9,10 +9,20 @@ returns boolean
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $
 begin
   if _lease_seconds < 60 or _lease_seconds > 900 then
     raise exception 'Invalid automation lease duration';
+  end if;
+
+  -- Match claim and stale-run recovery lock order: automation parent first,
+  -- then the lease row. Recovery cannot race a heartbeat that renews ownership.
+  perform 1
+    from public.automations
+   where id = _automation_id
+   for update;
+  if not found then
+    return false;
   end if;
 
   update public.scheduled_run_locks
