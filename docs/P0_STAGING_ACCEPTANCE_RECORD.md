@@ -9,8 +9,8 @@ This record must be completed only from the actual dedicated non-production appl
 - Repository: `Chrishem2003/chrishem-autostudio`
 - Reconciliation branch: `audit/p0-reconciliation-2026-11-03`
 - Draft pull request: [#7](https://github.com/Chrishem2003/chrishem-autostudio/pull/7)
-- Exact code head: `8c03d02f25be2b20bdce7aff6a1b171e9aa8319f`
-- Exact-head CI: [run 41642857376 — passed](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/41641171720)
+- Exact code head: `6102eb289483e136db9d899e16042d79f12ea111`
+- Exact-head CI: [run 41643455167 — passed](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/41641171720)
 - Hosted staging deployment SHA:
 - Dedicated staging Supabase project reference:
 - Staging application hostname:
