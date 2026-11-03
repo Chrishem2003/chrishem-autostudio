@@ -57,16 +57,19 @@ export const completeGmailConnect = createServerFn({ method: "POST" })
     const { saveConnectionKeyForUser, markConnectionVerified } = await import("./app-user-connections.server");
     const { disconnectAppUser } = await import("@/integrations/lovable/appUserConnector");
     const { connectionAPIKey, connectorId } = await exchangeAppUserOAuthCode(GATEWAY, data.code);
-    if (connectorId !== CONNECTOR) throw new Error("Connection returned for the wrong app.");
-    const email = await lookupEmail(connectionAPIKey);
+    if (connectorId !== CONNECTOR) {
+      await disconnectAppUser({ gatewayBaseUrl: GATEWAY, connectionAPIKey, connectorId }).catch(() => {});
+      throw new Error("Connection returned for the wrong app.");
+    }
     try {
+      const email = await lookupEmail(connectionAPIKey);
       await saveConnectionKeyForUser(context.userId, CONNECTOR, connectionAPIKey, email);
       await markConnectionVerified(context.userId, CONNECTOR);
+      return { ok: true, email };
     } catch {
       await disconnectAppUser({ gatewayBaseUrl: GATEWAY, connectionAPIKey, connectorId: CONNECTOR }).catch(() => {});
-      throw new Error("Gmail authorization could not be safely saved. Please reconnect.");
+      throw new Error("Gmail authorization could not be verified and saved. Please reconnect.");
     }
-    return { ok: true, email };
   });
 
 export const getGmailStatus = createServerFn({ method: "GET" })
