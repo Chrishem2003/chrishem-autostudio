@@ -162,6 +162,30 @@ describe("processOneExecutionJob", () => {
     expect(executeCalls).toBe(0);
   });
 
+  test("parks an unconfirmed success for review without replaying the provider action", async () => {
+    let executeCalls = 0;
+    let finishCalls = 0;
+    const { deps, calls } = dependencies({
+      execute: async () => {
+        executeCalls++;
+        return { status: "succeeded", sideEffectCertainty: "effect_confirmed" };
+      },
+      finish: async (_job, status) => {
+        finishCalls++;
+        return finishCalls === 1 ? false : status === "needs_review";
+      },
+    });
+
+    expect(await processOneExecutionJob(deps)).toEqual({
+      outcome: "finished",
+      jobId: "job-1",
+      status: "needs_review",
+    });
+    expect(executeCalls).toBe(1);
+    expect(calls.finished.map((call) => call.status)).toEqual(["succeeded", "needs_review"]);
+    expect(calls.finished[1].retryAt).toBeNull();
+  });
+
   test("does not execute jobs with unsupported trigger or malformed idempotency keys", async () => {
     for (const invalidMetadata of [
       { triggerType: "internal" },
