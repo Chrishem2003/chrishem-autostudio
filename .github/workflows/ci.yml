@@ -104,6 +104,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261011070000_execution_job_run_reconciliation.sql
       - name: Apply queue review visibility
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261011080000_execution_job_review_visibility.sql
+      - name: Apply stale manual/scheduled run reconciliation
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261103130000_stale_execution_run_reconciliation.sql
       - name: Verify idempotency, lease fencing and RPC permissions
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/execution_jobs_smoke.sql
       - name: Verify concurrent workers claim distinct jobs
