@@ -35,7 +35,43 @@ create table if not exists public.run_step_logs (
   output_snapshot jsonb
 );
 
-do $$
+create or replace function auth.uid()
+returns uuid
+language sql
+stable
+as $auth_uid$
+  select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+$auth_uid$;
+
+create or replace function public.owns_automation(_automation_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $owns_automation$
+  select exists (
+    select 1 from public.automations
+     where id = _automation_id and user_id = auth.uid()
+  )
+$owns_automation$;
+
+create or replace function public.owns_run(_run_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $owns_run$
+  select exists (
+    select 1
+      from public.run_logs r
+      join public.automations a on a.id = r.automation_id
+     where r.id = _run_id and a.user_id = auth.uid()
+  )
+$owns_run$;
+
+do $
 begin
   if not exists (select 1 from pg_roles where rolname = 'anon') then
     execute 'create ' || 'role anon nologin';
