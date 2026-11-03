@@ -428,9 +428,11 @@ export const listIntegrations = createServerFn({ method: "GET" })
       provider: r.provider,
       accountLabel: r.account_label,
       authKind: r.auth_kind,
-      status: r.status,
-      scopes: r.scopes ?? [],
-      lastVerifiedAt: r.last_verified_at,
+      // Legacy generic rows may have been marked verified by the old client-asserted flow.
+      // Until a provider-specific server verifier exists, never surface them as connected.
+      status: "needs_reauth",
+      scopes: [],
+      lastVerifiedAt: null,
     }));
   });
 
