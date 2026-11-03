@@ -87,4 +87,60 @@ if [[ "$finish_status" != "needs_review" || "$heartbeat_status" != "needs_review
   exit 1
 fi
 
-echo "Statement-time queue lease race passed: stale heartbeat and finalization were rejected after lock waits."
+# Automation lease heartbeat also takes the automation parent lock. Its
+# expiry predicate must use clock_timestamp after waiting, not transaction now().
+automation_token="$(psql -X -A -t -v ON_ERROR_STOP=1 -c "select public.claim_manual_automation('$automation_id', 300)" | tr -d '[:space:]')"
+if [[ -z "$automation_token" ]]; then
+  echo "Could not claim automation lease fixture" >&2
+  exit 1
+fi
+psql -v ON_ERROR_STOP=1 -c "
+  update public.scheduled_run_locks
+     set locked_until = clock_timestamp() + interval '1 second'
+   where automation_id = '$automation_id'
+     and lock_token = '$automation_token';
+"
+
+(
+  psql -X -q -v ON_ERROR_STOP=1 -c "
+    begin;
+    select id from public.automations where id = '$automation_id' for update;
+    select pg_sleep(2);
+    commit;
+  " > "$tmp_dir/automation-holder"
+) &
+holder_pid=$!
+sleep 0.2
+(
+  psql -X -A -t -v ON_ERROR_STOP=1 -c "
+    select public.heartbeat_manual_automation('$automation_id', '$automation_token', 300);
+  " | tr -d '[:space:]' > "$tmp_dir/automation-heartbeat-result"
+) &
+automation_heartbeat_pid=$!
+wait "$holder_pid"
+wait "$automation_heartbeat_pid"
+
+automation_heartbeat_result="$(cat "$tmp_dir/automation-heartbeat-result")"
+if [[ "$automation_heartbeat_result" != "f" ]]; then
+  echo "Expired automation lease renewed after waiting on the parent lock: result=$automation_heartbeat_result" >&2
+  exit 1
+fi
+expired_automation_lock="$(psql -X -A -t -v ON_ERROR_STOP=1 -c "
+  select (locked_until <= clock_timestamp())::text
+    from public.scheduled_run_locks
+   where automation_id = '$automation_id'
+     and lock_token = '$automation_token'
+" | tr -d '[:space:]')"
+if [[ "$expired_automation_lock" != "true" ]]; then
+  echo "Automation lease expiry timestamp was extended after the lock wait" >&2
+  exit 1
+fi
+
+replacement_token="$(psql -X -A -t -v ON_ERROR_STOP=1 -c "select public.claim_manual_automation('$automation_id', 300)" | tr -d '[:space:]')"
+if [[ -z "$replacement_token" || "$replacement_token" == "$automation_token" ]]; then
+  echo "Expired automation lease was not safely replaced" >&2
+  exit 1
+fi
+psql -v ON_ERROR_STOP=1 -c "select public.release_manual_automation('$automation_id', '$replacement_token')"
+
+echo "Statement-time queue and automation lease races passed: stale heartbeats/finalization were rejected after lock waits."
