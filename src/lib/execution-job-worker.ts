@@ -4,6 +4,7 @@ import {
   type SideEffectCertainty,
 } from "@/lib/execution-job-policy";
 import { sanitizeExecutionError } from "@/lib/execution-error-sanitizer";
+import { executionRetryAt } from "@/lib/execution-retry-schedule";
 
 export interface ClaimedExecutionJob {
   id: string;
@@ -23,7 +24,6 @@ export interface ExecutionJobResult {
   retryAt?: string | null;
   /** False for permanent validation/configuration failures; do not spin retries. */
   retryable?: boolean;
-  providerSupportsIdempotency?: boolean;
 }
 
 export interface ExecutionJobWorkerDependencies {
@@ -48,22 +48,155 @@ export type ProcessOneJobResult =
   | { outcome: "finalization_rejected"; jobId: string };
 
 /**
+ * Queue payloads are normalized JSON, but nested objects would otherwise remain
+ * mutable when the job envelope is frozen. Freeze the complete payload graph
+ * before handing it to an executor so the request being executed cannot drift.
+ */
+function freezeExecutionPayload(
+  value: unknown,
+  seen = new WeakSet<object>(),
+  ancestors = new WeakSet<object>(),
+): unknown {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean" ||
+    (typeof value === "number" && Number.isFinite(value))
+  ) return value;
+
+  if (typeof value !== "object") {
+    throw new TypeError("Execution payload contains a non-JSON value");
+  }
+  if (ancestors.has(value)) {
+    throw new TypeError("Execution payload contains a cycle");
+  }
+  if (seen.has(value)) return value;
+
+  const prototype = Object.getPrototypeOf(value);
+  const isArray = Array.isArray(value);
+  if (isArray ? prototype !== Array.prototype : prototype !== Object.prototype && prototype !== null) {
+    throw new TypeError("Execution payload must contain only plain JSON objects and arrays");
+  }
+
+  seen.add(value);
+  ancestors.add(value);
+  const keys = Reflect.ownKeys(value);
+  if (keys.some((key) => typeof key === "symbol")) {
+    throw new TypeError("Execution payload contains a symbol key");
+  }
+  for (const key of keys) {
+    if (isArray && key === "length") continue;
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor || !("value" in descriptor) || !descriptor.enumerable) {
+      throw new TypeError("Execution payload contains an accessor or non-enumerable property");
+    }
+    freezeExecutionPayload(descriptor.value, seen, ancestors);
+  }
+  ancestors.delete(value);
+  return Object.freeze(value);
+}
+
+/**
  * Processes at most one claimed job. Database atomicity and lease fencing are
  * enforced by the RPC adapter; this function never assumes it owns a lease
  * after heartbeat reports false. An exception from an executor is uncertain.
+ * Executor results cannot self-assert provider idempotency: until a reviewed
+ * adapter capability is wired into this worker, uncertain effects go to review.
  */
 export async function processOneExecutionJob(
   dependencies: ExecutionJobWorkerDependencies,
 ): Promise<ProcessOneJobResult> {
-  const job = await dependencies.claim();
-  if (!job) return { outcome: "empty" };
+  const claimedJob = await dependencies.claim();
+  if (!claimedJob) return { outcome: "empty" };
+
+  // The executor receives the job object. Snapshot and freeze its identity so
+  // an adapter cannot mutate the job ID or fencing token before heartbeat or
+  // finalization; those RPCs must refer to the exact claim originally returned.
+  let job: ClaimedExecutionJob;
+  try {
+    job = Object.freeze({
+      ...claimedJob,
+      payload: freezeExecutionPayload(claimedJob.payload),
+    });
+  } catch {
+    // A hostile/malformed adapter envelope can throw during property access
+    // or payload traversal. We cannot trust its fencing identity to finalize,
+    // so fail closed without executing or issuing an RPC against that identity.
+    return { outcome: "finalization_rejected", jobId: "unknown-claimed-job" };
+  }
+
+  // Validate the claim envelope at the adapter boundary. Invalid identity
+  // cannot be safely finalized because the database fencing key itself is not
+  // trustworthy; malformed non-identity metadata can be parked for review.
+  if (
+    typeof job.id !== "string" || job.id.trim().length === 0 || job.id.length > 200 ||
+    typeof job.automationId !== "string" || job.automationId.trim().length === 0 || job.automationId.length > 200 ||
+    typeof job.workerToken !== "string" || job.workerToken.trim().length === 0 || job.workerToken.length > 200
+  ) {
+    return { outcome: "finalization_rejected", jobId: "unknown-claimed-job" };
+  }
+
+  if (
+    !["manual", "scheduled", "webhook"].includes(job.triggerType) ||
+    typeof job.idempotencyKey !== "string" ||
+    job.idempotencyKey.trim().length === 0 ||
+    job.idempotencyKey.length > 200
+  ) {
+    let finalized = false;
+    try {
+      finalized = (await dependencies.finish(
+        job,
+        "needs_review",
+        "Claimed job metadata is invalid. Verify the queue record before retrying.",
+        null,
+      )) === true;
+    } catch {
+      // Invalid request metadata must never be allowed to reach the executor.
+    }
+    return finalized
+      ? { outcome: "finished", jobId: job.id, status: "needs_review" }
+      : { outcome: "finalization_rejected", jobId: job.id };
+  }
+
+  // A successful database claim must have incremented attempts to a positive
+  // integer and must respect the database's bounded retry policy. If an adapter
+  // returns malformed counters, do not execute external effects or let the
+  // retry-policy helper throw after execution has already begun.
+  if (
+    !Number.isInteger(job.attempts) ||
+    job.attempts < 1 ||
+    !Number.isInteger(job.maxAttempts) ||
+    job.maxAttempts < 1 ||
+    job.maxAttempts > 10 ||
+    job.attempts > job.maxAttempts
+  ) {
+    let finalized = false;
+    try {
+      finalized = (await dependencies.finish(
+        job,
+        "needs_review",
+        "Claimed job retry metadata is invalid. Verify the queue record before retrying.",
+        null,
+      )) === true;
+    } catch {
+      // Do not execute when the claim envelope contradicts the queue contract.
+    }
+    return finalized
+      ? { outcome: "finished", jobId: job.id, status: "needs_review" }
+      : { outcome: "finalization_rejected", jobId: job.id };
+  }
 
   let leaseLost = false;
   const heartbeat = async (): Promise<boolean> => {
     try {
       const alive = await dependencies.heartbeat(job);
-      if (!alive) leaseLost = true;
-      return alive;
+      // A runtime adapter must prove lease ownership with literal true. Truthy
+      // objects/strings are malformed responses, not evidence that the lease lives.
+      if (alive !== true) {
+        leaseLost = true;
+        return false;
+      }
+      return true;
     } catch {
       // A failed heartbeat is indistinguishable from lost ownership. Fail closed:
       // never finalize based on a lease whose state could not be verified.
@@ -72,53 +205,149 @@ export async function processOneExecutionJob(
     }
   };
 
+  // Verify queue ownership before entering any executor code. Executors should
+  // still heartbeat before external actions, but the worker must not rely on an
+  // adapter remembering to perform the very first lease check.
+  if (!(await heartbeat())) return { outcome: "lease_lost", jobId: job.id };
+
   let result: ExecutionJobResult;
   try {
     result = await dependencies.execute(job, { heartbeat });
   } catch (error) {
     if (leaseLost) return { outcome: "lease_lost", jobId: job.id };
+    // Rejected values are untrusted at runtime too. Even an Error-shaped object
+    // can expose a throwing or non-string message getter; never let diagnostic
+    // extraction escape and strand the claimed job outside the worker's policy.
+    let thrownMessage: unknown;
+    try {
+      if (error instanceof Error) thrownMessage = error.message;
+    } catch {
+      thrownMessage = undefined;
+    }
     result = {
       status: "failed",
       sideEffectCertainty: "uncertain",
-      error: error instanceof Error
-        ? sanitizeExecutionError(error.message, "Execution failed unexpectedly; verify the external outcome before retrying.")
+      error: typeof thrownMessage === "string"
+        ? sanitizeExecutionError(thrownMessage, "Execution failed unexpectedly; verify the external outcome before retrying.")
         : "Worker execution threw an unknown error.",
     };
   }
 
   if (leaseLost) return { outcome: "lease_lost", jobId: job.id };
 
+  // TypeScript types do not validate provider/adapter values at runtime. Treat
+  // malformed executor results as uncertain so an invalid status cannot make
+  // a possibly completed external action eligible for automatic retry.
+  const invalidExecutorResult: ExecutionJobResult = {
+    status: "failed",
+    sideEffectCertainty: "uncertain",
+    error: "Executor returned an invalid result. Verify the external outcome before retrying.",
+  };
+  const validStatuses = new Set(["succeeded", "failed"]);
+  const validCertainties = new Set<SideEffectCertainty>([
+    "not_attempted",
+    "confirmed_no_effect",
+    "uncertain",
+    "effect_confirmed",
+  ]);
+  try {
+    if (!result || typeof result !== "object") {
+      result = invalidExecutorResult;
+    } else {
+      // Read adapter fields once and snapshot them: getters/proxies can throw
+      // or return different values between accesses at this runtime boundary.
+      const candidate = result as unknown as Record<string, unknown>;
+      const status = candidate["status"];
+      const certainty = candidate["sideEffectCertainty"];
+      if (
+        !validStatuses.has(status as string) ||
+        !validCertainties.has(certainty as SideEffectCertainty)
+      ) {
+        result = invalidExecutorResult;
+      } else {
+        const errorValue = candidate["error"];
+        const retryAtValue = candidate["retryAt"];
+        const retryableValue = candidate["retryable"];
+        result = {
+          status: status as ExecutionJobResult["status"],
+          sideEffectCertainty: certainty as SideEffectCertainty,
+          ...(typeof errorValue === "string" || errorValue === null ? { error: errorValue } : {}),
+          ...(typeof retryAtValue === "string" || retryAtValue === null ? { retryAt: retryAtValue } : {}),
+          ...(typeof retryableValue === "boolean" ? { retryable: retryableValue } : {}),
+        };
+      }
+    }
+  } catch {
+    // A malformed adapter result is an uncertain external outcome.
+    result = invalidExecutorResult;
+  }
+
   let finalStatus: Exclude<ExecutionJobStatus, "running">;
+  // Executor adapters are runtime boundaries: a malformed retry timestamp must
+  // not make database finalization fail and leave a job running until lease expiry.
+  // Normalize valid timestamps and discard invalid values; safe queued retries get
+  // the worker's bounded backoff below when no usable timestamp remains.
+  const parsedRetryAt = typeof result.retryAt === "string" ? Date.parse(result.retryAt) : Number.NaN;
+  const retryClockMs = Date.now();
+  const minimumRetryDelayMs = 1_000;
+  const maximumRetryDelayMs = 24 * 60 * 60 * 1_000;
+  let finalRetryAt: string | null = null;
+  if (Number.isFinite(parsedRetryAt)) {
+    if (parsedRetryAt >= retryClockMs + minimumRetryDelayMs) {
+      // Preserve provider/lock retry hints, but never let an adapter request an
+      // unbounded delay. A past/near-immediate timestamp falls back to backoff;
+      // a very distant timestamp is capped at 24 hours.
+      finalRetryAt = new Date(
+        Math.min(parsedRetryAt, retryClockMs + maximumRetryDelayMs),
+      ).toISOString();
+    }
+  }
   let error = result.error
     ? sanitizeExecutionError(result.error, "Execution failed; inspect the run details and verify external outcome before retrying.")
     : null;
-  if (result.status === "succeeded") {
+  if (result.status === "succeeded" && result.sideEffectCertainty === "effect_confirmed") {
     finalStatus = "succeeded";
     error = null;
-  } else if (result.retryable === false) {
-    // Permanent validation/configuration failures are terminal for this job.
-    // Keep them distinct from transient no-side-effect failures that can retry.
+  } else if (result.status === "succeeded") {
+    // A success label without confirmed side-effect evidence is contradictory.
+    // Do not publish success or automatically replay a potentially completed action.
+    finalStatus = "needs_review";
+    error = sanitizeExecutionError(
+      result.error,
+      "Executor reported success without confirmed side-effect evidence. Verify the external outcome before retrying.",
+    );
+  } else if (
+    result.retryable === false &&
+    (result.sideEffectCertainty === "not_attempted" || result.sideEffectCertainty === "confirmed_no_effect")
+  ) {
+    // Permanent validation/configuration failures are terminal only when the
+    // adapter confirms no effect. Uncertain/confirmed effects must remain reviewable.
     finalStatus = "failed";
   } else {
     const decision = decideExecutionRetry({
       sideEffectCertainty: result.sideEffectCertainty,
       attempts: job.attempts,
       maxAttempts: job.maxAttempts,
-      ...(result.providerSupportsIdempotency === undefined
-        ? {}
-        : { providerSupportsIdempotency: result.providerSupportsIdempotency }),
-      stableIdempotencyKey: job.idempotencyKey,
     });
     finalStatus = decision.status;
+    if (finalStatus === "queued" && !finalRetryAt) {
+      finalRetryAt = executionRetryAt(job.attempts);
+    }
     error = sanitizeExecutionError(
       [error, decision.reason].filter(Boolean).join(" "),
       "Execution failed; inspect the run details and verify external outcome before retrying.",
     );
   }
 
+  // Retry scheduling is meaningful only for a queued job. Never pass an
+  // executor-supplied retry timestamp to terminal/manual-review finalization.
+  if (finalStatus !== "queued") finalRetryAt = null;
+
   let finalized: boolean;
   try {
-    finalized = await dependencies.finish(job, finalStatus, error, result.retryAt ?? null);
+    // RPC adapters are expected to return a boolean, but enforce the contract
+    // here too: only literal true confirms durable finalization.
+    finalized = (await dependencies.finish(job, finalStatus, error, finalRetryAt)) === true;
   } catch {
     // A database/network error means finalization is unknown, not successful.
     return { outcome: "finalization_rejected", jobId: job.id };
