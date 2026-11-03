@@ -9,7 +9,7 @@ import { createSupabaseExecutionJobDependencies } from "@/lib/execution-job-queu
 import { processOneExecutionJob } from "@/lib/execution-job-worker";
 import { buildRunFinalization } from "@/lib/run-finalization";
 import { preparePersistedExecutionPlan } from "@/lib/prepare-execution-plan";
-import { isDurableQueueEnabled } from "@/lib/runtime-feature-gates";
+import { isDurableQueueWorkerEnabled } from "@/lib/runtime-feature-gates";
 import { executeStep, livePreflightError } from "@/lib/execute-step.server";
 import type { Workflow } from "@/lib/workflow";
 
@@ -27,10 +27,17 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
       POST: async ({ request }) => {
         const denied = await authenticateCronRequest(request);
         if (denied) return denied;
-        if (!isDurableQueueEnabled()) {
+        if (!isDurableQueueWorkerEnabled()) {
           return Response.json(
-            { error: "Durable execution queue is disabled by rollout policy." },
-            { status: 503 },
+            { error: "Durable execution worker is disabled by rollout policy." },
+            {
+              status: 503,
+              headers: {
+                "Cache-Control": "no-store",
+                "Pragma": "no-cache",
+                "X-Content-Type-Options": "nosniff",
+              },
+            },
           );
         }
 
