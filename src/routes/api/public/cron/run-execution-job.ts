@@ -1,5 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { authenticateCronRequest } from "@/integrations/supabase/cron-auth";
+import {
+  authenticateCronRequestSafely,
+  runCronTaskWithFallback,
+  withCronSecurityHeaders,
+} from "@/lib/cron-task-guard";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { classifyExecutionOutcome } from "@/lib/execution-outcome";
 import { sanitizeExecutionError } from "@/lib/execution-error-sanitizer";
@@ -25,8 +30,9 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const denied = await authenticateCronRequest(request);
-        if (denied) return denied;
+        const response = await runCronTaskWithFallback(async () => {
+        const denied = await authenticateCronRequestSafely(request, authenticateCronRequest);
+        if (denied !== null) return denied;
         if (!isDurableQueueWorkerEnabled()) {
           return Response.json(
             { error: "Durable execution worker is disabled by rollout policy." },
@@ -300,6 +306,8 @@ export const Route = createFileRoute("/api/public/cron/run-execution-job")({
           });
           return new Response("Queue worker failed safely", { status: 500 });
         }
+        }, () => new Response("Queue worker failed safely", { status: 500 }));
+        return withCronSecurityHeaders(response);
       },
     },
   },
