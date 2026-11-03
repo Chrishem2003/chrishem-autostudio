@@ -70,7 +70,11 @@ export async function getConnectionForUser(userId: string, connectorId: string) 
 
 export async function setAccountEmail(userId: string, connectorId: string, email: string) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  await supabaseAdmin.from("app_user_connections").update({ account_email: email }).eq("user_id", userId).eq("connector_id", connectorId);
+  const { error } = await supabaseAdmin.from("app_user_connections")
+    .update({ account_email: email, updated_at: new Date().toISOString() })
+    .eq("user_id", userId)
+    .eq("connector_id", connectorId);
+  if (error) throw error;
 }
 
 export async function deleteConnectionForUser(userId: string, connectorId: string) {
