@@ -6,7 +6,8 @@ create table if not exists auth.users (id uuid primary key);
 create table if not exists public.automations (
   id uuid primary key,
   user_id uuid,
-  status text not null
+  status text not null,
+  last_run_at timestamptz
 );
 
 create type public.run_status as enum ('queued', 'running', 'success', 'failed', 'dry_run', 'halted');
