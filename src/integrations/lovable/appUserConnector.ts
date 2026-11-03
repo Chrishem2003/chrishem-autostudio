@@ -26,6 +26,7 @@ export async function authorizeAppUserOAuth(params: AppUserOAuthAuthorizeParams)
   const res = await fetch(`${params.gatewayBaseUrl}/api/v1/app-users/oauth2/authorize`, {
     method: "POST",
     headers,
+    redirect: "manual",
     body: JSON.stringify({
       connector_id: params.connectorId,
       app_user_id: params.appUserId,
@@ -33,13 +34,14 @@ export async function authorizeAppUserOAuth(params: AppUserOAuthAuthorizeParams)
       credentials_configuration: params.credentialsConfiguration,
     }),
   });
+  if (res.status >= 300 && res.status < 400) throw new Error("App User OAuth start rejected an unexpected redirect.");
   const text = await res.text();
-  if (!res.ok) throw new Error(`App User OAuth start failed (${res.status}): ${text || res.statusText}`);
+  if (!res.ok) throw new Error(`App User OAuth start failed (${res.status}).`);
   let body: { authorization_url?: string; session_id?: string };
   try {
     body = text ? JSON.parse(text) : {};
   } catch {
-    throw new Error(`App User OAuth start returned invalid JSON: ${text.slice(0, 200)}`);
+    throw new Error("App User OAuth start returned invalid JSON.");
   }
   if (!body.authorization_url) throw new Error("App User OAuth start response missing authorization_url");
   return { authorizationUrl: body.authorization_url, sessionId: body.session_id ?? "" };
@@ -60,7 +62,9 @@ export async function callAsAppUser({ gatewayBaseUrl, connectionAPIKey, connecto
   headers.set("Authorization", `Bearer ${requireApiKey()}`);
   headers.set("X-Connection-Api-Key", connectionAPIKey);
   if (requiredScopes?.length) headers.set("X-Lovable-Required-Scopes", requiredScopes.join(" "));
-  return fetch(`${gatewayBaseUrl}/${connectorId}${normalizedPath}`, { ...init, headers });
+  const res = await fetch(`${gatewayBaseUrl}/${connectorId}${normalizedPath}`, { ...init, headers, redirect: "manual" });
+  if (res.status >= 300 && res.status < 400) throw new Error("App User connector request rejected an unexpected redirect.");
+  return res;
 }
 
 export async function appUserReconnectRequired(res: Response): Promise<boolean> {
@@ -77,25 +81,28 @@ export async function disconnectAppUser({ gatewayBaseUrl, connectionAPIKey, conn
   const res = await fetch(`${gatewayBaseUrl}/api/v1/app-users/connection`, {
     method: "DELETE",
     headers,
+    redirect: "manual",
     body: JSON.stringify({ connector_id: connectorId }),
   });
-  const text = await res.text();
-  if (!res.ok) throw new Error(`App User disconnect failed (${res.status}): ${text || res.statusText}`);
+  if (res.status >= 300 && res.status < 400) throw new Error("App User disconnect rejected an unexpected redirect.");
+  if (!res.ok) throw new Error(`App User disconnect failed (${res.status}).`);
 }
 
 export async function exchangeAppUserOAuthCode(gatewayBaseUrl: string, code: string): Promise<{ connectionAPIKey: string; connectorId: string }> {
   const res = await fetch(`${gatewayBaseUrl}/api/v1/app-users/oauth2/exchange`, {
     method: "POST",
     headers: { Authorization: `Bearer ${requireApiKey()}`, "Content-Type": "application/json" },
+    redirect: "manual",
     body: JSON.stringify({ code }),
   });
+  if (res.status >= 300 && res.status < 400) throw new Error("App User OAuth exchange rejected an unexpected redirect.");
   const text = await res.text();
-  if (!res.ok) throw new Error(`App User OAuth exchange failed (${res.status}): ${text || res.statusText}`);
+  if (!res.ok) throw new Error(`App User OAuth exchange failed (${res.status}).`);
   let body: { api_key?: string; connector_id?: string };
   try {
     body = text ? JSON.parse(text) : {};
   } catch {
-    throw new Error(`App User OAuth exchange returned invalid JSON: ${text.slice(0, 200)}`);
+    throw new Error("App User OAuth exchange returned invalid JSON.");
   }
   if (!body.api_key) throw new Error("App User OAuth exchange response missing api_key");
   if (!body.connector_id) throw new Error("App User OAuth exchange response missing connector_id");
