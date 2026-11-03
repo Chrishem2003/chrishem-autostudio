@@ -119,5 +119,7 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261103150000_statement_time_queue_lease_fencing.sql
       - name: Verify idempotency, lease fencing and RPC permissions
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/execution_jobs_smoke.sql
+      - name: Verify statement-time queue lease lock-wait races
+        run: bash supabase/tests/execution_job_expiry_lock_race.sh
       - name: Verify concurrent workers claim distinct jobs
         run: bash supabase/tests/execution_jobs_concurrency.sh
