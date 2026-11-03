@@ -92,3 +92,15 @@ Do not enable production queue consumers or outbound transports based on this re
 - Verified jobs: frozen dependency install, typecheck, full unit tests, focused execution-integrity/cron lint, production build, disposable PostgreSQL migration chain, statement-time queue lease lock-wait race tests, and concurrent worker claim tests.
 - This latest run verifies the branch head, including the documentation-only acceptance-record updates; it does not replace hosted staging acceptance.
 - Hosted staging acceptance remains **NOT RUN**. P0 remains **OPEN** and P1 remains **NOT AUTHORIZED**.
+
+## Latest exact-head CI confirmation — 2026-11-03
+
+- PR #7 latest head: `cfbc26c909a046e744d7f15477c7c2ae2c3c3cb3`.
+- Exact-head GitHub Actions run: [run 41644313050 — passed](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/41644313050).
+- Both jobs completed successfully: typecheck, full unit tests, focused lint, production build, disposable PostgreSQL migration chain, RPC permission checks, statement-time queue lease lock-wait race tests, and concurrent worker claim tests.
+- This is automated CI evidence only. Hosted Auto-Studio staging acceptance remains **NOT RUN**; production migration/deployment remains unauthorized; P1 remains not authorized.
+
+## Staging environment boundary
+
+- The connected Supabase project `Chrishem Platform Staging` (ref `bokxljngydmqrmktofwm`) is a shared platform/NEMA staging environment with existing platform job and NEMA tables/migrations.
+- It has not been verified as a dedicated Auto-Studio staging database. Do not apply Auto-Studio migrations or run acceptance writes against it without an explicit environment decision and an isolated staging target.
