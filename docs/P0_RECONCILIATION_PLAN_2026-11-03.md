@@ -112,6 +112,7 @@ The following selected safeguards have now been ported to the clean integration 
 - Shared scheduled-trigger normalization and live capability preflight before enqueue; the worker repeats preflight immediately before execution.
 - One fail-closed outbound transport gate now also covers Gmail sends, not just HTTP/webhook/chat, so the rollout flag cannot be bypassed through the verified Gmail connector.
 - Queue-job claim, heartbeat and finalization functions now use statement-time expiry checks after row locks; successful queue finalization requires a persisted successful audit run. Multi-session tests cover expired queue and automation heartbeats/finalizers after lock waits.
+- If a worker's success finalization is rejected or its response is lost, it makes one guarded attempt to park the job in `needs_review`; the database status/lease guard prevents rewriting an already-committed success or a lease owned by another worker. The provider action is never replayed.
 - Authenticated audit history is owner-scoped and read-only. Dry-run audit writes now use the server-only service-role client with bounded output/error sanitization.
 - Focused blocking lint for changed production execution-integrity and cron modules.
 - A staging runbook and an explicit staging acceptance record.
@@ -120,8 +121,8 @@ The following selected safeguards have now been ported to the clean integration 
 
 - Branch: `audit/p0-reconciliation-2026-11-03`
 - Draft PR: [#7](https://github.com/Chrishem2003/chrishem-autostudio/pull/7)
-- Verified code checkpoint before documentation-only additions: `8c03d02f25be2b20bdce7aff6a1b171e9aa8319f`
-- Exact-head PR CI: [run 41642857376 — passed](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/41641171720)
+- Verified code checkpoint before documentation-only additions: `6102eb289483e136db9d899e16042d79f12ea111`
+- Exact-head PR CI: [run 41643455167 — passed](https://github.com/Chrishem2003/chrishem-autostudio/actions/runs/41641171720)
 - Passed: frozen dependency install, typecheck, full unit suite, focused production lint, production build, scheduler/heartbeat/stale-run/audit migrations, automation and queue lease fencing, stale-run recovery, audit read/write permissions, idempotency and concurrent worker claim tests.
 
 ### Remaining release gates
